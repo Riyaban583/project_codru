@@ -35,6 +35,7 @@ import BotExplorer from "./components/BotExplorer.jsx";
 import BotEngineer from "./components/BotEngineer.jsx";
 import BotInventor from "./components/BotInventor.jsx";
 import About1 from "./components/About1.jsx";
+import Contactinfo  from "./components/ContactInfo.jsx"
 
 function App() {
   const { theme } = useContext(ThemeContext);
@@ -221,6 +222,10 @@ function App() {
         <Route
           path="/admission"
           element={<Admission userData={userData} setUserData={setUserData} />}
+        />
+        <Route
+          path="/Contactinfo"
+          element={<Contactinfo />}
         />
       </Routes>
     </div>
