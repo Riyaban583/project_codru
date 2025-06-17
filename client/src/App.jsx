@@ -1,7 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { useEffect, useContext, useState } from "react";
 import "./App.css";
-import About from "./components/About";
 import Admission from "./components/Admission";
 import Buy from "./components/Buy.jsx";
 import Change_password from "./components/Change_password";
@@ -225,7 +224,7 @@ function App() {
         />
         <Route
           path="/Contactinfo"
-          element={<Contactinfo />}
+          element={<Contactinfo userData={userData} setUserData={setUserData} />}
         />
       </Routes>
     </div>
