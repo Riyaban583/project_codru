@@ -42,5 +42,5 @@ startDate:{
 
 });
 
-const contact = User.discriminator("contact", contactInfo);
+const contact = User.discriminator("contactInfo", contactInfo);
 module.exports = contact;

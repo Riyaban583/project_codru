@@ -30,6 +30,7 @@ const User = require("./models/userSchema");
 const Student = require("./models/studentSchema");
 const Teacher = require("./models/teacherSchema");
 const Contact = require("./models/contactSchema");
+const ContactInfo = require("./models/contactInfoSchema");
 const BotEnroll = require("./models/botEnrollSchema");
 
 app.use(require("./router/userauth.js"));

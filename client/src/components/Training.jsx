@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import '../styles/ContactInfo.css'; // Import the CSS file
+import localStorage from 'local-storage';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
@@ -11,6 +12,7 @@ const ContactInfo = () => {
         method:"post",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("Token")}`,
         },
         body: JSON.stringify(user),
       });
