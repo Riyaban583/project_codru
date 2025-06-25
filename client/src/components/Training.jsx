@@ -5,6 +5,22 @@ import Footer from './Footer';
 
 const ContactInfo = () => {
   
+    const fetchUser=async(e)=>{
+      e.preventDefault();
+      const data =await fetch("http://localhost:8080/training",{
+        method:"post",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(user),
+      });
+      if(!data.ok){
+        throw new Error("Network response was not ok");
+      }
+      else{
+        return await data.json();
+      } 
+    }
   const [user, setUser] = useState({
     name: '',
     email: '',
@@ -36,7 +52,9 @@ const ContactInfo = () => {
     <div className="form-container">
       <div className="form-card">
         <form
-          action="/CourseRegistration"
+          onSubmit={(e) => {
+            fetchUser(e);
+          }}
           method="post"
           // onSubmit={handleSubmit}
           encType="multipart/form-data"
@@ -46,80 +64,70 @@ const ContactInfo = () => {
             Codru <span className="highlight">Education</span>
           </h1>
 
-          {/* Profile Image Upload */}
-          <div className="profile-section">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/149/149071.png"
-              alt="profile"
-              className="profile-image"
-            />
-            <input type="file" className="input-file" />
-          </div>
-
           {/* Input Groups */}
           <div className="input-section">
             <div className="input-row">
               <div className="input-group">
                 <label>Name <span className="required">*</span></label>
-                <input type="text" name="name" required value={user.name} onChange={handleInput} placeholder="Your name" />
+                <input type="text" name="name"  value={user.name} onChange={handleInput} placeholder="Your name" />
               </div>
               <div className="input-group">
                 <label>Email <span className="required">*</span></label>
-                <input type="email" name="email" required value={user.email} onChange={handleInput} placeholder="you@example.com" />
+                <input type="email" name="email"  value={user.email} onChange={handleInput} placeholder="you@example.com" />
               </div>
             </div>
 
             <div className="input-row">
               <div className="input-group">
                 <label>College/School Name <span className="required">*</span></label>
-                <input type="text" name="college" required value={user.college} onChange={handleInput} />
+                <input type="text" name="college"  value={user.college} onChange={handleInput} />
               </div>
               <div className="input-group">
                 <label>Mobile Number <span className="required">*</span></label>
-                <input type="text" name="mobile" required value={user.mobile} onChange={handleInput} />
+                <input type="text" name="mobile"  value={user.mobile} onChange={handleInput} />
               </div>
             </div>
 
             <div className="input-row">
               <div className="input-group">
                 <label>Semester <span className="required">*</span></label>
-                <input type="text" name="semester" required value={user.semester} onChange={handleInput} />
+                <input type="text" name="semester"  value={user.semester} onChange={handleInput} />
               </div>
               <div className="input-group">
                 <label>Year of Passing <span className="required">*</span></label>
-                <input type="text" name="year" required value={user.year} onChange={handleInput} />
+                <input type="text" name="year"  value={user.year} onChange={handleInput} />
               </div>
             </div>
 
             <div className="input-group">
               <label>Course/Internship Name <span className="required">*</span></label>
-              <input type="text" name="courseName" required value={user.courseName} onChange={handleInput} />
+              <input type="text" name="courseName"  value={user.courseName} onChange={handleInput} />
             </div>
 
             <div className="input-group">
               <label>Duration <span className="required">*</span></label>
-              <input type="text" name="duration" required value={user.duration} onChange={handleInput} />
+              <input type="text" name="duration"  value={user.duration} onChange={handleInput} />
             </div>
 
             <div className="input-row">
               <div className="input-group">
                 <label>Start Date <span className="required">*</span></label>
-                <input type="date" name="startDate" required value={user.startDate} onChange={handleInput} />
+                <input type="date" name="startDate"  value={user.startDate} onChange={handleInput} />
               </div>
               <div className="input-group">
                 <label>End Date <span className="required">*</span></label>
-                <input type="date" name="endDate" required value={user.endDate} onChange={handleInput} />
+                <input type="date" name="endDate"  value={user.endDate} onChange={handleInput} />
               </div>
             </div>
 
             <div className="input-group">
               <label>Feedback <span className="required">*</span></label>
-              <textarea name="feedback" rows="4" required value={user.feedback} onChange={handleInput} placeholder="Share your experience..." />
+              <textarea name="feedback" rows="4"  value={user.feedback} onChange={handleInput} placeholder="Share your experience..." />
             </div>
 
             <div className="input-group">
               <label>Suggestions for Improvement <span className="required">*</span></label>
-              <textarea name="improvement" rows="3" required value={user.improvement} onChange={handleInput} placeholder="Your suggestions..." />
+              <textarea name="improvement" rows="3"  value={user.improvement} onChange={handleInput} placeholder="Your suggestions..." />
             </div>
           </div>
 

@@ -4,7 +4,7 @@ const bodyParser = require("body-parser");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
 const path = require("path");
-// const { Server } = require("socket.io");
+const { Server } = require("socket.io");
 
 dotenv.config({ path: "./config.env" });
 const app = express();
@@ -31,9 +31,11 @@ const Student = require("./models/studentSchema");
 const Teacher = require("./models/teacherSchema");
 const Contact = require("./models/contactSchema");
 const BotEnroll = require("./models/botEnrollSchema");
+
 app.use(require("./router/userauth.js"));
 app.use(require("./router/blogauth.js"));
 app.use(require("./router/courseauth.js"));
+app.use(require("./router/training.js"));
 
 let notifications = {};
 
