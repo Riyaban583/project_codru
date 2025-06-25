@@ -19,15 +19,14 @@ router.post("/training",authenticate, async (req, res) => {
       user_id,
       email,
       name,
-      college,
+      collegeName: college,
       semester,
       year,
-      courseName,
+      trainingorCourse:courseName,
       startDate,
       endDate,
-      feedback,
-      improvement,
-      duration,
+      comments:feedback,
+      suggestions:improvement,
     });
     await training.save();
     res.status(201).json({ message: "Training information saved successfully" });

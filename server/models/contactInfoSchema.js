@@ -15,17 +15,11 @@ const contactInfo = new mongoose.Schema({
     type: String,
     default: "",
   },
-  branch: {
+
+  year: {
     type: String,
     default: "",
   },
-
-  yearofAdmission: {
-    type: String,
-  },
-  yearofCompletion: {
-    type: String,
-  } ,
   //trainingorCourse: 
   traningorCourse: {
     type: String,
