@@ -21,7 +21,7 @@ const contactInfo = new mongoose.Schema({
     default: "",
   },
   //trainingorCourse: 
-  traningorCourse: {
+  trainingorCourse: {
     type: String,
   },
 startDate:{
@@ -42,5 +42,5 @@ startDate:{
 
 });
 
-const contact = User.discriminator("contactInfo", contactInfo);
+const contact = mongoose.model("Training", contactInfo);
 module.exports = contact;

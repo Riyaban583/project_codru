@@ -9,7 +9,11 @@ const { Server } = require("socket.io");
 dotenv.config({ path: "./config.env" });
 const app = express();
 
-app.use(cors());
+app.use(cors( {
+  origin: "*",
+  httpOnly: true,
+  credentials: true,
+}));
 app.use(express.json());
 
 const port = process.env.PORT || 8080;
@@ -23,6 +27,7 @@ app.use(
   })
 );
 
+
 // app.use(express.static(path.join(__dirname, "public")));
 
 require("./db/conn.js");
@@ -30,8 +35,10 @@ const User = require("./models/userSchema");
 const Student = require("./models/studentSchema");
 const Teacher = require("./models/teacherSchema");
 const Contact = require("./models/contactSchema");
-const ContactInfo = require("./models/contactInfoSchema");
+const ContactInfo = require("./models/trainingSchema");
 const BotEnroll = require("./models/botEnrollSchema");
+const Blog = require("./models/blogSchema");
+const Course = require("./models/courseSchema");
 
 app.use(require("./router/userauth.js"));
 app.use(require("./router/blogauth.js"));

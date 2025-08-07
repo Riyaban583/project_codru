@@ -2,21 +2,22 @@ const express = require("express");
 const Blog = require("../models/blogSchema");
 const router = express.Router();
 const User = require("../models/userSchema");
+const authenticate = require("../middleware/authenticate");
 
-router.post("/deleteblogs", async (req, res) => {
-  try {
-    // Delete all documents in the Blog collection
-    await Blog.deleteMany({});
+// router.post("/deleteblogs", async (req, res) => {
+//   try {
+//     // Delete all documents in the Blog collection
+//     await Blog.deleteMany({});
 
-    res.status(200).json({ message: "All blogs deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting blogs:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+//     res.status(200).json({ message: "All blogs deleted successfully" });
+//   } catch (error) {
+//     console.error("Error deleting blogs:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
 
 // CREATING THE BLOG BY USER
-router.post("/blogs", async (req, res) => {
+router.post("/blogs",authenticate,async (req, res) => {
   try {
     const { title, content, username, userphoto } = req.body;
     if (!title || !content || !username || !userphoto) {
@@ -24,10 +25,9 @@ router.post("/blogs", async (req, res) => {
     }
 
     const newBlog = new Blog({
+      userId: req.userId, // Assuming userId is set in the request by authentication middleware
       title,
       content,
-      username,
-      userphoto,
     });
 
     await newBlog.save();
@@ -45,12 +45,59 @@ router.post("/blogs", async (req, res) => {
   }
 });
 
+//delete blog by its id
+router.delete("/blogs/delete/:blogId", authenticate, async (req, res) => {
+  try {
+    const { blogId } = req.params;
+    const blog = await Blog.findById(blogId);
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    } else {
+      await Blog.findByIdAndDelete(blogId);
+      const user = await User.findById(req.userId);
+      if (user) {
+        user.blogs = user.blogs.filter((blog) => blog._id.toString() !== blogId);
+        await user.save();
+      }
+      return res.status(200).json({ message: "Blog deleted successfully" });
+    }
+  } catch (err) {
+    console.error("Error deleting blog:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+//edit blog by its id
+// This route allows the user to edit their blog post by providing the blogId and the new title and content.
+router.put("/blogs/edit/:blogId", authenticate, async (req, res) => {
+  try {
+    const { blogId } = req.params;
+    const { title, content } = req.body;
+
+    const blog = await Blog.findById(blogId);
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    }
+
+    blog.title = title;
+    blog.content = content;
+    await blog.save();
+
+    return res.status(200).json({ message: "Blog updated successfully" });
+  } catch (err) {
+    console.error("Error updating blog:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 //FETCHING ALL BLOGS OF ALL USERS
-router.post("/blogsdata", async (req, res) => {
+router.get("/blogsdata", async (req, res) => {
   try {
     const blogs = await Blog.find().select(
-      "title content username userphoto createdAt likes dislikes comments"
-    );
+      "title content userId createdAt likes dislikes comments"
+    ).populate({
+      path: "userId",
+      select: "username photo ",});
     return res.status(200).json({ message: "Success", blogs: blogs });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -61,7 +108,7 @@ router.post("/blogsdata", async (req, res) => {
 router.get("/blogs/:blogId", async (req, res) => {
   try {
     const { blogId } = req.params;
-    const blog = await Blog.findById(blogId);
+    const blog = await Blog.findById(blogId).populate("user_id");
 
     if (blog) {
       return res.status(200).json({ message: "Success", blog: blog });
@@ -74,39 +121,39 @@ router.get("/blogs/:blogId", async (req, res) => {
 });
 
 // Route to get blogs of a particular user
-router.post("/userblogs", async (req, res) => {
-  try {
-    const { username } = req.body;
+// router.get("/userblogs", async (req, res) => {
+//   try {
+//     const { username } = req.body;
 
-    if (!username) {
-      return res.status(400).json({ error: "Username is required" });
-    }
+//     if (!username) {
+//       return res.status(400).json({ error: "Username is required" });
+//     }
 
-    const user = await User.findOne({ username }).populate("blogs");
+//     const user = await User.findOne({ username }).populate("blogs");
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
+//     if (!user) {
+//       return res.status(404).json({ error: "User not found" });
+//     }
 
-    // Extract the blog data from the populated blogs field
-    const blogs = user.blogs.map((blog) => ({
-      _id: blog._id,
-      title: blog.title,
-      content: blog.content,
-      // Add other fields you need
-    }));
+//     // Extract the blog data from the populated blogs field
+//     const blogs = user.blogs.map((blog) => ({
+//       _id: blog._id,
+//       title: blog.title,
+//       content: blog.content,
+//       // Add other fields you need
+//     }));
 
-    res.status(200).json({ blogs });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+//     res.status(200).json({ blogs });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 //save blog in userschema
-router.post("/blog/saveblog", async (req, res) => {
+router.post("/blog/saveblog/:blogId", async (req, res) => {
   try {
-    const { blogId, username } = req.body;
-
+      const blogId = req.params.blogId;
+      const { username } = req.body;
     const userExist = await User.findOne({ username });
     if (!userExist) {
       return res.status(404).json({ message: "User not found" });
@@ -135,9 +182,10 @@ router.post("/blog/saveblog", async (req, res) => {
 });
 
 // Unsave blog endpoint
-router.post("/blog/unsaveblog", async (req, res) => {
+router.post("/blog/unsaveblog/:blogId", async (req, res) => {
   try {
-    const { blogId, username } = req.body;
+    const blogId = req.params.blogId;
+    const { username } = req.body;
     const userExist = await User.findOne({ username });
     if (!userExist) {
       return res.status(404).json({ message: "User not found" });
@@ -163,9 +211,9 @@ router.post("/blog/unsaveblog", async (req, res) => {
 });
 
 // Route to fetch saved blogs for a user
-router.post("/savedblogs", async (req, res) => {
+router.get("/savedblogs", authenticate,async (req, res) => {
   try {
-    const { username } = req.body;
+    const username = req.username; // Get username from authenticated user
     if (!username) {
       return res.status(400).json({ error: "Username is required" });
     }
@@ -186,9 +234,10 @@ router.post("/savedblogs", async (req, res) => {
 });
 
 // LIKING A BLOG BY ANY USER
-router.post("/blog/like", async (req, res) => {
+router.post("/blog/like/:blogId",authenticate, async (req, res) => {
   try {
-    const { blogId, username } = req.body;
+    const blogId = req.params.blogId;
+    const username = req.username; // Get username from authenticated user
     const blog = await Blog.findById(blogId);
 
     if (!blog) {
@@ -217,9 +266,10 @@ router.post("/blog/like", async (req, res) => {
 
 //DISLIKING BLOG BY ANY USER
 
-router.post("/blog/dislike", async (req, res) => {
+router.post("/blog/dislike/:blogId",authenticate,async (req, res) => {
   try {
-    const { blogId, username } = req.body;
+    const blogId = req.params.blogId;
+    const username = req.username; // Get username from authenticated user
     const blog = await Blog.findById(blogId);
 
     if (!blog) {
@@ -247,7 +297,7 @@ router.post("/blog/dislike", async (req, res) => {
 });
 
 // FETHING COMMENTS OF SPECIFIC BLOG
-router.get("/comments/:blogId", async (req, res) => {
+router.get("/comments/:blogId",authenticate,async (req, res) => {
   try {
     const blogId = req.params.blogId;
     const blog = await Blog.findById(blogId);
@@ -263,10 +313,12 @@ router.get("/comments/:blogId", async (req, res) => {
 });
 
 // ADDING COMMENT AND REPLY OF THAT COMMENT
-router.post("/comments", async (req, res) => {
+router.post("/comments/add/:blogId",authenticate, async (req, res) => {
   try {
-    const { blogId, Username, Photo, text, parentId } = req.body;
-    if (!blogId || !Username || !Photo || !text) {
+     const blogId = req.params.blogId;
+     const { username, photo } = req.user;
+     const {text,parentId} = req.body;// parentId is optional for direct comments
+    if (!text) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
@@ -276,8 +328,8 @@ router.post("/comments", async (req, res) => {
     }
 
     const newComment = {
-      name: Username,
-      photo: Photo,
+      name: username,
+      photo: photo,
       text: text,
       replies: [],
     };
@@ -295,19 +347,8 @@ router.post("/comments", async (req, res) => {
         return null;
       };
 
-      const findDirectRootComment = (comments) => {
-        for (let comment of comments) {
-          if (
-            comment._id.equals(parentId) ||
-            findRootComment(comment.replies, parentId)
-          ) {
-            return comment;
-          }
-        }
-        return null;
-      };
-
-      const rootComment = findDirectRootComment(blog.comments);
+     
+      const rootComment = findRootComment(blog.comments, parentId);
 
       if (rootComment) {
         // Add the new comment directly under the root comment (A)
@@ -474,141 +515,65 @@ router.put("/comments/edit", async (req, res) => {
 
 // changing photo in comments using profile
 
-router.put("/updateUserPhoto", async (req, res) => {
-  const { username, newPhoto } = req.body;
+// router.put("/updateUserPhoto", async (req, res) => {
+//   const { username, newPhoto } = req.body;
 
-  try {
-    // Update the user's photo in the blogs
-    await Blog.updateMany({ username }, { $set: { userphoto: newPhoto } });
+//   try {
+//     // Update the user's photo in the blogs
+//     await Blog.updateMany({ username }, { $set: { userphoto: newPhoto } });
 
-    // Fetch all blogs to update comments and nested replies
-    const blogs = await Blog.find();
+//     // Fetch all blogs to update comments and nested replies
+//     const blogs = await Blog.find();
 
-    for (let blog of blogs) {
-      let updated = false;
+//     for (let blog of blogs) {
+//       let updated = false;
 
-      // Update comments
-      for (let comment of blog.comments) {
-        if (comment.name === username) {
-          comment.photo = newPhoto;
-          updated = true;
-        }
+//       // Update comments
+//       for (let comment of blog.comments) {
+//         if (comment.name === username) {
+//           comment.photo = newPhoto;
+//           updated = true;
+//         }
 
-        // Update nested replies
-        if (updateNestedReplies(comment.replies, username, newPhoto)) {
-          updated = true;
-        }
-      }
+//         // Update nested replies
+//         if (updateNestedReplies(comment.replies, username, newPhoto)) {
+//           updated = true;
+//         }
+//       }
 
-      // Save the updated blog document
-      if (updated) {
-        await blog.save();
-      }
-    }
+//       // Save the updated blog document
+//       if (updated) {
+//         await blog.save();
+//       }
+//     }
 
-    res.status(200).send("User photo updated in all blogs and comments");
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Internal server error");
-  }
-});
+//     res.status(200).send("User photo updated in all blogs and comments");
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal server error");
+//   }
+// });
 
-// Helper function to recursively update nested replies
-const updateNestedReplies = (replies, username, newPhoto) => {
-  let updated = false;
+// // Helper function to recursively update nested replies
+// const updateNestedReplies = (replies, username, newPhoto) => {
+//   let updated = false;
 
-  for (let reply of replies) {
-    if (reply.name === username) {
-      reply.photo = newPhoto;
-      updated = true;
-    }
+//   for (let reply of replies) {
+//     if (reply.name === username) {
+//       reply.photo = newPhoto;
+//       updated = true;
+//     }
 
-    if (reply.replies && reply.replies.length > 0) {
-      if (updateNestedReplies(reply.replies, username, newPhoto)) {
-        updated = true;
-      }
-    }
-  }
+//     if (reply.replies && reply.replies.length > 0) {
+//       if (updateNestedReplies(reply.replies, username, newPhoto)) {
+//         updated = true;
+//       }
+//     }
+//   }
 
-  return updated;
-};
+//   return updated;
+// };
 
-router.post("/follow", async (req, res) => {
-  const { currentUserId, targetUserId } = req.body;
 
-  try {
-    const currentUser = await User.findOne({ username: currentUserId });
-    const targetUser = await User.findOne({ username: targetUserId });
-
-    if (!currentUser || !targetUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    // Follow
-    if (
-      !currentUser.following.some((f) => f.username === targetUser.username)
-    ) {
-      currentUser.following.push({
-        username: targetUser.username,
-        name: targetUser.name,
-        photo: targetUser.photo,
-      });
-
-      targetUser.followers.push({
-        username: currentUser.username,
-        name: currentUser.name,
-        photo: currentUser.photo,
-      });
-
-      await currentUser.save();
-      await targetUser.save();
-    }
-
-    res.status(200).json({
-      success: true,
-      isFollowing: true,
-    });
-  } catch (error) {
-    console.error("Error in follow route:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.post("/unfollow", async (req, res) => {
-  const { currentUserId, targetUserId } = req.body;
-
-  try {
-    const currentUser = await User.findOne({ username: currentUserId });
-    const targetUser = await User.findOne({ username: targetUserId });
-
-    if (!currentUser || !targetUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    // Unfollow
-    currentUser.following = currentUser.following.filter(
-      (f) => f.username !== targetUser.username
-    );
-    targetUser.followers = targetUser.followers.filter(
-      (f) => f.username !== currentUser.username
-    );
-
-    await currentUser.save();
-    await targetUser.save();
-
-    res.status(200).json({
-      user: currentUser,
-      success: true,
-      isFollowing: false,
-    });
-  } catch (error) {
-    console.error("Error in unfollow route:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
 module.exports = router;

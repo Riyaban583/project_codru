@@ -27,6 +27,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       default: "",
+      select: false, // Exclude password from queries by default
     },
     dob: {
       type: String,

@@ -35,6 +35,7 @@ import BotEngineer from "./components/BotEngineer.jsx";
 import BotInventor from "./components/BotInventor.jsx";
 import About1 from "./components/About1.jsx";
 import Training  from "./components/Training.jsx"
+import Navbar from "./components/Navbar.jsx";
 
 function App() {
   const { theme } = useContext(ThemeContext);
@@ -50,7 +51,7 @@ function App() {
     const fetchData = async () => {
       const token = localStorage.getItem("Token");
       if (token) {
-        const res = await fetch("https://codru-server.vercel.app/profile", {
+        const res = await fetch(`${import.meta.env.VITE_API}profile`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -224,7 +225,7 @@ function App() {
         />
         <Route
           path="/training"
-          element={<Training userData={userData} setUserData={setUserData} />}
+          element={<Training userData={userData}  />}
         />
       </Routes>
     </div>

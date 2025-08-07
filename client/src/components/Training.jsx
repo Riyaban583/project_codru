@@ -1,14 +1,39 @@
-import { useState } from 'react';
+ // Ensure you have dotenv installed and configured correctly
+import { useState, useEffect } from 'react';
 import '../styles/ContactInfo.css'; // Import the CSS file
-import localStorage from 'local-storage';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
-const ContactInfo = () => {
+const ContactInfo = ({userData}) => {
+  const getDetails = async() => {
+    const backendurl = `${import.meta.env.VITE_API}`; // Fallback to localhost if VITE_API is not set
+    const response = await fetch(`${backendurl}training`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        authorization: `Bearer ${localStorage.getItem('Token')}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    } else {
+      const data = await response.json();
+      setUser({
+        name:data.name,
+        email: data.email,
+       mobile: data.phone,
+      });
+    }
+  }
+  useEffect(() => {
+    getDetails();
+  }, []);
+  
   
     const fetchUser=async(e)=>{
       e.preventDefault();
-      const data =await fetch("http://localhost:8080/training",{
+      const backendurl=`${import.meta.env.VITE_API}`; // Fallback to localhost if VITE_API is not set
+      const data =await fetch(`${backendurl}training`,{
         method:"post",
         headers: {
           "Content-Type": "application/json",
@@ -50,7 +75,7 @@ const ContactInfo = () => {
 
   return (
     <>
-    <Navbar/>
+    <Navbar userData={userData} setUserData={userData}/>
     <div className="form-container">
       <div className="form-card">
         <form
@@ -59,7 +84,6 @@ const ContactInfo = () => {
           }}
           method="post"
           // onSubmit={handleSubmit}
-          encType="multipart/form-data"
           className="form"
         >
           <h1 className="form-title">
@@ -71,11 +95,11 @@ const ContactInfo = () => {
             <div className="input-row">
               <div className="input-group">
                 <label>Name <span className="required">*</span></label>
-                <input type="text" name="name"  value={user.name} onChange={handleInput} placeholder="Your name" />
+                <input type="text" name="name"  value={user.name||""}  placeholder="Your name" />
               </div>
               <div className="input-group">
                 <label>Email <span className="required">*</span></label>
-                <input type="email" name="email"  value={user.email} onChange={handleInput} placeholder="you@example.com" />
+                <input type="email" name="email"  value={user.email||""}  placeholder="you@example.com" />
               </div>
             </div>
 
@@ -86,7 +110,7 @@ const ContactInfo = () => {
               </div>
               <div className="input-group">
                 <label>Mobile Number <span className="required">*</span></label>
-                <input type="text" name="mobile"  value={user.mobile} onChange={handleInput} />
+                <input type="text" name="mobile"  value={user.mobile||" "}  />
               </div>
             </div>
 

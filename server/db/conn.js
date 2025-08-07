@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
-const DB = process.env.DATABASE||"mongodb://localhost:27017/codru";
+require("dotenv").config();
+const DB = process.env.DATABASE; // Use your MongoDB connection string
 mongoose
   .connect(DB)
   .then(() => {

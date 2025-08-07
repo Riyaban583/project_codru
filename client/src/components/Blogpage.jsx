@@ -10,15 +10,17 @@ function Blogpage({ userData, setUserData }) {
   const [expandedTitles, setExpandedTitles] = useState({});
   const [showNoBlogsMessage, setShowNoBlogsMessage] = useState(false); // State to control "No Blogs" message
   const [loading, setLoading] = useState(true); // State to control shimmer effect
+ 
 
   useEffect(() => {
     const fetchBlogData = async () => {
       try {
-        const res = await fetch("https://codru-server.vercel.app/blogsdata", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-
+        const res = await fetch(`${import.meta.env.VITE_API}blogsdata`, {
+          method: "GET",
+          headers: {  
+         authorization: `Bearer ${localStorage.getItem("Token")}` }
+          }
+        );
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
@@ -101,11 +103,11 @@ function Blogpage({ userData, setUserData }) {
                 ) : (
                   <div className="blog-no-image">
                     <div className="author-photo">
-                      <img src={data.userphoto} alt="User Photo" />
+                      <img src={data.userId.photo} alt="User Photo" />
                     </div>
                     <div className="author-name">
                       <b>Published by: </b>
-                      {data.username}
+                      {data.userId.name}
                       <br />
                       <b>Published at: </b>
                       {date}
