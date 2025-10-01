@@ -21,8 +21,8 @@ import {
 import BadgeIcon from "@mui/icons-material/Badge";
 import GoogleIcon from "../assets/google.svg";
 import { useGoogleLogin } from "@react-oauth/google";
-import FacebookIcon from "../assets/facebook-color.svg";
-import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props";
+// import FacebookIcon from "../assets/facebook-color.svg";
+// import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props";
 import MicrosoftIcon from "../assets/microsoft.svg";
 import MicrosoftLogin from "react-microsoft-login";
 import { MuiOtpInput } from "mui-one-time-password-input";
