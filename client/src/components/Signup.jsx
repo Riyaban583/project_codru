@@ -4,6 +4,7 @@ import Muialert from "./Muialert";
 import "../styles/Signup.css";
 import s from "../assets/6430773-transformed.webp";
 import { Email, Lock, Phone, Person } from "@mui/icons-material";
+import FunDatePicker from "./FunDatePicker";
 import SignUpAnim from "./SignUpAnim";
 import "../styles/Spinner.css";
 import {
@@ -19,6 +20,9 @@ import {
   DialogContent,
 } from "@mui/material";
 import BadgeIcon from "@mui/icons-material/Badge";
+import { DatePicker } from "@mui/x-date-pickers";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import GoogleIcon from "../assets/google.svg";
 import { useGoogleLogin } from "@react-oauth/google";
 // import FacebookIcon from "../assets/facebook-color.svg";
@@ -26,6 +30,7 @@ import { useGoogleLogin } from "@react-oauth/google";
 import MicrosoftIcon from "../assets/microsoft.svg";
 import MicrosoftLogin from "react-microsoft-login";
 import { MuiOtpInput } from "mui-one-time-password-input";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday"; // Import the calendar icon
 
 function matchIsString(text) {
   return typeof text === "string";
@@ -48,8 +53,8 @@ async function getAccessTokenFromCode(code) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      client_id: process.env.APP_ID_GOES_HERE,
-      client_secret: process.env.APP_SECRET_GOES_HERE,
+      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+      client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
       redirect_uri: "https://www.example.com/authenticate/google",
       grant_type: "authorization_code",
       code,
@@ -98,6 +103,7 @@ function Signup() {
   const [microsoftUser, setMicrosoftUser] = useState(null);
 
   const navigate = useNavigate();
+  
 
   const [click, handleClick] = useState(false);
   const [open, setOpen] = useState(false);
@@ -249,18 +255,14 @@ function Signup() {
     setShowAlert(false);
   };
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      console.log(tokenResponse);
-    },
-    onError: () => {
-      console.log("Login Failed");
-    },
-  });
-
-  const facebookLogin = (response) => {
-    // Here, you would typically send the response data to your server for further processing
+  const googleLogin = () => {
+    // Redirect to the backend route for Google OAuth
+    window.location.href = "https://codru-server.vercel.app/auth/google";
   };
+
+  // const facebookLogin = (response) => {
+  //   // Here, you would typically send the response data to your server for further processing
+  // };
 
   const microsoftLogin = (err, data) => {
     if (!err) {
@@ -275,7 +277,6 @@ function Signup() {
     setMicrosoftUser(null);
     console.log("Logged out from Microsoft");
   };
-
   return (
     <div className="signupdiv">
       <div className="signupdiv1">
@@ -436,6 +437,7 @@ function Signup() {
             type="tel"
             value={value.phone}
             onChange={handleChange}
+            required
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -446,16 +448,7 @@ function Signup() {
           />
         </div>
         <div>
-          <TextField
-            fullWidth
-            variant="outlined"
-            name="dob"
-            helperText={click && "Fill in your date of birth."}
-            type="date"
-            value={value.dob}
-            onChange={handleChange}
-            onFocus={() => handleClick(true)}
-          />
+        <FunDatePicker />
         </div>
         <div className="terms1">
           <label>
@@ -498,7 +491,7 @@ function Signup() {
           </div>
           <span className="separator">|</span>
 
-          <FacebookLogin
+          {/* <FacebookLogin
             appId="1088597931155576"
             autoLoad={false}
             fields="name,email,picture"
@@ -510,7 +503,8 @@ function Signup() {
                 <img src={FacebookIcon} alt="Facebook" className="icon" />
               </div>
             )}
-          />
+          /> */}
+          
 
           <span className="separator">|</span>
 

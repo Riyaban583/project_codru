@@ -39,7 +39,6 @@ const BotEnroll = ({ course }) => { // Accept course as a prop
             alert('Phone number must be exactly 10 digits.');
             return;
         }
-        // console.log('Form Submitted:', formData);
 
         const res = await fetch('https://codru-server.vercel.app/botenroll', {
             method: 'POST',
@@ -52,18 +51,29 @@ const BotEnroll = ({ course }) => { // Accept course as a prop
         // Handle the response from the server
         if (res.ok) {
             setAlert({
-              show: true,
-              severity: "success",
-              message: "Message sent successfully!",
+                show: true,
+                severity: "success",
+                message: "Form Submitted. Please wait 24 Hours for the response.",
             });
-            // setValue({ formData.name: "", email: "", phone: "", city: "", message: "" });
-          } else {
+
+            // Reset all form fields
+            setFormData({
+                name: '',
+                age: '',
+                email: '',
+                phone: '',
+                countryCode: '+91', // Reset to default country code
+                course: '',
+                duration: '',
+                idea: '', // Reset optional field
+            });
+        } else {
             setAlert({
-              show: true,
-              severity: "error",
-              message: "Failed to send message",
+                show: true,
+                severity: "error",
+                message: "Failed to Enroll. Please try again.",
             });
-          }
+        }
     };
 
     return (
@@ -202,9 +212,8 @@ const BotEnroll = ({ course }) => { // Accept course as a prop
                     <Muialert
                       severity={alert.severity}
                       onClose={() => setAlert({ ...alert, show: false })}
-                    >
-                      {alert.message}
-                    </Muialert>
+                      message={alert.message} // Pass the message as a prop
+                    />
                   )}
             </div>
         </div>

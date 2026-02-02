@@ -11,7 +11,6 @@ import FacebookIcon from "../assets/facebook-color.svg";
 import MicrosoftIcon from "../assets/microsoft.svg";
 import { useNavigate } from "react-router-dom";
 import SignInAnim from "./SignInAnim";
-import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "./Navbar";
 
 const handleGoogleLoginSuccess = (credentialResponse) => {
@@ -221,10 +220,15 @@ function Signin({  userData, setUserData }) {
           </div>
 
           <div className="external">
-            <GoogleLogin
-              onSuccess={handleGoogleLoginSuccess}
-              onError={handleGoogleLoginFailure}
-            />
+            <div className="icon-wrapper">
+              <img
+                src={GoogleIcon}
+                alt="Google"
+                className="icon"
+                onClick={() => googleLogin()}
+                style={{ cursor: "pointer" }}
+              />
+            </div>
             <span className="separator">|</span>
             <div
               className="icon-wrapper"

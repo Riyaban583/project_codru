@@ -27,12 +27,14 @@ const Muialert = ({ message, severity, onClose, autoHideDuration = 4000 }) => {
         sx={{
           width: "100%",
           mb: 2,
-          backgroundColor: "black",
-          color: "white",
+          backgroundColor: severity === "success" ? "#4caf50" : severity === "error" ? "#f44336" : "#2196f3", // Green for success, red for error, blue for info
+          color: "white", // Keep the text white for contrast
           padding: "2vh",
+          fontSize: "1rem", // Adjust font size for better readability
+          fontWeight: "bold", // Make the text bold
         }}
       >
-        {message}
+        {message} {/* Ensure the message is displayed here */}
       </MuiAlert>
     </div>
   );

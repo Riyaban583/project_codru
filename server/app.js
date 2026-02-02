@@ -55,6 +55,69 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+);
+
+// Route to generate the Google OAuth URL
+app.get("/auth/google", (req, res) => {
+  const scopes = [
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+  ];
+
+  const url = oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: scopes,
+  });
+
+  res.redirect(url); // Redirect the user to the Google OAuth URL
+});
+
+// Route to handle the Google OAuth callback
+app.get("/auth/google/callback", async (req, res) => {
+  const code = req.query.code;
+
+  if (!code) {
+    return res.status(400).json({ error: "Authorization code is missing" });
+  }
+
+  try {
+    // Exchange the authorization code for an access token
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+
+    // Fetch user information
+    const oauth2 = google.oauth2({
+      auth: oauth2Client,
+      version: "v2",
+    });
+
+    const { data } = await oauth2.userinfo.get();
+
+    // You can now use `data` to create or authenticate the user in your database
+    console.log("User Info:", data);
+
+    // Example: Save user info to the database
+    const user = await User.findOneAndUpdate(
+      { email: data.email },
+      {
+        name: data.name,
+        email: data.email,
+        photo: data.picture,
+      },
+      { upsert: true, new: true }
+    );
+
+    res.status(200).json({ message: "Authentication successful", user });
+  } catch (error) {
+    console.error("Error during Google OAuth:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.post('/botenroll', async (req, res) => {
   const formData = req.body;
 
@@ -95,7 +158,7 @@ app.post('/botenroll', async (req, res) => {
         Phone: ${formData.phone}
         Course: ${formData.course}
         Duration: ${formData.duration}
-        Message: ${formData.idea || "No additional message provided"}
+        Idea: ${formData.idea || "No additional message provided"}
       `,
     };
 

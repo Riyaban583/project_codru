@@ -11,8 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emotion/react": "^11.11.4",
-    "@emotion/styled": "^11.11.5",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
     "@fortawesome/fontawesome-svg-core": "^6.5.2",
     "@fortawesome/free-brands-svg-icons": "^6.5.2",
     "@fortawesome/free-regular-svg-icons": "^6.5.2",
@@ -25,9 +25,9 @@
     "@fullcalendar/react": "^6.1.14",
     "@mui/icons-material": "^5.14.6",
     "@mui/lab": "^5.0.0-alpha.170",
-    "@mui/material": "^5.15.21",
+    "@mui/material": "^5.17.1",
     "@mui/x-data-grid": "^7.7.1",
-    "@mui/x-date-pickers": "^7.7.1",
+    "@mui/x-date-pickers": "^7.29.3",
     "@react-oauth/google": "^0.12.1",
     "@syncfusion/ej2-react-pdfviewer": "^25.2.7",
     "axios": "^1.7.2",
@@ -38,6 +38,7 @@
     "fullcalendar": "^6.1.14",
     "gapi-script": "^1.2.0",
     "gsap": "^3.12.5",
+    "html-react-parser": "^5.2.4",
     "htmlparser": "^1.7.7",
     "lottie": "^0.0.1",
     "lottie-web": "^5.12.2",
@@ -53,9 +54,7 @@
     "react-confetti": "^6.1.0",
     "react-dom": "^18.3.1",
     "react-draggable": "^4.4.6",
-    "react-facebook-login": "^4.1.1",
     "react-google-calendar-api": "^2.3.0",
-    "react-html-parser": "^2.0.2",
     "react-lottie": "^1.2.4",
     "react-microsoft-login": "^2.0.1",
     "react-modal": "^3.16.1",
@@ -64,7 +63,9 @@
     "react-quill": "^2.0.0",
     "react-router-dom": "^6.23.1",
     "react-xarrows": "^2.0.2",
-    "socket.io-client": "^4.7.5"
+    "socket.io-client": "^4.7.5",
+    "stylis": "^4.3.6",
+    "stylis-plugin-rtl": "^2.1.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
