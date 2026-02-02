@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;700&display=swap');
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #efe1e1; 
+  color: #000000; 
+  line-height: 1.6;
+}
+.form-container {
+    font-family: Fredoka, sans-serif;
+  width: 100%;
+  min-height: 100vh;
+  /* background: linear-gradient(to bottom right, #ebf8ff, #ffffff, #f0f8ff); */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+.form-card {
+  width: 100%;
+  max-width: 1000px;
+  background: #efe1e1;;
+  padding: 40px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.form-title {
+  font-size: 32px;
+  text-align: center;
+  color: #1f2937;
+  font-weight: bold;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #65676b;
+}
+
+.highlight {
+  color: #eb258f;
+}
+
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+textarea{
+  background: #ffff;
+  display:flex ;
+  resize: none;
+  color: #1e1a1a;
+}
+
+@media (min-width: 768px) {
+  .profile-section {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.profile-image {
+  width: 100px;
+  height: 100px;
+  border: 1px solid #d1d5db;
+  padding: 4px;
+  border-radius: 50%;
+}
+
+.input-file {
+  padding: 8px;
+  width: 100%;
+  max-width: 300px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+.input-section {
+  color: #32363e;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+ 
+}
+
+.input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+input{
+    box-shadow: inset 0 0 0 1px #d1d5db;
+}
+
+@media (min-width: 768px) {
+  .input-row {
+    flex-direction: row;
+  }
+}
+
+.input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group label {
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.input-group input,
+.input-group textarea {
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 16px;
+  outline: none;
+}
+
+.input-group input:focus,
+.input-group textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.required {
+  color: red;
+}
+
+.submit-button {
+  text-align: center;
+}
+
+.submit-button button {
+  margin-top: 20px;
+  padding: 12px 24px;
+  background-color: #2563eb;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.submit-button button:hover {
+  background-color: #1d4ed8;
+}

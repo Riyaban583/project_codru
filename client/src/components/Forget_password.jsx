@@ -21,7 +21,7 @@ const Forget_password = () => {
 
     try {
       const res = await fetch(
-        `https://codru-server.vercel.app/reset-password/${token}`,
+        `${import.meta.env.VITE_API}reset-password/${token}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

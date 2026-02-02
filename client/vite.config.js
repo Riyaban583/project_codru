@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(),],
   server: {
     proxy: {
       // Remove "/api" from the request path and forward it to the backend

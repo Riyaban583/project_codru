@@ -4,7 +4,8 @@ const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 const router = express.Router();
 const dotenv = require("dotenv");
-dotenv.config({ path: "./config.env" });
+// dotenv.config({ path: "./config.env" });
+dotenv.config();
 const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
 router.use(express.json());
@@ -14,6 +15,7 @@ router.use(cookieParser());
 const User = require("../models/userSchema");
 const Student = require("../models/studentSchema");
 const Teacher = require("../models/teacherSchema");
+const authenticate = require("../middleware/authenticate");
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -112,7 +114,7 @@ router.post("/signin", async (req, res) => {
       return res.status(400).json({ error: "Empty field(s)" });
     }
 
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username }).select("+password");
 
     if (user) {
       const isMatched = await bcrypt.compare(password, user.password);
@@ -133,7 +135,7 @@ router.post("/signin", async (req, res) => {
       );
 
       const options = {
-        expires: new Date(Date.now() + process.env.COOKIEEXPIRE),
+        expires: new Date(Date.now() + (process.env.COOKIEEXPIRE|| 24 * 60 * 60 * 1000)), // Default to 20 days if not set
         httpOnly: true,
       };
 
@@ -238,23 +240,23 @@ router.post("/admission/:username", async (req, res) => {
 });
 
 // GET student data by username
-router.get("/students/:username", async (req, res) => {
-  const username = req.params.username;
+// router.get("/students/:username", async (req, res) => {
+//   const username = req.params.username;
 
-  try {
-    // Find student by username in the database
-    const student = await User.findOne({ username });
+//   try {
+//     // Find student by username in the database
+//     const student = await User.findOne({ username, role: "Student" });
 
-    if (!student) {
-      return res.status(404).json({ error: "Student not found" });
-    }
+//     if (!student) {
+//       return res.status(404).json({ error: "Student not found" });
+//     }
 
-    res.status(200).json(student);
-  } catch (error) {
-    console.error("Error fetching student:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
+//     res.status(200).json(student);
+//   } catch (error) {
+//     console.error("Error fetching student:", error);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
 
 // Change password route
 router.post("/change-password", async (req, res) => {
@@ -416,19 +418,12 @@ router.post("/profile-edit", async (req, res) => {
 });
 
 // Profile retrieval route
-router.get("/profile", async (req, res) => {
+router.get("/profile",authenticate,async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Unauthorized access" });
-    }
-
-    const token = authHeader.split(" ")[1];
-    const decodedToken = jwt.verify(token, process.env.TOKEN_SECRET);
-    const username = decodedToken.username;
-
-    let user = await User.findOne({ username });
+    const username = req.username; // Get username from authenticated user
+    let user = await User.findOne({ username }).populate({
+      path: "blogs followers following", 
+    });
     if (!user) {
       return res.status(400).json({ error: "User not found" });
     }
@@ -439,6 +434,89 @@ router.get("/profile", async (req, res) => {
       return res.status(401).json({ error: "Invalid token" });
     }
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+//userlist for sending follow request
+router.get("/userlist", authenticate, async (req, res) => {
+  try {
+    const users = await User.find().select("_id username name ");
+    res.status(200).json({success:true, message:" users fatches successfully",users});
+  } catch (error) {
+    console.error("Error fetching user list:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Follow user route
+router.post("/follow/:userid",authenticate, async (req, res) => {
+  const targetId = req.params.userid;
+  const currentUserId = req.userId; // Get current user ID from authenticated request
+  try {
+    const targetUser = await User.findById(targetId);
+    const currentUser = await User.findById(currentUserId);
+
+    if (!targetUser || !currentUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (targetUser.followers.some(follower => follower._id.equals(currentUserId))) {
+      return res.status(400).json({ error: "You are already following this user" });
+    }else if (targetUser._id.equals(currentUser._id)) {
+      return res.status(400).json({ error: "You cannot follow yourself" });
+    }
+    else{
+      targetUser.followers.push({
+        _id: currentUser._id,
+        username: currentUser.username,
+        name: currentUser.name,
+        // photo: currentUser.photo,
+      });
+      currentUser.following.push({
+        _id: targetUser._id,
+        username: targetUser.username,
+        name: targetUser.name,
+        // photo: targetUser.photo,
+      });
+
+      await targetUser.save();
+      await currentUser.save();
+
+      res.status(200).json({ message: "Followed successfully" });
+    }
+}
+  catch (error) {
+    console.error("Error following user:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Unfollow user route
+router.post("/unfollow/:userid", authenticate, async (req, res) => {
+  const targetId = req.params.userid;
+  const currentUserId = req.userId; // Get current user ID from authenticated request
+  try {
+    const targetUser = await User.findById(targetId);
+    const currentUser = await User.findById(currentUserId);
+
+    if (!targetUser || !currentUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!targetUser.followers.some(follower => follower._id.equals(currentUserId))) {
+      return res.status(400).json({ error: "You are not following this user" });
+    }
+
+    targetUser.followers = targetUser.followers.filter(follower => !follower._id.equals(currentUserId));
+    currentUser.following = currentUser.following.filter(following => !following._id.equals(targetId));
+
+    await targetUser.save();
+    await currentUser.save();
+
+    res.status(200).json({ message: "Unfollowed successfully" });
+  } catch (error) {
+    console.error("Error unfollowing user:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -459,11 +537,13 @@ router.get("", (req, res) => {
 });
 
 // Route to get a user's public profile
-router.get("/profile/:username", async (req, res) => {
+router.get("/profile/:username", authenticate,async (req, res) => {
   const { username } = req.params;
 
   try {
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username }).populate({
+      path: "followers following blogs",
+    });
 
     if (!user) {
       return res
@@ -480,7 +560,7 @@ router.get("/profile/:username", async (req, res) => {
   }
 });
 
-router.post("/checkfollowing", async (req, res) => {
+router.post("/checkfollowing",authenticate, async (req, res) => {
   const { currentUsername, targetUsername } = req.body;
   try {
     // Find the target user by username
@@ -500,6 +580,11 @@ router.post("/checkfollowing", async (req, res) => {
       res.status(200).json({
         success: true,
         following: true,
+      });
+    }else{
+      res.status(200).json({
+        success: true,
+        following: false,
       });
     }
   } catch (error) {

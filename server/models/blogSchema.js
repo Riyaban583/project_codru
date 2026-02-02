@@ -29,10 +29,14 @@ const CommentSchema = new mongoose.Schema(
 );
 
 const blogSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
   title: { type: String, required: true },
   content: { type: String, required: true },
-  username: { type: String, required: true },
-  userphoto: { type: String },
+  // username: { type: String, required: true },
+  // userphoto: { type: String },
   createdAt: {
     type: Date,
     default: Date.now,

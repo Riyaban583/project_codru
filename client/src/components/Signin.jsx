@@ -13,6 +13,47 @@ import { useNavigate } from "react-router-dom";
 import SignInAnim from "./SignInAnim";
 import Navbar from "./Navbar";
 
+const handleGoogleLoginSuccess = (credentialResponse) => {
+  console.log("Google Login Success:", credentialResponse);
+
+  // Send the token to your backend for verification
+  fetch(`${import.meta.env.VITE_API}google-login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: credentialResponse.credential }),
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      console.log("User data from backend:", data);
+
+      // Save user data in state
+      setUserData({
+        Photo: data.photo,
+        Name: data.name,
+        Role: data.role,
+        isAdmin: data.isAdmin,
+      });
+
+      // Save token and username in localStorage
+      localStorage.setItem("Token", data.token);
+      localStorage.setItem("Username", data.username);
+
+      // Navigate to the home page
+      navigate("/");
+    })
+    .catch((error) => {
+      console.error("Error during Google login:", error);
+      setAlertMessage("Google Sign-In failed. Please try again.");
+      setShowAlert(true);
+    });
+};
+
+const handleGoogleLoginFailure = (error) => {
+  console.error("Google Login Failed:", error);
+  setAlertMessage("Google Sign-In failed. Please try again.");
+  setShowAlert(true);
+};
+
 function Signin({  userData, setUserData }) {
   const [showAlert, setShowAlert] = useState(false); // State to control alert visibility
   const [alertMessage, setAlertMessage] = useState(""); // State to store alert message
@@ -35,7 +76,7 @@ function Signin({  userData, setUserData }) {
     e.preventDefault();
     const { username, password } = value;
     console.log(value);
-    const res = await fetch("https://codru-server.vercel.app/signin", {
+    const res = await fetch(`${import.meta.env.VITE_API}signin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -81,7 +122,7 @@ function Signin({  userData, setUserData }) {
       return;
     }
 
-    const res = await fetch("https://codru-server.vercel.app/reset-password", {
+    const res = await fetch(`${import.meta.env.VITE_API}reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

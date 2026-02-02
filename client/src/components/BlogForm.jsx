@@ -72,10 +72,11 @@ const BlogForm = ({ userData, setUserData }) => {
     };
 
     try {
-      const response = await fetch("https://codru-server.vercel.app/blogs", {
+      const response = await fetch(`${import.meta.env.VITE_API}blogs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          authorization: `Bearer ${localStorage.getItem("Token")}`,
         },
         body: JSON.stringify(postData),
       });
