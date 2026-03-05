@@ -1,5 +1,5 @@
 # server/.gitignore
+.env
 node_modules/
-config.env    # CRITICAL: Hides your MongoDB password and JWT Secret
-.env          # Just in case you use this name too
+config.env 
 npm-debug.log
