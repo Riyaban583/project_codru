@@ -5,6 +5,13 @@ const nodemailer = require("nodemailer");
 const cors = require("cors");
 const path = require("path");
 const { Server } = require("socket.io");
+const { google } = require("googleapis");
+const authenticate = require("./middleware/authenticate"); // Import it
+const User = require("./models/userSchema");
+const Student = require("./models/studentSchema");
+const jwt = require("jsonwebtoken");
+
+
 
 dotenv.config({ path: "./config.env" });
 const app = express();
@@ -31,8 +38,6 @@ app.use(
 // app.use(express.static(path.join(__dirname, "public")));
 
 require("./db/conn.js");
-const User = require("./models/userSchema");
-const Student = require("./models/studentSchema");
 const Teacher = require("./models/teacherSchema");
 const Contact = require("./models/contactSchema");
 const ContactInfo = require("./models/trainingSchema");
@@ -61,60 +66,103 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-// Route to generate the Google OAuth URL
-app.get("/auth/google", (req, res) => {
-  const scopes = [
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/userinfo.email",
-  ];
 
-  const url = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: scopes,
-  });
+// ==========================================
+// GOOGLE CALENDAR API (SERVICE ACCOUNT)
+// ==========================================
+app.get("/calendar-events", async (req, res) => {
+  try {
+    // 1. Authenticate using the Service Account credentials from .env
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        // The .replace() is crucial because .env files read line breaks literally as \n
+        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+    });
 
-  res.redirect(url); // Redirect the user to the Google OAuth URL
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    // 2. Fetch the events from the company calendar
+    const response = await calendar.events.list({
+      calendarId: process.env.GOOGLE_CALENDAR_ID,
+      timeMin: new Date().toISOString(), // Only show future events
+      maxResults: 100, // Adjust this if you want more/less events
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+
+    // 3. Format the data perfectly for FullCalendar on your React frontend
+    const formattedEvents = response.data.items.map(event => ({
+      id: event.id,
+      title: event.summary,
+      start: event.start.dateTime || event.start.date,
+      end: event.end.dateTime || event.end.date,
+      url: event.htmlLink,
+    }));
+
+    res.status(200).json(formattedEvents);
+  } catch (error) {
+    console.error('Error fetching calendar:', error);
+    res.status(500).json({ error: 'Failed to fetch calendar events' });
+  }
 });
 
-// Route to handle the Google OAuth callback
+app.get("/auth/google", (req, res) => {
+  const url = oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: ["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"],
+  });
+  res.redirect(url);
+});
+
+// Route to generate the Google OAuth URL
 app.get("/auth/google/callback", async (req, res) => {
   const code = req.query.code;
-
-  if (!code) {
-    return res.status(400).json({ error: "Authorization code is missing" });
-  }
+  if (!code) return res.status(400).json({ error: "Code missing from Google" });
 
   try {
-    // Exchange the authorization code for an access token
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    // Fetch user information
-    const oauth2 = google.oauth2({
-      auth: oauth2Client,
-      version: "v2",
-    });
+    const oauth2 = google.oauth2({ auth: oauth2Client, version: "v2" });
+    const { data } = await oauth2.userinfo.get(); 
 
-    const { data } = await oauth2.userinfo.get();
+    let user = await User.findOne({ email: data.email });
 
-    // You can now use `data` to create or authenticate the user in your database
-    console.log("User Info:", data);
-
-    // Example: Save user info to the database
-    const user = await User.findOneAndUpdate(
-      { email: data.email },
-      {
+    if (!user) {
+      let baseUsername = data.email.split('@')[0]; 
+      
+      // CRITICAL: Use 'new Student' so the database knows to allow admission details
+      user = new Student({
         name: data.name,
         email: data.email,
+        username: baseUsername,
         photo: data.picture,
-      },
-      { upsert: true, new: true }
-    );
+        isEmailVerified: true
+      });
 
-    res.status(200).json({ message: "Authentication successful", user });
+      try {
+        await user.save();
+      } catch (saveError) {
+        user.username = `${baseUsername}${Math.floor(Math.random() * 10000)}`;
+        await user.save();
+      }
+    } else {
+      user.photo = data.picture;
+      await user.save();
+    }
+
+    const token = jwt.sign({ _id: user._id }, process.env.TOKEN_SECRET, {
+      expiresIn: "24h",
+    });
+
+    res.redirect(`http://localhost:5173/dashboard?token=${token}`);
+    
   } catch (error) {
-    console.error("Error during Google OAuth:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Google Auth Error:", error);
+    res.redirect("http://localhost:5173/signin?error=auth_failed");
   }
 });
 
@@ -178,10 +226,11 @@ app.post('/botenroll', async (req, res) => {
 });
 
 app.post("/contactus", async (req, res) => {
-  const { email, name, city, phone, message } = req.body;
+  // Grab all fields, including the countryCode from your select dropdown
+  const { email, name, city, phone, countryCode, message } = req.body;
 
-  // Validate required fields
-  if (!email || !name || !message || !city || !phone) {
+  // Validate ALL required fields
+  if (!email || !name || !message || !city || !phone || !countryCode) {
     return res.status(400).send("All fields are required");
   }
 
@@ -191,12 +240,15 @@ app.post("/contactus", async (req, res) => {
       name: name,
       email: email,
       city: city,
+      countryCode: countryCode, 
       phone: phone,
       message: message,
     });
 
-    await newContact.save(); // Save to the database
+    await newContact.save(); 
     console.log("Contact form saved successfully");
+
+    const fullPhone = `${countryCode} ${phone}`;
 
     // Send an email notification
     const mailOptions = {
@@ -208,7 +260,7 @@ app.post("/contactus", async (req, res) => {
         Name: ${name}
         Email: ${email}
         City: ${city}
-        Phone: ${phone}
+        Phone: ${fullPhone}
         Message: ${message}
       `,
     };
@@ -224,12 +276,12 @@ app.post("/contactus", async (req, res) => {
     });
   } catch (err) {
     console.error("Error saving contact form:", err);
+    // If the error is a validation error (like a bad phone number format), send a 400
+    if (err.name === 'ValidationError') {
+       return res.status(400).send(err.message);
+    }
     return res.status(500).send("Error saving contact form");
   }
-});
-
-app.get("/", (req, res) => {
-  res.send("Hello there!");
 });
 
 app.post("/notifications", async (req, res) => {
@@ -448,15 +500,49 @@ app.put("/assignTask/:username", async (req, res) => {
   }
 });
 
-app.post("/get-tasks", async (req, res) => {
-  try {
-    const { username } = req.body;
+app.get("/get-user-details", authenticate, (req, res) => {
+  // req.user was already populated by your middleware!
+  res.status(200).json({
+    name: req.user.name,
+    email: req.user.email,
+    photo: req.user.photo,
+    role: req.user.role,
+    isAdmin: req.user.isAdmin
+  });
+});
 
-    if (!username) {
-      return res.status(400).json({ error: "Username is required" });
+app.put("/update-profile", authenticate, async (req, res) => {
+  try {
+    // We use findById so Mongoose knows this is a Student and allows the extra fields
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    const student = await Student.findOne({ username });
+    // Apply the new data from the React frontend
+    const updates = req.body;
+
+    for (const key in updates) {
+      if (key !== '_id' && key !== 'role' && key !== 'email') {
+        user[key] = updates[key];
+      }
+    }
+
+    // Save the fully updated student profile
+    const updatedUser = await user.save();
+
+    res.status(200).json({ message: "Profile updated successfully!", user: updatedUser });
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+app.post("/get-tasks", authenticate, async (req, res) => {
+  try {
+    // IMPORTANT: Use req.userId (from middleware) instead of trusting the body
+    const student = await Student.findOne({ _id: req.userId });
 
     if (!student) {
       return res.status(404).json({ error: "User not found" });
@@ -489,6 +575,24 @@ setInterval(cleanupOldNotifications, 60 * 60 * 1000);
 
 app.listen(port, () => {
   console.log(`Server is running on ${port}`);
+});
+
+// Import your middleware if you haven't already at the top
+// const authenticate = require("./middleware/authenticate");
+
+app.get("/get-user-profile", authenticate, async (req, res) => {
+  try {
+    // req.user is the full document fetched by your authenticate middleware.
+    // Because of discriminators, if they are a Student, this already contains 
+    // fatherName, subjects, address, etc.
+    
+    // We send the entire user object back to React!
+    res.status(200).json(req.user);
+    
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    res.status(500).json({ error: "Failed to fetch user profile" });
+  }
 });
 
 // const server = app.listen(port, () => {

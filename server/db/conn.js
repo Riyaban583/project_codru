@@ -4,6 +4,6 @@ const DB = process.env.DATABASE; // Use your MongoDB connection string
 mongoose
   .connect(DB)
   .then(() => {
-    console.log("Connection Successful");
+    console.log("Connection Successful! 🚀");
   })
-  .catch((err) => console.log("Connection Error:", err));
+  .catch((err) => console.log("Connection Error: 🚨", err));

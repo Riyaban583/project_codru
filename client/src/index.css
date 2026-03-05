@@ -1,40 +1,70 @@
-:root {
-  /* --default-font: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif; */
-  --heading-font: "Arial Rounded MT Bold", "Arimo Bold";
-  --tagline-font: "Segoe Print", "Arimo Italic";
-  --text-font: "Bierstadt", "Arimo";
+@import url('https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
 
-  /* font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif; */
-  line-height: 1.5;
-  font-weight: 400;
-  width: 100%;
 
-  color-scheme: light dark;
-  /* color: black; */
-  /* background-color:  #efe1e1; */
-  justify-content: "center";
-
-  /* font-synthesis: none; */
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* =========================================
+   1. CuTe Learning Brand Theme Variables
+   ========================================= */
+@theme {
+  --color-brand-orange: #ed7f23; 
+  --color-brand-blue: #1765a4;   
+  
+  --font-display: "Arial Rounded MT Bold", "Helvetica Rounded", Arial, sans-serif;
+  --font-body: "Arimo", sans-serif;
 }
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none; /* Hide scrollbar for WebKit browsers */
-}
-body {
-  margin: 0px;
-  padding: 0%;
-  ::-webkit-scrollbar {
-    display: none;
+
+/* =========================================
+   2. Global Base Rules
+   ========================================= */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  html, body {
+    @apply font-body bg-slate-50 text-slate-800 antialiased flex flex-col min-h-screen;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  input, textarea, select {
+    @apply bg-white text-gray-900;
   }
 }
-* {
-  margin: 0px;
-  padding: 0px;
+
+/* =========================================
+   3. Custom Components (Logo, Chat, etc.)
+   ========================================= */
+@layer components {
+  .logo {
+    width: 6.5rem;
+    height: auto;
+    display: block;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+  }
+
+  /* Chat Widget Link Styles */
+  .msg-bubble a {
+    @apply text-brand-orange underline font-bold;
+  }
+
+  .msg-user a {
+    @apply text-white;
+  }
 }
-input {
-  background-color: white;
-  color: black;
+
+/* =========================================
+   4. Custom Utilities (Scrollbars)
+   ========================================= */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }

@@ -1,2 +1,6 @@
-/server/config.env
-/server/node_modules/
+nodemodules/
+# Root .gitignore
+.DS_Store
+.vscode/
+.idea/
+*.log
