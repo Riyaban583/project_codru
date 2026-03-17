@@ -606,9 +606,6 @@ router.post("/reset-password/:token", async (req, res) => {
   }
 });
 
-let otpCode;
-let otpTimestamp;
-
 // ==========================================
 // 1. GENERATE OTP ROUTE (Signup Proof)
 // ==========================================

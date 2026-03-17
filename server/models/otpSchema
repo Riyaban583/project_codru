@@ -9,3 +9,4 @@ const otpSchema = new mongoose.Schema({
 
 // Create the model (avoids overwriting if it already exists)
 const OTP = mongoose.model("OTP", otpSchema);
+module.exports  = OTP
