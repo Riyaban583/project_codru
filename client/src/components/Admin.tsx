@@ -4,7 +4,6 @@ import {
   GridToolbarContainer,
   GridToolbarQuickFilter,
   GridColDef,
-  GridRenderCellParams,
 } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,99 +11,346 @@ import {
   Assignment as AssignmentIcon,
   AddCircle as AddCircleIcon,
   RemoveCircle as RemoveCircleIcon,
+  Shield as ShieldIcon,
+  Block as BlockIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon
 } from "@mui/icons-material";
-import { Dialog, DialogContent, IconButton, Tooltip, CircularProgress } from "@mui/material";
+import { Dialog, DialogContent, IconButton, TextField, Button, Tooltip, Switch, FormControlLabel } from "@mui/material";
 import { MuiOtpInput } from "mui-one-time-password-input";
+import { Loader2, Send, X, Megaphone, Link as LinkIcon } from "lucide-react";
 
 // Components
 import Muialert from "./Muialert";
 
-function matchIsString(text: unknown): text is string {
-  return typeof text === "string";
-}
+const BroadcastModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const [data, setData] = useState({ title: "", message: "", link: "" });
+  const [loading, setLoading] = useState(false);
 
-function matchIsNumeric(text: unknown) {
-  const isNumber = typeof text === "number";
-  const isString = matchIsString(text);
-  return (isNumber || (isString && text !== "")) && !isNaN(Number(text));
-}
+  const handleSend = async () => {
+  if (!data.title || !data.message) return alert("Please fill in the title and message!");
+  
+  const targetURL = `${import.meta.env.VITE_API}api/admin/broadcast`;
+  console.log("🚀 Attempting to broadcast to:", targetURL);
+  console.log("📦 Payload:", data);
 
-const validateChar = (value: string) => {
-  return matchIsNumeric(value);
+  setLoading(true);
+  try {
+    const res = await fetch(targetURL, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${localStorage.getItem("jwtoken")}` 
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      alert("Broadcast sent successfully!");
+      onClose();
+    } else if (res.status === 404) {
+      console.error("❌ Error 404: The server doesn't recognize this URL. Check your server.js route path.");
+    } else if (res.status === 403) {
+      console.error("❌ Error 403: You aren't an admin, or the token is missing.");
+    }
+  } catch (error) {
+    console.error("🚨 Network Error:", error);
+  } finally {
+    setLoading(false);
+  }
 };
 
-export default function Admin() {
+  return (
+    <Dialog 
+      open={isOpen} 
+      onClose={onClose}
+      PaperProps={{ style: { borderRadius: '24px', padding: '10px', maxWidth: '500px', width: '100%' } }}
+    >
+      <div className="p-4">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-brand-orange/10 p-2 rounded-xl">
+              <Megaphone className="text-brand-orange w-6 h-6" />
+            </div>
+            <h2 className="text-2xl font-display font-bold text-brand-blue">Global Broadcast</h2>
+          </div>
+          <IconButton onClick={onClose}><X /></IconButton>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <TextField
+            label="Notification Title"
+            placeholder="e.g., Site Maintenance"
+            fullWidth
+            value={data.title}
+            onChange={(e) => setData({ ...data, title: e.target.value })}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '14px' } }}
+          />
+          <TextField
+            label="Your Message"
+            placeholder="Tell your users what's happening..."
+            multiline
+            rows={3}
+            fullWidth
+            value={data.message}
+            onChange={(e) => setData({ ...data, message: e.target.value })}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '14px' } }}
+          />
+          <TextField
+            label="Redirect Link (Optional)"
+            placeholder="/dashboard or https://..."
+            fullWidth
+            value={data.link}
+            onChange={(e) => setData({ ...data, link: e.target.value })}
+            InputProps={{ startAdornment: <LinkIcon size={18} className="mr-2 text-gray-400" /> }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '14px' } }}
+          />
+
+          <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200 mt-2">
+            <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Live Preview</p>
+            <div className="flex gap-3 items-start">
+               <img src="https://res.cloudinary.com/da6jhcsmm/image/upload/v1773202841/CuTe_Logo_dlmvw9.png" className="w-8 h-8 rounded-lg" />
+               <div>
+                  <p className="text-xs font-bold text-gray-800">{data.title || "Title Here"}</p>
+                  <p className="text-[11px] text-gray-500 leading-tight">{data.message || "Your message will appear here..."}</p>
+               </div>
+            </div>
+          </div>
+
+          <Button
+            variant="contained"
+            disabled={loading}
+            onClick={handleSend}
+            sx={{ 
+              mt: 2, bgcolor: '#1765a4', borderRadius: '14px', py: 1.5, fontWeight: 'bold', textTransform: 'none',
+              '&:hover': { bgcolor: '#124d7d' }
+            }}
+            startIcon={loading ? <Loader2 className="animate-spin" /> : <Send size={18} />}
+          >
+            {loading ? "Transmitting..." : "Blast to All Devices"}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+};
+
+function Admin() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [godMode, setGodMode] = useState(false);
+  const [draggingStudentUsername, setDraggingStudentUsername] = useState<string | null>(null);
+
+  // 🚨 Pending Teacher & Parent States
+  const [pendingTeachers, setPendingTeachers] = useState<any[]>([]);
+  const [pendingParents, setPendingParents] = useState<any[]>([]);
+  const [loadingPending, setLoadingPending] = useState(true);
   
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+
   // OTP Dialog State
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState({ otp: "" });
+  const [otpValue, setOtpValue] = useState("");
   const [currentUsername, setCurrentUsername] = useState("");
-  
+
   // Alert State
   const [alertMessage, setAlertMessage] = useState("");
   const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("info");
   const [showAlert, setShowAlert] = useState(false);
   const [waitingAlert, setWaitingAlert] = useState(false);
-  
+
   const navigate = useNavigate();
 
+  // 1. Fetch ALL data
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchAdminData = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API}users`);
-        if (!response.ok) throw new Error("Network response was not ok");
-        const data = await response.json();
+        setLoading(true);
+        setLoadingPending(true);
+        const token = localStorage.getItem("jwtoken");
+        const headers = {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        };
 
-        const mappedData = data.map((user: any, index: number) => ({
-          id: index, // DataGrid requires a unique 'id' prop
-          ...user,
-        }));
+        // 🚨 Added pending-parents to the Promise.all array
+        const [userRes, pendingRes, pendingParentRes] = await Promise.all([
+          fetch(`${import.meta.env.VITE_API}users`, { headers }),
+          fetch(`${import.meta.env.VITE_API}admin/pending-teachers`, { headers }),
+          fetch(`${import.meta.env.VITE_API}admin/pending-parents`, { headers })
+        ]);
 
-        setUsers(mappedData);
-      } catch (error) {
-        console.error("Error fetching users:", error);
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          const cleanUsers = userData.map((u: any) => ({ ...u, id: u._id.toString() }));
+          setUsers(cleanUsers);
+        }
+
+        if (pendingRes.ok) {
+          const pendingData = await pendingRes.json();
+          setPendingTeachers(pendingData);
+        }
+
+        // 🚨 Set Pending Parents State
+        if (pendingParentRes.ok) {
+          const pendingParentData = await pendingParentRes.json();
+          setPendingParents(pendingParentData);
+        }
+        
+      } catch (error: any) {
         setAlertSeverity("error");
-        setAlertMessage("Failed to load users.");
+        setAlertMessage("Failed to load admin data.");
         setShowAlert(true);
       } finally {
         setLoading(false);
+        setLoadingPending(false);
       }
     };
-
-    fetchUsers();
+    fetchAdminData();
   }, []);
 
-  const handleDelete = async (id: number, username: string, role: string) => {
-    const confirmDelete = window.confirm(`Remove "${username}" from the organization?`);
-    if (!confirmDelete) return;
+  // 2. Drag & Drop Handshake Logic
+  const handleDrop = async (e: React.DragEvent, teacherUsername: string, teacherRole: string) => {
+    e.preventDefault();
+    const studentUsername = e.dataTransfer.getData("studentUsername");
+
+    if (!godMode || teacherRole !== 'Teacher' || !studentUsername) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API}user/${username}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
+      const res = await fetch(`${import.meta.env.VITE_API}admin/assign-student`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("jwtoken")}`
+        },
+        body: JSON.stringify({ teacherUsername, studentUsername })
       });
-      
-      if (!response.ok) throw new Error("Network response was not ok");
-      
-      setUsers(users.filter((user) => user.id !== id));
-      setAlertSeverity("success");
-      setAlertMessage("User deleted successfully.");
-      setShowAlert(true);
+
+      const data = await res.json();
+      if (res.ok) {
+        setAlertSeverity("success");
+        setAlertMessage(data.message);
+        setShowAlert(true);
+        setUsers(prev => prev.map(u => 
+          u.username === studentUsername ? { ...u, assignedTeacher: teacherUsername } : u
+        ));
+      } else {
+        setAlertSeverity("error");
+        setAlertMessage(data.error);
+        setShowAlert(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // 3. God Mode Inline Editing
+  const handleProcessRowUpdate = async (newRow: any, oldRow: any) => {
+    if (JSON.stringify(newRow) === JSON.stringify(oldRow)) return oldRow;
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API}admin/god-mode-edit/${newRow.id}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("jwtoken")}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(newRow)
+      });
+
+      if (response.ok) {
+        setAlertSeverity("success");
+        setAlertMessage(`Updated ${newRow.username} successfully!`);
+        setShowAlert(true);
+        return newRow;
+      } else {
+        throw new Error("Failed to save changes.");
+      }
     } catch (error) {
       setAlertSeverity("error");
-      setAlertMessage("Failed to delete user.");
+      setAlertMessage("God Mode Edit Failed.");
+      setShowAlert(true);
+      return oldRow;
+    }
+  };
+
+  // 4. Action Handlers (Verify, Ban, Delete, Admin Toggle)
+  const handleTeacherAction = async (id: string, action: "verify" | "reject") => {
+    try {
+      const token = localStorage.getItem("jwtoken");
+      const res = await fetch(`${import.meta.env.VITE_API}admin/${action}-teacher/${id}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setPendingTeachers(prev => prev.filter(t => t._id !== id));
+        setUsers(prev => prev.map(u => u._id === id ? { ...u, isVerifiedStaff: action === 'verify' } : u));
+        setAlertSeverity("success");
+        setAlertMessage(`Teacher ${action === "verify" ? "approved" : "rejected"}.`);
+        setShowAlert(true);
+      }
+    } catch (error) {
+      setAlertSeverity("error");
       setShowAlert(true);
     }
   };
 
-  const handleAssignTask = (username: string) => {
-    navigate(`/add-task/${username}`);
+  // 🚨 NEW: Parent Verification Handler
+  const handleParentAction = async (id: string, action: "verify" | "reject") => {
+    try {
+      const token = localStorage.getItem("jwtoken");
+      const res = await fetch(`${import.meta.env.VITE_API}${action}-parent/${id}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setPendingParents(prev => prev.filter(p => p._id !== id));
+        setUsers(prev => prev.map(u => u._id === id ? { ...u, isVerifiedParent: action === 'verify' } : u));
+        setAlertSeverity("success");
+        setAlertMessage(`Parent account ${action === "verify" ? "verified" : "rejected"}.`);
+        setShowAlert(true);
+      }
+    } catch (error) {
+      setAlertSeverity("error");
+      setShowAlert(true);
+    }
   };
 
-  const handleBro = async (username: string, isAdmin: boolean) => {
+  const handleDelete = async (id: string, username: string) => {
+    if (!window.confirm(`Permanently delete @${username}?`)) return;
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API}user/${username}`, { method: "DELETE" });
+      if (response.ok) {
+        setUsers(users.filter((u) => u.id !== id));
+        setAlertSeverity("success");
+        setAlertMessage("User deleted.");
+        setShowAlert(true);
+      }
+    } catch (error) {
+      setAlertSeverity("error");
+      setShowAlert(true);
+    }
+  };
+
+  const handleToggleBan = async (username: string) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API}user/toggle-ban/${username}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("jwtoken")}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAlertSeverity("warning");
+        setAlertMessage(data.message);
+        setShowAlert(true);
+        setUsers(prev => prev.map(u => u.username === username ? { ...u, isBanned: data.isBanned } : u));
+      }
+    } catch (err) {
+      setAlertMessage("Ban toggle failed.");
+      setShowAlert(true);
+    }
+  };
+
+  const handleAdminToggleRequest = async (username: string, isAdmin: boolean) => {
     try {
       setWaitingAlert(true);
       const response = await fetch(`${import.meta.env.VITE_API}generate-otp-bro`, {
@@ -113,118 +359,199 @@ export default function Admin() {
         body: JSON.stringify({ username, isAdmin }),
       });
       setWaitingAlert(false);
-
       if (response.ok) {
         setCurrentUsername(username);
-        setValue({ otp: "" });
+        setOtpValue("");
         setOpen(true);
-      } else {
-        throw new Error("Failed to generate OTP");
       }
     } catch (error) {
       setWaitingAlert(false);
       setAlertSeverity("error");
-      setAlertMessage("Error occurred while generating OTP");
       setShowAlert(true);
     }
   };
 
-  const handleOtpVerification = async (username: string, finalValue: string) => {
+  const handleOtpVerification = async (finalOtp: string) => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API}verify-bigbro`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, otp: finalValue }),
+        body: JSON.stringify({ username: currentUsername, otp: finalOtp }),
       });
-
-      const jsonresponse = await res.json();
-
+      const data = await res.json();
       if (res.ok) {
         setOpen(false);
         setAlertSeverity("success");
-        setAlertMessage(jsonresponse.message);
+        setAlertMessage(data.message);
         setShowAlert(true);
-        // Better UX: Instead of reloading the page, update the state directly if possible, 
-        // but reloading is a safe fallback for admin state changes.
         setTimeout(() => window.location.reload(), 1500); 
       } else {
         setAlertSeverity("error");
-        setAlertMessage(jsonresponse.error);
+        setAlertMessage(data.error || "Invalid OTP");
         setShowAlert(true);
       }
     } catch (err) {
       setAlertSeverity("error");
-      setAlertMessage("OTP Verification Failed");
       setShowAlert(true);
     }
   };
 
+  // Columns Configuration
   const columns: GridColDef[] = [
-    { field: "name", headerName: "Name", flex: 1, minWidth: 150 },
-    { field: "username", headerName: "Username", flex: 1, minWidth: 150 },
-    { field: "email", headerName: "Email", flex: 1.5, minWidth: 200 },
-    { field: "phone", headerName: "Phone", flex: 1, minWidth: 120 },
+    { field: "name", headerName: "Full Name", flex: 1.2, minWidth: 150, editable: godMode },
+    { field: "username", headerName: "Username", flex: 1, minWidth: 120, editable: godMode },
+    { field: "email", headerName: "Email", flex: 1.5, minWidth: 200, editable: godMode },
     { 
       field: "role", 
       headerName: "Role", 
-      flex: 1, 
-      minWidth: 120,
-      renderCell: (params: GridRenderCellParams) => (
-        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-          params.value === 'Student' ? 'bg-blue-100 text-blue-800' : 
-          params.value === 'Teacher' ? 'bg-orange-100 text-orange-800' : 
-          'bg-gray-100 text-gray-800'
+      width: 120,
+      renderCell: (params) => (
+        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+          params.value === 'Student' ? 'bg-blue-100 text-blue-700' : 
+          params.value === 'Parent' ? 'bg-rose-100 text-rose-700' : // 🚨 Parent Badge added
+          'bg-orange-100 text-orange-700'
         }`}>
-          {params.value}
+          {params.value || 'User'}
         </span>
       )
     },
     { 
+    field: "statusInfo", 
+    headerName: "Verified / Assigned To", 
+    width: 220, 
+    renderCell: (params) => {
+      const isTeacher = params.row.role === 'Teacher';
+      const isStudent = params.row.role === 'Student';
+      const isParent = params.row.role === 'Parent'; // 🚨 Parent Flag added
+      const isVerifiedStaff = params.row.isVerifiedStaff;
+      const isVerifiedParent = params.row.isVerifiedParent; // 🚨 Parent Verification Flag
+      const assignedTeacher = params.row.assignedTeacher;
+
+      // God Mode Toggle for Teachers
+      const toggleStaffVerification = async (e: any) => {
+        e.stopPropagation();
+        if (!godMode) return;
+        const updatedRow = { ...params.row, isVerifiedStaff: !isVerifiedStaff };
+        await handleProcessRowUpdate(updatedRow, params.row);
+        setUsers(prev => prev.map(u => u._id === params.row._id ? updatedRow : u));
+      };
+
+      // 🚨 God Mode Toggle for Parents
+      const toggleParentVerification = async (e: any) => {
+        e.stopPropagation();
+        if (!godMode) return;
+        const updatedRow = { ...params.row, isVerifiedParent: !isVerifiedParent };
+        await handleProcessRowUpdate(updatedRow, params.row);
+        setUsers(prev => prev.map(u => u._id === params.row._id ? updatedRow : u));
+      };
+
+      const handleUnassign = async (e: any) => {
+        e.stopPropagation();
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API}admin/unassign-student/${params.row.username}`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${localStorage.getItem("jwtoken")}` }
+          });
+          if (res.ok) {
+            setUsers(prev => prev.map(u => u.username === params.row.username ? { ...u, assignedTeacher: "" } : u));
+            setAlertSeverity("info");
+            setAlertMessage(`Student @${params.row.username} is now unassigned.`);
+            setShowAlert(true);
+          }
+        } catch (err) {
+          console.error("Failed to unassign.");
+        }
+      };
+
+      return (
+        <div className="flex items-center gap-3 h-full w-full">
+          {/* TEACHER VIEW */}
+          {isTeacher && (
+            <IconButton 
+              onClick={toggleStaffVerification} 
+              size="small" 
+              style={{ color: isVerifiedStaff ? '#10b981' : '#ef4444', opacity: godMode ? 1 : 0.4 }}
+            >
+              {isVerifiedStaff ? <CheckCircleIcon fontSize="small" /> : <CancelIcon fontSize="small" />}
+            </IconButton>
+          )}
+
+          {/* 🚨 PARENT VIEW */}
+          {isParent && (
+            <IconButton 
+              onClick={toggleParentVerification} 
+              size="small" 
+              style={{ color: isVerifiedParent ? '#10b981' : '#ef4444', opacity: godMode ? 1 : 0.4 }}
+            >
+              {isVerifiedParent ? <CheckCircleIcon fontSize="small" /> : <CancelIcon fontSize="small" />}
+            </IconButton>
+          )}
+
+          {/* STUDENT VIEW */}
+          {isStudent && (
+            <div className="flex items-center gap-2 group">
+              <span className={`text-[11px] font-bold ${assignedTeacher ? 'text-brand-blue' : 'text-slate-300'}`}>
+                {assignedTeacher ? `🎓 @${assignedTeacher}` : "—"}
+              </span>
+              
+              {godMode && assignedTeacher && (
+                <Tooltip title="Unassign Student">
+                  <IconButton 
+                    onClick={handleUnassign}
+                    size="small" 
+                    sx={{ 
+                      padding: '2px', 
+                      color: '#94a3b8', 
+                      '&:hover': { color: '#ef4444', bgcolor: '#fef2f2' } 
+                    }}
+                  >
+                    <CancelIcon sx={{ fontSize: 14 }} /> 
+                  </IconButton>
+                </Tooltip>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+  },
+    { 
       field: "isAdmin", 
-      headerName: "Admin Status", 
-      flex: 1, 
-      minWidth: 130,
-      renderCell: (params: GridRenderCellParams) => (
-        <span className={`font-bold ${params.value ? 'text-green-600' : 'text-gray-400'}`}>
-          {params.value ? "Admin" : "Standard"}
+      headerName: "Admin", 
+      width: 80,
+      renderCell: (params) => params.value ? <ShieldIcon sx={{ fontSize: 18, color: '#10b981' }} /> : <span className="text-xs text-gray-300">NO</span>
+    },
+    { 
+      field: "isBanned", 
+      headerName: "Banned", 
+      width: 80,
+      renderCell: (params) => (
+        <span className={`text-[10px] font-bold ${params.value ? 'text-red-600' : 'text-green-600'}`}>
+          {params.value ? "YES" : "NO"}
         </span>
       )
     },
     {
       field: "actions",
       headerName: "Actions",
-      flex: 1.5,
-      minWidth: 180,
+      width: 160,
       sortable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <div className="flex items-center gap-2 h-full">
+      renderCell: (params) => (
+        <div className="flex items-center gap-1 h-full">
           {params.row.role === "Student" && (
-            <Tooltip title="Assign Task">
-              <IconButton onClick={() => handleAssignTask(params.row.username)} size="small" sx={{ color: '#1765a4' }}>
-                <AssignmentIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          
-          {params.row.isAdmin ? (
-            <Tooltip title="Revoke Admin Privileges">
-              <IconButton onClick={() => handleBro(params.row.username, params.row.isAdmin)} size="small" color="warning">
-                <RemoveCircleIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          ) : (
-            <Tooltip title="Grant Admin Privileges">
-              <IconButton onClick={() => handleBro(params.row.username, params.row.isAdmin)} size="small" color="success">
-                <AddCircleIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-
-          <Tooltip title="Delete User">
-            <IconButton onClick={() => handleDelete(params.row.id, params.row.username, params.row.role)} size="small" color="error">
-              <DeleteIcon fontSize="small" />
+            <IconButton onClick={() => navigate(`/update-report/${params.row.username}`)} size="small" sx={{ color: '#1765a4' }}>
+              <AssignmentIcon fontSize="small" />
             </IconButton>
-          </Tooltip>
+          )}
+          <IconButton onClick={() => handleToggleBan(params.row.username)} size="small" sx={{ color: params.row.isBanned ? '#10b981' : '#ef4444' }}>
+            <BlockIcon fontSize="small" />
+          </IconButton>
+          <IconButton onClick={() => handleAdminToggleRequest(params.row.username, params.row.isAdmin)} size="small" color={params.row.isAdmin ? "warning" : "success"}>
+            {params.row.isAdmin ? <RemoveCircleIcon fontSize="small" /> : <AddCircleIcon fontSize="small" />}
+          </IconButton>
+          <IconButton onClick={() => handleDelete(params.row.id, params.row.username)} size="small" color="error">
+            <DeleteIcon fontSize="small" />
+          </IconButton>
         </div>
       ),
     },
@@ -232,85 +559,215 @@ export default function Admin() {
 
   function CustomToolbar() {
     return (
-      <GridToolbarContainer className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50/50">
-        <h2 className="text-xl font-display font-bold text-brand-blue">User Directory</h2>
+      <GridToolbarContainer className="flex items-center px-10 py-6 border-b border-gray-100 bg-gray-50/50 w-full">
+      
+      {/* 1. LEFT: Title */}
+      <div className="flex-1">
+        <h2 className="text-2xl px-3 font-display font-bold text-brand-blue tracking-tight">
+          User Management
+        </h2>
+      </div>
+
+      {/* 2. MIDDLE: Controls with Gap and RESTORED Pulse */}
+      <div className="flex-1 flex justify-center items-center gap-8">
+        {/* Pulse Container */}
+        <div 
+          className={`px-4 py-1 rounded-full border-2 transition-all duration-500 flex items-center ${
+            godMode ? 'god-pulse-active' : 'border-transparent bg-white/50'
+          }`}
+        >
+          <FormControlLabel
+            control={
+              <Switch 
+                checked={godMode} 
+                onChange={(e) => setGodMode(e.target.checked)} 
+                color="error" 
+                size="small"
+              />
+            }
+            label={
+              <span className={`font-black tracking-widest text-[10px] ${godMode ? 'text-red-600' : 'text-slate-400'}`}>
+                GOD MODE
+              </span>
+            }
+            sx={{ margin: 0 }}
+          />
+        </div>
+
+        {/* Broadcast Button */}
+        <button 
+          onClick={() => setIsBroadcastOpen(true)}
+          className="bg-brand-orange text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-orange/10"
+        >
+          <Megaphone size={16} strokeWidth={3} />
+          <span className="text-xs uppercase tracking-wider">Broadcast</span>
+        </button>
+      </div>
+
+      {/* 3. RIGHT: Search */}
+      <div className="flex-1 flex justify-end">
         <GridToolbarQuickFilter 
-          placeholder="Search users..." 
-          variant="outlined"
-          size="small"
+          placeholder="Search directory..." 
+          variant="outlined" 
+          size="small" 
           sx={{ 
-            width: "300px", 
-            backgroundColor: "white", 
-            '& .MuiOutlinedInput-root': { borderRadius: '8px' } 
+            width: "100%", 
+            maxWidth: "300px",
+            '& .MuiOutlinedInput-root': { 
+              borderRadius: '14px', 
+              bgcolor: 'white', 
+              marginRight: '8px',
+              '& fieldset': { borderColor: '#e2e8f0' }
+            } 
           }} 
         />
-      </GridToolbarContainer>
+      </div>
+
+    </GridToolbarContainer>
     );
   }
 
   return (
-    <div className="animate-fade-in-up h-[75vh] w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-      <DataGrid
-        rows={users}
-        columns={columns}
-        loading={loading}
-        disableRowSelectionOnClick
-        slots={{
-          toolbar: CustomToolbar,
-          loadingOverlay: () => (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
-              <CircularProgress sx={{ color: '#ed7f23' }} />
-            </div>
-          ),
-        }}
-        sx={{
-          border: 'none',
-          '& .MuiDataGrid-columnHeaders': {
-            backgroundColor: '#f8fafc',
-            borderBottom: '2px solid #e2e8f0',
-            color: '#475569',
-            fontFamily: '"Arimo", sans-serif',
-            fontSize: '0.875rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          },
-          '& .MuiDataGrid-cell': {
-            borderBottom: '1px solid #f1f5f9',
-            fontFamily: '"Arimo", sans-serif',
-            display: 'flex',
-            alignItems: 'center',
-          },
-          '& .MuiDataGrid-row:hover': {
-            backgroundColor: '#f8fafc',
-          },
-        }}
-      />
+    <div className="flex flex-col gap-6 h-full w-full">
+      <style>{`
+        @keyframes god-pulse {
+          0% { 
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); 
+            border-color: rgba(239, 68, 68, 0.5);
+            background-color: rgba(239, 68, 68, 0.05);
+          }
+          70% { 
+            box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); 
+            border-color: rgba(239, 68, 68, 0.8);
+            background-color: rgba(239, 68, 68, 0.1);
+          }
+          100% { 
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); 
+            border-color: rgba(239, 68, 68, 0.5);
+            background-color: rgba(239, 68, 68, 0.05);
+          }
+        }
+        .god-pulse-active { 
+          animation: god-pulse 2s infinite !important; 
+          border-style: solid !important;
+        }
+      `}</style>
 
-      {/* OTP Dialog for Admin Promotion */}
-      <Dialog
-        open={open}
-        onClose={(e, reason) => { if (reason !== "backdropClick") setOpen(false); }}
-        PaperProps={{
-          style: { padding: "32px", borderRadius: "16px", textAlign: "center" },
-        }}
-      >
+      {/* Pending TEACHER Approvals */}
+      {(pendingTeachers.length > 0 || loadingPending) && (
+        <div className="animate-fade-in-down bg-white shadow-xl border border-gray-100 rounded-[24px] p-6">
+          <h2 className="text-lg font-black text-brand-blue mb-4 flex items-center gap-2">
+            <span className="bg-orange-100 text-brand-orange w-7 h-7 rounded-full flex items-center justify-center text-xs">{pendingTeachers.length}</span>
+            Pending Staff Approvals
+          </h2>
+          {loadingPending ? <div className="flex justify-center p-4"><Loader2 className="animate-spin text-brand-orange" /></div> : (
+            <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+              {pendingTeachers.map((teacher) => (
+                <div key={teacher._id} className="min-w-[280px] flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <img src={teacher.photo || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover shadow-sm border-2 border-orange-100" />
+                    <div className="overflow-hidden">
+                      <p className="font-bold text-brand-blue text-sm truncate">{teacher.name}</p>
+                      <p className="text-[10px] text-slate-500 font-medium truncate">@{teacher.username}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <IconButton onClick={() => handleTeacherAction(teacher._id, "reject")} size="small" color="error"><CancelIcon fontSize="small" /></IconButton>
+                    <IconButton onClick={() => handleTeacherAction(teacher._id, "verify")} size="small" color="success"><CheckCircleIcon fontSize="small" /></IconButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 🚨 Pending PARENT Approvals (New Section!) */}
+      {(pendingParents.length > 0 || loadingPending) && (
+        <div className="animate-fade-in-down bg-white shadow-xl border border-gray-100 rounded-[24px] p-6">
+          <h2 className="text-lg font-black text-rose-500 mb-4 flex items-center gap-2">
+            <span className="bg-rose-100 text-rose-600 w-7 h-7 rounded-full flex items-center justify-center text-xs">{pendingParents.length}</span>
+            Pending Parent Verifications
+          </h2>
+          {loadingPending ? <div className="flex justify-center p-4"><Loader2 className="animate-spin text-rose-500" /></div> : (
+            <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+              {pendingParents.map((parent) => (
+                <div key={parent._id} className="min-w-[280px] flex items-center justify-between p-3 bg-rose-50/50 rounded-2xl border border-rose-100">
+                  <div className="flex items-center gap-3">
+                    <img src={parent.photo || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover shadow-sm border-2 border-rose-200" />
+                    <div className="overflow-hidden">
+                      <p className="font-bold text-rose-700 text-sm truncate">{parent.name}</p>
+                      <p className="text-[10px] text-rose-400 font-medium truncate">@{parent.username}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <IconButton onClick={() => handleParentAction(parent._id, "reject")} size="small" sx={{ color: '#ef4444' }}><CancelIcon fontSize="small" /></IconButton>
+                    <IconButton onClick={() => handleParentAction(parent._id, "verify")} size="small" sx={{ color: '#10b981' }}><CheckCircleIcon fontSize="small" /></IconButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main Grid */}
+      <div className="animate-fade-in-up h-[80vh] w-full bg-white shadow-xl border border-gray-100 rounded-[24px] overflow-hidden flex flex-col">
+        <DataGrid
+          rows={users}
+          columns={columns}
+          loading={loading}
+          getRowId={(row) => row._id} 
+          disableRowSelectionOnClick
+          slots={{ toolbar: CustomToolbar }}
+          processRowUpdate={handleProcessRowUpdate}
+          getRowClassName={(params) => (godMode && params.row.role === 'Student' ? 'student-draggable' : '')}
+          slotProps={{
+            row: {
+              draggable: godMode,
+              onDragStart: (e: any) => {
+                const rowId = e.currentTarget.dataset.id;
+                const row = users.find(u => u._id === rowId);
+                if (row?.role === 'Student') e.dataTransfer.setData("studentUsername", row.username);
+              },
+              onDragEnter: (e: any) => {
+                const rowId = e.currentTarget.dataset.id;
+                const row = users.find(u => u._id === rowId);
+                if (godMode && row?.role === 'Teacher') e.currentTarget.classList.add('teacher-drop-zone');
+              },
+              onDragOver: (e: any) => e.preventDefault(),
+              onDragLeave: (e: any) => e.currentTarget.classList.remove('teacher-drop-zone'),
+              onDrop: (e: any) => {
+                e.currentTarget.classList.remove('teacher-drop-zone');
+                const rowId = e.currentTarget.dataset.id;
+                const row = users.find(u => u._id === rowId);
+                handleDrop(e, row?.username, row?.role);
+              }
+            }
+          }}
+          sx={{ border: 'none', '& .MuiDataGrid-columnHeaders': { bgcolor: '#f8fafc', fontWeight: '900' } }}
+        />
+      </div>
+
+      {/* OTP Dialog */}
+      <Dialog open={open} onClose={(e, reason) => { if (reason !== "backdropClick") setOpen(false); }} disableEscapeKeyDown PaperProps={{ style: { padding: "40px", borderRadius: "24px", textAlign: "center" } }}>
         <DialogContent>
-          <h3 className="text-xl font-display font-bold text-brand-blue mb-2">Verify Admin Action</h3>
-          <p className="text-sm text-gray-500 mb-6">Enter the 4-digit OTP sent to your email.</p>
-          <MuiOtpInput
-            length={4}
-            autoFocus
-            onComplete={(val) => handleOtpVerification(currentUsername, val)}
-            value={value.otp}
-            onChange={(otp) => setValue({ otp })}
-            gap={2}
-          />
+          <ShieldIcon sx={{ fontSize: 48, color: '#ef4444', mb: 2 }} />
+          <h3 className="text-2xl font-display font-bold text-brand-blue mb-2">Security Verification</h3>
+          <p className="text-sm text-gray-500 mb-8">Enter the code from your Admin Security Email to proceed.</p>
+          <MuiOtpInput length={4} autoFocus onComplete={handleOtpVerification} value={otpValue} onChange={setOtpValue} gap={2} />
         </DialogContent>
       </Dialog>
 
-      {/* Unified Alerts */}
       {showAlert && <Muialert message={alertMessage} severity={alertSeverity} onClose={() => setShowAlert(false)} />}
-      {waitingAlert && <Muialert message="Processing request... Please wait." severity="info" onClose={() => setWaitingAlert(false)} />}
+      {waitingAlert && <Muialert message="Sending OTP..." severity="info" onClose={() => setWaitingAlert(false)} />}
+
+        <BroadcastModal 
+          isOpen={isBroadcastOpen} 
+          onClose={() => setIsBroadcastOpen(false)} 
+        />
     </div>
   );
 }
+
+export default Admin;

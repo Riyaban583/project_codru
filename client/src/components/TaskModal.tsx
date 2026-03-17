@@ -5,13 +5,14 @@ import { Close as CloseIcon, Launch as LaunchIcon } from '@mui/icons-material';
 interface TaskModalProps {
   show: boolean;
   onClose: () => void;
+  taskId: number | null;
   question: string;
   answer: string;
   link: string;
   position: { x: number; y: number };
 }
 
-const TaskModal = ({ show, onClose, question, answer, link, position }: TaskModalProps) => {
+const TaskModal = ({ show, onClose, taskId, question, answer, link, position }: TaskModalProps) => {
   if (!show) return null;
 
   // Smart Positioning Math: Ensures the modal never flies off the edge of the screen!
@@ -57,7 +58,7 @@ const TaskModal = ({ show, onClose, question, answer, link, position }: TaskModa
         {/* Header Section */}
         <div className="bg-brand-blue px-6 py-4 flex justify-between items-center">
           <h2 className="text-white font-display font-bold text-lg tracking-wide">
-            Task Details
+            Level {taskId}
           </h2>
           <IconButton 
             onClick={onClose} 
@@ -72,7 +73,7 @@ const TaskModal = ({ show, onClose, question, answer, link, position }: TaskModa
         <div className="p-6 flex flex-col gap-4">
           <div>
             <h3 className="text-sm font-bold text-brand-orange uppercase tracking-wider mb-1">
-              Assignment
+              Problem Faced
             </h3>
             <p className="text-gray-800 font-display font-bold text-lg leading-tight">
               {question}
@@ -81,7 +82,7 @@ const TaskModal = ({ show, onClose, question, answer, link, position }: TaskModa
 
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-              Description / Notes
+              Solution Found
             </h3>
             <p className="text-gray-600 font-body text-sm leading-relaxed">
               {answer || "No additional details provided for this task."}

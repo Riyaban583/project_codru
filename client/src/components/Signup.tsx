@@ -7,14 +7,12 @@ import {
   TextField, Button, InputAdornment, Checkbox, Dialog, DialogContent, Select, MenuItem
 } from "@mui/material";
 import { MuiOtpInput } from "mui-one-time-password-input";
-import MicrosoftLogin from "react-microsoft-login";
 
 // Components & Assets
 import SignUpAnim from "./SignUpAnim";
 import FunDatePicker from "./FunDatePicker";
 import Muialert from "./Muialert";
 import GoogleIcon from "../assets/google.svg";
-import MicrosoftIcon from "../assets/microsoft.svg";
 
 function Signup() {
   const [value, setValue] = useState({
@@ -31,7 +29,8 @@ function Signup() {
     isEmailVerified: false,
   });
 
-  const [loading, setLoading] = useState(true);
+  const [isOtpSending, setIsOtpSending] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
   const [open, setOpen] = useState(false);
@@ -39,7 +38,6 @@ function Signup() {
   const [countryCode, setCountryCode] = useState("+91");
   const navigate = useNavigate();
 
-  // --- Handlers ---
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value: val } = e.target;
     setValue((prev) => ({
@@ -50,19 +48,29 @@ function Signup() {
   };
 
   const handleEmailVerification = async () => {
-    setLoading(false);
-    const res = await fetch(`${import.meta.env.VITE_API}generate-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: value.email }),
-    });
+    setIsOtpSending(true);
+    setValue(prev => ({ ...prev, otp: "" }));
+    
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API}generate-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: value.email }),
+      });
 
-    if (res.ok) {
-      setOpen(true);
-      setTimer(60);
-      setLoading(true);
-    } else {
-      setLoading(true);
+      if (res.ok) {
+        setOpen(true);
+        setTimer(60);
+      } else {
+        const data = await res.json();
+        setAlertMessage(data.error || "Failed to send OTP. Try again.");
+        setShowAlert(true);
+      }
+    } catch (error) {
+      setAlertMessage("Network error. Could not send OTP.");
+      setShowAlert(true);
+    } finally {
+      setIsOtpSending(false);
     }
   };
 
@@ -83,21 +91,52 @@ function Signup() {
     }
   };
 
+  // 🚀 UPDATED: Auto-Login & Smart Redirect Logic
   const PostData = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (usernameStatus !== "available") {
+      setAlertMessage("Please choose a valid and available username.");
+      setShowAlert(true);
+      return;
+    }
+
     if (!value.isEmailVerified) {
       setAlertMessage("Please verify your email first.");
       setShowAlert(true);
       return;
     }
 
-    const res = await fetch(`${import.meta.env.VITE_API}register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(value),
-    });
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API}register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(value),
+      });
 
-    if (res.ok) navigate("/signin");
+      const data = await res.json();
+
+      if (res.ok) {
+        // 1. AUTO-LOGIN
+        localStorage.setItem("jwtoken", data.token);
+        localStorage.setItem("Username", data.username);
+        localStorage.setItem("Name", data.name);
+        localStorage.setItem("Photo", data.photo || "");
+
+        // 2. SMART REDIRECT
+        const returnTo = sessionStorage.getItem("redirectPath") || "/";
+        sessionStorage.removeItem("redirectPath"); 
+
+        // 3. Navigate with the 'new' flag for the popup
+        navigate(`${returnTo}?new=true`);
+      } else {
+        setAlertMessage(data.error || "Something went wrong.");
+        setShowAlert(true);
+      }
+    } catch (err) {
+      setAlertMessage("Server error. Please try again.");
+      setShowAlert(true);
+    }
   };
 
   useEffect(() => {
@@ -105,9 +144,47 @@ function Signup() {
       const interval = setInterval(() => setTimer(timer - 1), 1000);
       return () => clearInterval(interval);
     } else if (timer === 0) {
-      setOpen(false);
+      setTimer(null);
     }
   }, [timer]);
+
+  useEffect(() => {
+    const checkUsername = async () => {
+      const currentUsername = value.username.trim();
+      if (currentUsername.length === 0) {
+        setUsernameStatus("idle");
+        return;
+      }
+      if (currentUsername.length < 4) {
+        setUsernameStatus("invalid");
+        return;
+      }
+
+      setUsernameStatus("checking");
+
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API}check-username`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: currentUsername }),
+        });
+        const data = await res.json();
+        if (res.ok && data.available) {
+          setUsernameStatus("available");
+        } else {
+          setUsernameStatus("taken");
+        }
+      } catch (error) {
+        setUsernameStatus("idle");
+      }
+    };
+
+    const delayDebounceFn = setTimeout(() => {
+      checkUsername();
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [value.username]);
 
   return (
     <div className="min-h-screen pt-20 pb-12 flex items-center justify-center bg-slate-50 px-4">
@@ -115,13 +192,9 @@ function Signup() {
         
         {/* Left Side: Animation & Branding */}
         <div className="md:w-1/2 bg-brand-blue p-12 flex flex-col justify-center items-center text-white">
-          <div className="w-full max-w-sm mb-8">
-             <SignUpAnim />
-          </div>
+          <div className="w-full max-w-sm mb-8"><SignUpAnim /></div>
           <h1 className="text-3xl font-display font-bold mb-4 text-center">Join the Curious Team</h1>
-          <p className="text-blue-100 text-center font-body opacity-80">
-            Start your journey of education with empathy and discovery.
-          </p>
+          <p className="text-blue-100 text-center font-body opacity-80">Start your journey of education with empathy and discovery.</p>
         </div>
 
         {/* Right Side: Form */}
@@ -136,7 +209,7 @@ function Signup() {
               fullWidth
               variant="outlined"
               name="name"
-              placeholder="Full Name"
+              label="Full Name" 
               value={value.name}
               onChange={handleChange}
               required
@@ -148,19 +221,37 @@ function Signup() {
               fullWidth
               variant="outlined"
               name="username"
-              placeholder="Username"
+              label="Username"
               value={value.username}
               onChange={handleChange}
               required
-              InputProps={{ startAdornment: (<InputAdornment position="start"><Person className="text-brand-blue" /></InputAdornment>) }}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+              error={usernameStatus === "taken" || usernameStatus === "invalid"}
+              helperText={
+                usernameStatus === "checking" ? "Checking availability..." :
+                usernameStatus === "invalid" ? "Username must be at least 4 characters." :
+                usernameStatus === "taken" ? "Username is already taken." :
+                usernameStatus === "available" ? "Username is available!" : ""
+              }
+              InputProps={{ 
+                startAdornment: (<InputAdornment position="start"><Person className="text-brand-blue" /></InputAdornment>),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {usernameStatus === "checking" && <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>}
+                    {usernameStatus === "available" && <span className="text-green-500 font-bold">✔</span>}
+                  </InputAdornment>
+                )
+              }}
+              sx={{ 
+                '& .MuiOutlinedInput-root': { borderRadius: '12px' },
+                '& .MuiFormHelperText-root': { color: usernameStatus === 'available' ? '#22c55e' : undefined, fontWeight: usernameStatus === 'available' ? 'bold' : 'normal' }
+              }}
             />
 
             <TextField
               fullWidth
               variant="outlined"
               name="email"
-              placeholder="Email Address"
+              label="Email Address"
               value={value.email}
               onChange={handleChange}
               required
@@ -172,13 +263,15 @@ function Signup() {
                       <button 
                         type="button"
                         onClick={handleEmailVerification}
-                        className="text-xs font-bold text-brand-orange hover:underline disabled:opacity-50"
-                        disabled={!!timer}
+                        className="flex items-center gap-2 text-xs font-bold text-brand-orange hover:underline disabled:opacity-50 disabled:no-underline"
+                        disabled={!!timer || isOtpSending}
                       >
-                        {timer ? `Resend in ${timer}s` : "Verify"}
+                        {isOtpSending ? (
+                          <><div className="w-3 h-3 border-2 border-brand-orange border-t-transparent rounded-full animate-spin"></div> Sending...</>
+                        ) : (timer ? `Resend in ${timer}s` : "Verify")}
                       </button>
                     )}
-                    {value.isEmailVerified && <span className="text-green-500">✔</span>}
+                    {value.isEmailVerified && <span className="text-green-500 font-bold">✔ Verified</span>}
                   </InputAdornment>
                 )
               }}
@@ -187,73 +280,35 @@ function Signup() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <TextField
-                fullWidth
-                variant="outlined"
-                name="password"
-                type="password"
-                placeholder="Password"
-                value={value.password}
-                onChange={handleChange}
-                required
+                fullWidth variant="outlined" name="password" type="password" label="Password" value={value.password} onChange={handleChange} required
                 InputProps={{ startAdornment: (<InputAdornment position="start"><Lock className="text-brand-blue" /></InputAdornment>) }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
               />
               <TextField
-                fullWidth
-                variant="outlined"
-                name="cpassword"
-                type="password"
-                placeholder="Confirm"
-                value={value.cpassword}
-                onChange={handleChange}
-                required
+                fullWidth variant="outlined" name="cpassword" type="password" label="Confirm Password" value={value.cpassword} onChange={handleChange} required
                 InputProps={{ startAdornment: (<InputAdornment position="start"><Lock className="text-brand-blue" /></InputAdornment>) }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
               />
             </div>
 
-            {/* --- NEW PHONE NUMBER LAYOUT --- */}
             <div className="flex gap-3">
               <Select
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value as string)}
-                sx={{
-                  minWidth: '130px',
-                  borderRadius: '12px',
-                  backgroundColor: 'white',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e5e7eb' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#1765a4' },
-                }}
+                sx={{ minWidth: '130px', borderRadius: '12px', backgroundColor: 'white', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e5e7eb' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#1765a4' } }}
               >
                 <MenuItem value="+91">+91 (IN)</MenuItem>
                 <MenuItem value="+1">+1 (US)</MenuItem>
                 <MenuItem value="+44">+44 (UK)</MenuItem>
-                {/* Add more as needed */}
               </Select>
-
               <TextField
-                fullWidth
-                variant="outlined"
-                name="phone"
-                placeholder="Phone Number"
-                value={value.phone}
-                onChange={handleChange}
-                required
-                sx={{ 
-                  '& .MuiOutlinedInput-root': { 
-                    borderRadius: '12px',
-                    backgroundColor: 'white'
-                  } 
-                }}
+                fullWidth variant="outlined" name="phone" label="Phone Number" value={value.phone} onChange={handleChange} required
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', backgroundColor: 'white' } }}
               />
             </div>
 
-            {/* --- DATE OF BIRTH LAYOUT --- */}
             <div className="w-full [&>div]:w-full">
-              <FunDatePicker 
-                value={value.dob} 
-                onChange={(newDate) => setValue({ ...value, dob: newDate || "" })} 
-              />
+              <FunDatePicker value={value.dob} onChange={(newDate) => setValue({ ...value, dob: newDate || "" })} />
             </div>
 
             <button
@@ -264,49 +319,58 @@ function Signup() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-gray-500 font-body">
-            Already have an account? <NavLink to="/signin" className="text-brand-blue font-bold hover:underline">Sign In</NavLink>
-          </p>
-
           <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-200"></span></div>
-            <div className="relative flex justify-center text-sm"><span className="px-4 bg-white text-gray-400">Or continue with</span></div>
+            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-100"></span></div>
+            <div className="relative flex justify-center text-xs font-bold uppercase tracking-widest"><span className="px-4 bg-white text-gray-400">Or continue with</span></div>
           </div>
 
-          <div className="flex justify-center items-center gap-6">
-            <button 
-              onClick={() => window.location.href = `${import.meta.env.VITE_API}auth/google`}
-              className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition transform hover:scale-110"
-            >
-              <img src={GoogleIcon} alt="Google" className="w-6 h-6" />
-            </button>
-            <div className="w-px h-6 bg-gray-200"></div>
-            <MicrosoftLogin
-              clientId="f8c7976f-3e93-482d-88a3-62a1133cbbc3"
-              authCallback={() => {}}
-              children={
-                <button className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition transform hover:scale-110">
-                  <img src={MicrosoftIcon} alt="Microsoft" className="w-6 h-6" />
-                </button>
-              }
-            />
-          </div>
+          {/* 🚀 NEW: Clean Full-Width Google Button */}
+          <button 
+            onClick={() => {
+              const returnTo = sessionStorage.getItem("redirectPath") || "/";
+              window.location.href = `${import.meta.env.VITE_API}auth/google?returnTo=${returnTo}`;
+            }}
+            className="w-full flex items-center justify-center gap-3 py-3.5 border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-95"
+          >
+            <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
+            Sign in with Google
+          </button>
+
+          <p className="mt-8 text-center text-gray-400 text-sm font-medium">
+            Already have an account? <NavLink to="/signin" className="text-brand-blue font-black hover:underline ml-1">Sign In</NavLink>
+          </p>
         </div>
       </div>
 
-      {/* OTP Dialog */}
-      <Dialog open={open} onClose={() => setOpen(false)}>
-        <div className="p-8 text-center">
-          <h3 className="text-xl font-display font-bold text-brand-blue mb-4">Verify Your Email</h3>
-          <p className="text-gray-500 mb-6 text-sm">We've sent a 4-digit code to {value.email}</p>
+      {/* OTP Dialog remains same */}
+      <Dialog 
+        open={open} 
+        onClose={(event, reason) => { if (reason !== 'backdropClick' && reason !== 'escapeKeyDown') setOpen(false); }}
+        disableEscapeKeyDown
+        PaperProps={{ style: { borderRadius: '24px', padding: '10px' } }}
+      >
+        <div className="p-8 text-center flex flex-col items-center">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4"><Email className="text-brand-blue" fontSize="large" /></div>
+          <h3 className="text-2xl font-display font-bold text-brand-blue mb-2">Verify Your Email</h3>
+          <p className="text-gray-500 mb-8 text-sm max-w-[250px]">We've sent a 4-digit code to <br/><span className="font-bold text-gray-700">{value.email}</span></p>
           <MuiOtpInput
-            length={4}
-            autoFocus
-            onComplete={handleOtpComplete}
-            value={value.otp}
-            onChange={(otp) => setValue({...value, otp})}
-            gap={2}
+            length={4} autoFocus onComplete={handleOtpComplete} value={value.otp} onChange={(otp) => setValue({...value, otp})} gap={2}
+            TextFieldsProps={{ inputProps: { inputMode: 'numeric', pattern: '[0-9]*' } }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', fontSize: '24px', fontWeight: 'bold' } }}
           />
+          <div className="mt-10 pt-6 border-t border-gray-100 w-full">
+            {timer && timer > 0 ? (
+              <p className="text-gray-400 text-sm font-body">Resend code in <span className="text-brand-blue font-bold">{timer}s</span></p>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-sm text-gray-500">Didn't receive the code?</p>
+                <button type="button" onClick={handleEmailVerification} disabled={isOtpSending} className="text-brand-orange font-bold hover:underline flex items-center gap-2">
+                  {isOtpSending && <div className="w-3 h-3 border-2 border-brand-orange border-t-transparent rounded-full animate-spin"></div>} Resend OTP
+                </button>
+              </div>
+            )}
+          </div>
+          <button onClick={() => setOpen(false)} className="mt-4 text-xs text-gray-400 hover:text-gray-600 underline">Entered wrong email? Edit it</button>
         </div>
       </Dialog>
       

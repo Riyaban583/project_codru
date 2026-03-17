@@ -23,7 +23,7 @@ export default function FunDatePicker({ value, onChange }: FunDatePickerProps) {
         slotProps={{
           textField: {
             fullWidth: true,
-            placeholder: "Date of Birth",
+            label: "Date of Birth", // 🚨 CHANGED from placeholder to label to make it float!
             sx: {
               "& .MuiOutlinedInput-root": {
                 borderRadius: "12px",

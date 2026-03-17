@@ -53,7 +53,7 @@ const DraggableBox = ({ id, style = {}, onDrag, onClick, className = "" }: Dragg
 
   // Clean up the text: if id is "task1", just display "Week 1"
   const displayName = id.toLowerCase().includes('task') 
-    ? `Wk ${id.replace(/\D/g, '')}` 
+    ? `LVL ${id.replace(/\D/g, '')}` 
     : id;
 
   // Safely extract left/top from incoming style so we don't cause the double-move bug
@@ -62,27 +62,38 @@ const DraggableBox = ({ id, style = {}, onDrag, onClick, className = "" }: Dragg
 
   return (
     <Draggable
-      bounds={bounds}
+      bounds="parent" // <-- THE MAGIC FIX!
       defaultPosition={{ x: initialX, y: initialY }}
       onDrag={handleDrag}
       onStop={updateXarrow}
       nodeRef={boxRef}
     >
+      {/* OUTER DIV: Handles the Draggable Movement and Xarrow Tracking */}
       <div
         ref={boxRef}
-        id={id}
-        onClick={onClick}
-        className={`absolute flex items-center justify-center rounded-full text-white font-display font-bold cursor-pointer z-20 transition-transform duration-200 hover:scale-110 hover:brightness-110 ${className}`}
+        id={id} // <-- CRITICAL: The arrow needs to track the outer moving box!
+        className={`absolute z-20 ${className}`}
         style={{
-          width: planetDesign.width,
+          ...style, 
+          left: undefined, 
+          top: undefined,
+          width: planetDesign.width, // Give the outer box the exact size of the planet
           height: planetDesign.height,
-          background: planetDesign.background,
-          boxShadow: planetDesign.boxShadow,
         }}
       >
-        <span className="drop-shadow-md tracking-wider text-sm md:text-base pointer-events-none">
-          {displayName}
-        </span>
+        {/* INNER DIV: Handles the Visuals, Colors, and Hover Animations */}
+        <div
+          onClick={onClick}
+          className="w-full h-full flex items-center justify-center rounded-full text-white font-display font-bold cursor-pointer transition-transform duration-200 hover:scale-110 hover:brightness-110"
+          style={{
+            background: planetDesign.background,
+            boxShadow: planetDesign.boxShadow,
+          }}
+        >
+          <span className="drop-shadow-md tracking-wider text-sm md:text-base pointer-events-none">
+            {displayName}
+          </span>
+        </div>
       </div>
     </Draggable>
   );

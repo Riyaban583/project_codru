@@ -24,7 +24,9 @@ const authenticate = async (req, res, next) => {
     req.token = token;
     req.user = user;
     req.userId = user._id;
+    req.userID = user._id; // For all your previous code
     req.username = user.username;
+    req.email = user.email;
 
     next();
   } catch (err) {

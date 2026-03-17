@@ -1,98 +1,250 @@
 import { useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation, Navigate, useSearchParams } from "react-router-dom"; 
+// Add this to your imports at the top
+import { registerSW } from 'virtual:pwa-register';
+import CommunicationPortal from './components/CommunicationPortal';
 
 // --- TYPESCRIPT DEFINITIONS ---
-// This ensures our user data is always perfectly formatted across the whole app.
 export interface UserData {
+  _id: string;
   Name: string;
   Photo: string;
   Role: string;
   isAdmin: boolean;
+  isVerifiedStaff: boolean;
+  staffApprovalRequested: boolean;
+  isVerifiedParent: boolean;
+  parentVerificationRequested: boolean;  
 }
 
 // --- IMPORTS ---
-// We will uncomment these one by one as we convert them to TypeScript & Tailwind!
-// import Home from "./components/Home";
+import Home from "./components/Home";
 import Signin from "./components/Signin";
 import Dashboard from "./components/Dashboard";
- import Navbar from "./components/Navbar";
- import Signup from "./components/Signup";
-// ... (Add others as we go)
+import Navbar from "./components/Navbar";
+import Signup from "./components/Signup";
+import TaskForm from "./components/TaskForm";
+import SinglePost from "./components/SinglePost";
+import Publicprofile from "./components/Publicprofile"; 
+import Popup from "./components/Popup";
+import NotFound from "./components/NotFound";
+
 
 function App() {
-  // State is now strictly typed using the interface above
   const [userData, setUserData] = useState<UserData>({
+    _id: "",
     Name: "",
     Photo: "",
     Role: "",
     isAdmin: false,
+    isVerifiedStaff: false,
+    staffApprovalRequested: false,
+    isVerifiedParent: false,
+    parentVerificationRequested: false,
   });
+  
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isServerVerified, setIsServerVerified] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams(); // 🚨 Added for 'new=true' logic
+  const [showRolePopup, setShowRolePopup] = useState(false);
 
-  // Fetch User Data on Mount
+  const location = useLocation();
+
+  const isAuth = !!localStorage.getItem("jwtoken");
+
   useEffect(() => {
-    const fetchData = async () => {
-      const token = localStorage.getItem("Token");
-      
-      if (token) {
-        try {
-          const res = await fetch(`${import.meta.env.VITE_API}profile`, {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          });
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
-          const data = await res.json();
-          
-          if (res.ok) {
-            setUserData((prevData) => ({
-              ...prevData,
-              Photo: data.user.photo ? data.user.photo.toString() : "",
-              Name: data.user.name ? data.user.name.toString() : "",
-              isAdmin: true,
-              Role: data.user.role || "",
-            }));
-            localStorage.setItem("Photo", data.user.photo);
-            localStorage.setItem("Name", data.user.name);
-          } else {
-            console.error("Failed to fetch user data", data.error);
-          }
-        } catch (error) {
-          console.error("Network error fetching user data:", error);
-        }
-      }
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
-
-    fetchData();
   }, []);
 
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      registerSW({ immediate: true });
+    }
+
+    if ("Notification" in window) {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          console.log("System notifications enabled!");
+        }
+      });
+    }
+  }, []);
+
+  // Inside App.tsx or main.tsx
+
+
+  useEffect(() => {
+  const initializeAuth = async () => {
+    const tokenFromUrl = searchParams.get('token');
+    const isNewUser = searchParams.get('new') === 'true'; // True or False
+
+    // 1. Handle Google Token if it exists
+    if (tokenFromUrl) {
+      localStorage.setItem("jwtoken", tokenFromUrl);
+    }
+
+    // 2. 🚀 CATCH THE NEW USER FLAG INTO STATE
+    if (isNewUser) {
+      setShowRolePopup(true); 
+    }
+
+    // 3. 🧹 CLEANUP: Run this if EITHER parameter exists
+    if (tokenFromUrl || isNewUser) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('token');
+      newParams.delete('new');
+      setSearchParams(newParams, { replace: true });
+    }
+
+    // 4. Proceed to fetch profile
+    const activeToken = localStorage.getItem("jwtoken");
+    if (activeToken) {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API}profile`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${activeToken}`
+          }
+        });
+
+        const data = await res.json();
+        
+        if (res.ok && data.user) {
+          localStorage.setItem("Username", data.user.username);
+          localStorage.setItem("userId", data.user._id);
+          localStorage.setItem("Photo", data.user.photo || "");
+          localStorage.setItem("Name", data.user.name || "");
+          
+          setUserData({
+            _id: data.user._id,
+            Photo: data.user.photo?.toString() || "",
+            Name: data.user.name?.toString() || "",
+            Role: data.user.role?.toString() || "",
+            isAdmin: data.user.isAdmin || false, 
+            isVerifiedStaff: data.user.isVerifiedStaff || false,
+            staffApprovalRequested: data.user.staffApprovalRequested || false,
+            isVerifiedParent: data.user.isVerifiedParent || false,
+            parentVerificationRequested: data.user.parentVerificationRequested || false,
+          });
+          setIsServerVerified(true);
+        }
+      } catch (error) {
+        console.error("Network error fetching user profile:", error);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    } else {
+      setIsAuthLoading(false);
+    }
+  };
+
+  initializeAuth();
+}, []);
+
+  const hideNavbar = 
+    location.pathname.startsWith("/dashboard") || 
+    location.pathname.startsWith("/admin") || 
+    location.pathname.startsWith("/assign-task");
+
+  // 🚨 NEW: Public Route Component to block authenticated users from login/signup pages
+  const PublicRoute = ({ children }: { children: JSX.Element }) => {
+    // Show spinner while checking auth state
+    if (isAuthLoading) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    
+    // If they already have a token, redirect them to the dashboard
+    if (localStorage.getItem("jwtoken")) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    
+    // If they don't have a token, let them through
+    return children;
+  };
+
+  const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+    if (isAuthLoading) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    if (!localStorage.getItem("jwtoken")) {
+      // 🚨 REDIRECT BACK: Save the current path before kicking to signin
+      sessionStorage.setItem("redirectPath", location.pathname);
+      return <Navigate to="/signin" replace />;
+    }
+    return children;
+  };
+
   return (
-    // We replace the old App.css logic with clean Tailwind utility classes
     <div className="min-h-screen bg-slate-50 text-gray-900 font-sans selection:bg-brand-orange selection:text-white">
       
-      {/* We can put the Navbar here later so it stays at the top of every page! */}
-      <Navbar userData={userData} setUserData={setUserData} />
+      {!hideNavbar && <Navbar userData={userData} setUserData={setUserData} />}
 
-      <Routes>
-        {/* Placeholder route to test if the app is working */}
-        <Route 
-          path="/" 
-          element={
-            <div className="flex flex-col items-center justify-center min-h-[80vh]">
-              <h1 className="text-4xl font-bold text-brand-blue mb-4">Dashboard Base Ready</h1>
-              <p className="text-brand-orange">Waiting for components to migrate!</p>
-            </div>
-          } 
-        />
+      <Popup 
+        isOpen={showRolePopup} 
+        onRoleSelected={(newRole) => {
+          // Save the role to local state
+          setUserData(prev => ({ ...prev, Role: newRole }));
+          
+          // 🚨 Close the popup forever!
+          setShowRolePopup(false); 
+        }} 
+      />
 
-        {/* --- ROUTES TO UNCOMMENT --- */}
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/signin" element={<Signin userData={userData} setUserData={setUserData} />} />
+      {!isOnline ? (
+        <NotFound mode="offline" />
+      ) : (
+        <>
+        <Routes>
+          <Route path="/post/:postId" element={<SinglePost userData={userData} />} />
+          <Route path="/profile/:username" element={<Publicprofile />} />
+          <Route path="/" element={<Home userData={userData} />} />
 
-        <Route path="/dashboard" element={<Dashboard userData={userData} setUserData={setUserData} />} />
-        {/* ... */}
-      </Routes>
+
+          <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+          <Route path="/signin" element={<PublicRoute><Signin userData={userData} setUserData={setUserData} /></PublicRoute>} />
+          
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard userData={userData} setUserData={setUserData} />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/update-report/:username" 
+            element={
+              <ProtectedRoute>
+                <TaskForm />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+
+        {isAuth && <CommunicationPortal />}
+        </>
+      )}
     </div>
   );
 }

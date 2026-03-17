@@ -48,7 +48,7 @@ function Signin({ setUserData }: SigninProps) {
         isAdmin: data.isAdmin,
       });
 
-      localStorage.setItem("Token", data.token);
+      localStorage.setItem("jwtoken", data.token);
       localStorage.setItem("Username", data.username);
       navigate("/");
     } else {
