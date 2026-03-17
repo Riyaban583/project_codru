@@ -14,6 +14,7 @@ export default defineConfig({
       filename: 'sw.js',            // The file is named 'sw.js'
       registerType: 'autoUpdate', 
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'], 
+
       manifest: {
         name: 'Codru Student Dashboard',
         short_name: 'Codru',
@@ -24,7 +25,8 @@ export default defineConfig({
       },
       // 🚨 Renamed from 'workbox' to 'injectManifest'
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        maximumFileSizeToCacheInBytes: 5000000
       },
       devOptions: {
         enabled: true, 
