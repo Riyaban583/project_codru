@@ -609,85 +609,71 @@ let otpCode;
 let otpTimestamp;
 
 // ==========================================
-// 1. GENERATE OTP ROUTE (Saved to Database)
+// 1. GENERATE OTP ROUTE (Signup Proof)
 // ==========================================
 router.post("/generate-otp", async (req, res) => {
   try {
     const { email } = req.body;
-    
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
     // Generate a 4-digit OTP
     const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
     
-    // 🚨 THE FIX: Save the OTP to the database!
-    // If this is for an existing user (like password reset), we update them.
-    // If it's a new user, you might need to use { upsert: true } or a dedicated OTP model.
-    // Assuming they are an existing user for this example:
-    const user = await User.findOneAndUpdate(
-      { email: email },
-      { 
-        otpCode: generatedOtp, 
-        otpTimestamp: Date.now() 
-      },
-      { new: true } // Return updated doc
-    );
+    // Delete any old OTPs for this email so they don't clash
+    await OTP.deleteMany({ email: email });
 
-    if (!user) {
-       return res.status(404).json({ message: "No user found with this email." });
-    }
+    // Save the new OTP to our temporary database collection
+    await OTP.create({ email: email, otp: generatedOtp });
 
+    // Send the Email
     const mailOptions = {
       from: process.env.EMAIL,
       to: email,
-      subject: "Email Verification",
+      subject: "Email Verification - CuTe Learning",
       html: otpTemplate(generatedOtp),
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
         console.error("Error sending email:", error);
-        res.status(500).send({ message: "Failed to send OTP" });
+        res.status(500).send({ error: "Failed to send OTP" });
       } else {
         res.status(200).send({ message: "OTP sent successfully" });
       }
     });
   } catch (err) {
     console.error("OTP Gen Error:", err);
-    res.status(500).send({ message: "Server error" });
+    res.status(500).send({ error: "Server error" });
   }
 });
 
 // ==========================================
-// 2. VERIFY OTP ROUTE (Read from Database)
+// 2. VERIFY OTP ROUTE (Signup Proof)
 // ==========================================
 router.post("/verify-email", async (req, res) => {
   try {
-    // 🚨 The frontend MUST send the email along with the OTP so we can find it!
     const { email, otp } = req.body; 
 
-    const user = await User.findOne({ email });
+    // Look inside our temporary OTP collection
+    const record = await OTP.findOne({ email: email });
 
-    if (!user || !user.otpCode) {
-      return res.status(401).send({ message: "Invalid or expired OTP" });
+    if (!record) {
+      return res.status(401).send({ error: "OTP expired or not found. Please resend." });
     }
 
-    const currentTime = Date.now();
-    const timeDifference = currentTime - user.otpTimestamp;
-
-    // Check if OTP matches and is under 60 seconds (60,000 ms)
-    if (parseInt(otp) === parseInt(user.otpCode) && timeDifference <= 60000) {
+    // Check if it matches exactly
+    if (record.otp === otp.toString()) {
       
-      // Clear the OTP from the database so it can't be reused by hackers!
-      user.otpCode = undefined;
-      user.otpTimestamp = undefined;
-      await user.save();
+      // Success! Delete it so it can't be used twice
+      await OTP.deleteMany({ email: email });
 
       res.status(200).send({ message: "Verification successful" });
     } else {
-      res.status(401).send({ message: "Invalid or expired OTP" });
+      res.status(401).send({ error: "Invalid OTP" });
     }
   } catch (err) {
     console.error("OTP Verify Error:", err);
-    res.status(500).send({ message: "Server error" });
+    res.status(500).send({ error: "Server error" });
   }
 });
 
