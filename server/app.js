@@ -18,6 +18,8 @@ const welcomeTemplate = require("./utils/welcomeTemplate"); // For consistent we
 const contactUsTemplate = require("./utils/contactUsTemplate"); // For consistent contact email formatting
 const Event = require("./models/eventSchema");
 const ConnectionRequest = require("./models/connectionRequestSchema");
+const adminOtpTemplate = require("./utils/adminOtpTemplate");
+const OTP = require("./models/otpSchema");
 
 dotenv.config({ path: "./config.env" });
 const app = express();
@@ -986,21 +988,25 @@ app.delete("/user/:username", async (req, res) => {
     return res.status(500).json({ error: "Internal server error." });
   }
 });
-
-const adminOtpTemplate = require("./utils/adminOtpTemplate"); // 🚨 Import the new template
-
+// ==========================================
+// BIG BRO: GENERATE ADMIN OTP
+// ==========================================
 app.post("/generate-otp-bro", async (req, res) => {
   try {
     const { username, isAdmin } = req.body;
     
-    // Generate OTP
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
-    const otpTimestamp = Date.now(); // You should store this in the DB or a global object to verify later!
-
     const user = await User.findOne({ username });
     if (!user) {
       return res.status(404).send({ message: "User not found" });
     }
+
+    // Generate OTP
+    const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    
+    // 🚨 THE FIX: Save to DB! 
+    // Since this goes to the Master Admin, we save it under the Admin's email
+    await OTP.deleteMany({ email: process.env.EMAIL });
+    await OTP.create({ email: process.env.EMAIL, otp: generatedOtp });
 
     // Define the specific action for the email
     const actionText = !isAdmin
@@ -1011,7 +1017,7 @@ app.post("/generate-otp-bro", async (req, res) => {
       from: process.env.EMAIL,
       to: process.env.EMAIL, // Sending to yourself/admin email
       subject: "🚨 ACTION REQUIRED: Admin Privilege Toggle Request",
-      html: adminOtpTemplate(otpCode, actionText, user.name),
+      html: adminOtpTemplate(generatedOtp, actionText, user.name),
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
@@ -1028,18 +1034,31 @@ app.post("/generate-otp-bro", async (req, res) => {
   }
 });
 
-app.post("/verify-bigbro", async (req, res) => {
+// ==========================================
+// BIG BRO: VERIFY & TOGGLE ADMIN (Added 'authenticate' middleware!)
+// ==========================================
+app.post("/verify-bigbro", authenticate, async (req, res) => {
   try {
     const { otp, username } = req.body;
-    const currentTime = Date.now();
-    const timeDifference = currentTime - otpTimestamp; // Make sure otpTimestamp is accessible here!
 
     const user = await User.findOne({ username });
     if (!user) {
       return res.status(404).send({ message: "User not found" });
     }
 
-    if (parseInt(otp) === parseInt(otpCode) && timeDifference <= 60000) {
+    // 🚨 THE FIX: Look up the Master Admin OTP in the database
+    const record = await OTP.findOne({ email: process.env.EMAIL });
+
+    if (!record) {
+      return res.status(401).send({ message: "OTP expired or not found. Please request a new one." });
+    }
+
+    // Check if OTP matches
+    if (record.otp === otp.toString()) {
+      
+      // 🚨 Clear the OTP from DB so it can't be reused!
+      await OTP.deleteMany({ email: process.env.EMAIL });
+
       // 1. Toggle the Admin Status
       user.isAdmin = !user.isAdmin;
       await user.save();
@@ -1060,12 +1079,13 @@ app.post("/verify-bigbro", async (req, res) => {
         : `Hi ${user.name || user.username},\n\nYour Administrator privileges on Curious Team Learning have been deactivated. You are now browsing as a standard user.`;
 
       // 3. 🚨 IN-APP NOTIFICATION
+      // (Added safe fallback `req.user?.username || "System"` just in case)
       await sendAutoNotification(
         req.app,
         user._id, 
         appMessage, 
-        "settings", // Teleports them to settings
-        req.user.username // Indicates who triggered the notification
+        "settings", 
+        req.user?.username || "System" 
       );
 
       // 4. 🚨 EMAIL NOTIFICATION
