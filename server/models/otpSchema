@@ -8,4 +8,4 @@ const otpSchema = new mongoose.Schema({
 });
 
 // Create the model (avoids overwriting if it already exists)
-const OTP = mongoose.models.OTP || mongoose.model("OTP", otpSchema);
+const OTP = mongoose.model("OTP", otpSchema);

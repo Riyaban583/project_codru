@@ -13,6 +13,7 @@ router.use(bodyParser.json());
 router.use(express.urlencoded({ extended: true }));
 router.use(cookieParser());
 const User = require("../models/userSchema");
+const OTP = require("../models/otpSchema");
 const Syllabus = require("../models/syllabusSchema");
 const authenticate = require("../middleware/authenticate");
 const otpTemplate = require("../utils/otpTemplate"); // Ensure this path is correct
