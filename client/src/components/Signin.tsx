@@ -7,8 +7,6 @@ import { TextField, InputAdornment } from "@mui/material";
 import SignInAnim from "./SignInAnim";
 import Muialert from "./Muialert";
 import GoogleIcon from "../assets/google.svg";
-import FacebookIcon from "../assets/facebook-color.svg";
-import MicrosoftIcon from "../assets/microsoft.svg";
 import { UserData } from "../App";
 
 interface SigninProps {
@@ -41,12 +39,15 @@ function Signin({ setUserData }: SigninProps) {
     
     const data = await res.json();
     if (res.ok) {
-      setUserData({
-        Photo: data.photo?.toString() || "",
-        Name: data.name?.toString() || "",
-        Role: data.role?.toString() || "",
-        isAdmin: data.isAdmin,
-      });
+      // 🚨 THE TYPESCRIPT FIX: 
+      // Spread the previous state so we don't lose _id, and safely assign the strings!
+      setUserData((prev) => ({
+        ...prev,
+        Photo: data.photo || "",
+        Name: data.name || "",
+        Role: data.role || "",
+        isAdmin: !!data.isAdmin,
+      }));
 
       localStorage.setItem("jwtoken", data.token);
       localStorage.setItem("Username", data.username);
@@ -166,31 +167,19 @@ function Signin({ setUserData }: SigninProps) {
 
           <div className="relative my-8">
             <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-200"></span></div>
-            <div className="relative flex justify-center text-sm"><span className="px-4 bg-white text-gray-400">Or log in with</span></div>
+            <div className="relative flex justify-center text-sm"><span className="px-4 bg-white text-gray-400">Or</span></div>
           </div>
 
-          <div className="flex justify-center items-center gap-6">
-            <button 
-              onClick={() => window.location.href = `${import.meta.env.VITE_API}auth/google`}
-              className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition transform hover:scale-110"
-            >
-              <img src={GoogleIcon} alt="Google" className="w-6 h-6" />
-            </button>
-            <div className="w-px h-6 bg-gray-200"></div>
-            <button 
-               onClick={() => console.log("Facebook Auth")}
-               className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition transform hover:scale-110"
-            >
-              <img src={FacebookIcon} alt="Facebook" className="w-6 h-6" />
-            </button>
-            <div className="w-px h-6 bg-gray-200"></div>
-            <button 
-               onClick={() => console.log("Microsoft Auth")}
-               className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition transform hover:scale-110"
-            >
-              <img src={MicrosoftIcon} alt="Microsoft" className="w-6 h-6" />
-            </button>
-          </div>
+          {/* 🚨 THE NEW BIG GOOGLE BUTTON */}
+          <button 
+            type="button"
+            onClick={() => window.location.href = `${import.meta.env.VITE_API}auth/google`}
+            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 text-gray-700 py-3.5 rounded-xl font-bold text-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-[0.98]"
+          >
+            <img src={GoogleIcon} alt="Google" className="w-6 h-6" />
+            Continue with Google
+          </button>
+          
         </div>
       </div>
 
