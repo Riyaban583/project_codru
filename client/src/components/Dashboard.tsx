@@ -9,8 +9,9 @@ import {
   UserCog,
   ShieldAlert, 
   Bell,
-  Heart, // 🚨 NEW ICON
-  MessageCircle // 🚨 NEW ICON
+  Heart, 
+  MessageCircle,
+  Menu // 🚨 NEW ICON FOR MOBILE
 } from "lucide-react";
 
 // Components
@@ -51,13 +52,16 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   
+  // 🚨 NEW STATE: Mobile Menu Drawer
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // State for the Freemium Modal
   const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   // 1. Define who gets to see what
   const isPremiumTeacher = userData.Role === "Teacher" && userData.isVerifiedStaff;
   const isUnverifiedTeacher = userData.Role === "Teacher" && !userData.isVerifiedStaff;
-  const isParent = userData.Role === "Parent"; // 🚨 DEFINED PARENT HERE
+  const isParent = userData.Role === "Parent"; 
   const isVerifiedParent = isParent && userData.isVerifiedParent;
   const isUnverifiedParent = isParent && !userData.isVerifiedParent;
   
@@ -68,7 +72,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const [currentView, setCurrentView] = useState(() => {
     let savedView = location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "schedule";
     if (savedView === "dashboard") {
-      // 🚨 If parent, default to profile instead of schedule
       savedView = isParent ? "profile" : "schedule";
       localStorage.setItem("currentView", savedView);
     }
@@ -81,7 +84,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
     day: 'numeric' 
   });
   
-  // 🚨 ADDED NEW PARENT VIEWS TO THE MAP
   const [activeTab, setActiveTab] = useState(() => {
     const viewToTabMap: Record<string, string> = {
       schedule: "Schedule", syllabus: "Syllabus Tracker", profile: "Profile",
@@ -112,18 +114,33 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   }, [location]);
 
   useEffect(() => {
-    const target = location.state?.targetView?.toLowerCase();
+    let target = location.state?.targetView?.toLowerCase();
+    
     if (target) {
+      if (target === "audit-log") target = "admin-audit-log";
+      if (target === "village") target = "the-village";
+
       setCurrentView(target);
+      
       const viewToTabMap: Record<string, string> = {
-        schedule: "Schedule", syllabus: "Syllabus Tracker", profile: "Profile",
-        settings: "Settings", "my-posts": "My Posts", "saved-posts": "Saved Posts",
-        report: "Report", management: "Management", "my-courses": "My Courses",
-        "the-village": "The Village (Q&A)", "expert-connect": "Expert Connect" // 🚨 Added here too
+        schedule: "Schedule", 
+        syllabus: "Syllabus Tracker", 
+        profile: "Profile",
+        settings: "Settings", 
+        "my-posts": "My Posts", 
+        "saved-posts": "Saved Posts",
+        report: "Report", 
+        management: "Management", 
+        "my-courses": "My Courses",
+        "the-village": "The Village (Q&A)", 
+        "expert-connect": "Expert Connect",
+        "manage-users": "Manage Users",           
+        "admin-audit-log": "Security Audit Log"   
       };
-      setActiveTab(viewToTabMap[target] || "Schedule");
+
+      setActiveTab(viewToTabMap[target] || "Dashboard"); 
       localStorage.setItem("currentView", target);
-      localStorage.setItem("activeTab", viewToTabMap[target] || "Schedule");
+      localStorage.setItem("activeTab", viewToTabMap[target] || "Dashboard");
       window.history.replaceState({}, document.title, "/dashboard");
     }
   }, [location.state]);
@@ -152,7 +169,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const handleNavigation = (path: string) => navigate(path);
 
   const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    // ... your existing photo upload logic stays exactly the same
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
@@ -222,7 +238,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         setAlertMessage(data.message); 
         setShowAlert(true);
         
-        // 🚨 FIX: Update the correct state based on who is logged in!
         if (userData.Role === "Parent") {
           setUserData(prev => ({ ...prev, parentVerificationRequested: true }));
         } else {
@@ -245,7 +260,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   };
 
   const getDrawerContent = () => {
-    // 1. Basic items EVERYONE gets (Students, Teachers, AND Parents!)
     const basicItems = [
       { text: "Home", icon: <Home size={22} />, path: "/" },
       { text: "Schedule", icon: <CalendarClock size={22} />, view: "schedule" }, 
@@ -255,7 +269,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       { text: "Saved Posts", icon: <Bookmark size={22} />, view: "saved-posts" },
     ];
 
-    // 2. Premium Academic items (Still hidden from Parents)
     const premiumItems = [];
     if (!isParent) {
       if (userData.Role === "Student" || isPremiumTeacher) {
@@ -266,14 +279,12 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       if (isPremiumTeacher) premiumItems.push({ text: "Management", icon: <GraduationCap size={22} />, view: "management" });
     }
 
-    // 3. 🚨 NEW: PARENT SPACE ITEMS
     const parentItems = [];
     if (isParent) {
       parentItems.push({ text: "The Village", icon: <Heart size={22} />, view: "the-village" });
       parentItems.push({ text: "Expert Connect", icon: <MessageCircle size={22} />, view: "expert-connect", isLocked: isUnverifiedParent });
     }
 
-    // 4. Admin Items
     if (userData.isAdmin) {
       premiumItems.push({ text: "Manage Users", icon: <UserCog size={22} />, view: "manage-users" });
       premiumItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
@@ -291,25 +302,21 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
                 setCurrentView(item.view); setActiveTab(item.text);
                 localStorage.setItem("currentView", item.view); localStorage.setItem("activeTab", item.text);
               }
+              // 🚨 Closes the mobile menu when an item is clicked
+              setIsMobileMenuOpen(false); 
             }}
             sx={{
               borderRadius: "12px",
-              // 🚨 If locked: Vibrant Red/Rose gradient. If unlocked: Normal active/inactive colors.
               background: item.isLocked 
-                ? "linear-gradient(to bottom right, #fb7185, #e11d48)" // Rose-400 to Rose-600
+                ? "linear-gradient(to bottom right, #fb7185, #e11d48)" 
                 : (isActive ? "#fff7ed" : "transparent"),
-              
-              // 🚨 If locked: White text. If unlocked: Normal active/inactive colors.
               color: item.isLocked 
                 ? "#ffffff" 
                 : (isActive ? "#ed7f23" : "#64748b"),
-              
-              // Add a soft glowing shadow to the locked item to make it tempting
               boxShadow: item.isLocked ? "0 4px 14px 0 rgba(225, 29, 72, 0.3)" : "none",
-              
               "&:hover": { 
                 background: item.isLocked 
-                  ? "linear-gradient(to bottom right, #f43f5e, #be123c)" // Darker on hover
+                  ? "linear-gradient(to bottom right, #f43f5e, #be123c)" 
                   : (isActive ? "#ffedd5" : "#f1f5f9"), 
                 color: item.isLocked 
                   ? "#ffffff" 
@@ -322,7 +329,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               primary={
                 <div className="flex items-center gap-2">
                   <span>{item.text}</span>
-                  {/* The Lock Icon */}
                   {item.isLocked && <Lock size={16} strokeWidth={2.5} className="opacity-90" />}
                 </div>
               } 
@@ -337,7 +343,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       <List className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar flex flex-col">
         {basicItems.map(renderListItem)}
 
-        {/* Render Parent Tools */}
         {parentItems.length > 0 && (
           <>
             <div className="my-3 mx-2 border-t border-slate-100"></div>
@@ -346,7 +351,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           </>
         )}
 
-        {/* Render Academic/Admin Tools */}
         {premiumItems.length > 0 && (
           <>
             <div className="my-3 mx-2 border-t border-slate-100"></div>
@@ -379,10 +383,22 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-body">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-body relative">
       
-      {/* LEFT AREA: SIDEBAR */}
-      <div className="w-72 bg-white border-r border-gray-100 flex flex-col shadow-lg flex-shrink-0 z-10">
+      {/* 🚨 MOBILE BACKDROP */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[105] md:hidden transition-opacity" 
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* LEFT AREA: SIDEBAR (Now handles mobile sliding) */}
+      <div className={`
+        fixed inset-y-0 left-0 z-[110] transform transition-transform duration-300 ease-in-out
+        md:relative md:translate-x-0 w-72 bg-white border-r border-gray-100 flex flex-col shadow-2xl md:shadow-lg flex-shrink-0
+        ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
         
         <div className="h-20 flex items-center justify-center border-b border-gray-100">
           <NavLink to="/" className="cursor-pointer">
@@ -411,7 +427,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           </div>
           <h2 className="mt-4 text-lg font-display font-bold text-brand-blue">Hi, {userData.Name ? userData.Name.split(' ')[0] : "Explorer"}!</h2>
           
-          {/* 🚨 UPDATED COLOR LOGIC FOR PROFILE ROLE */}
           <p className={`text-xs font-bold uppercase tracking-wider mt-1 ${
             userData.Role === 'Teacher' ? 'text-brand-orange' : 
             userData.Role === 'Student' ? 'text-brand-blue' : 
@@ -431,14 +446,30 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
         <div className="h-48 bg-brand-blue absolute top-0 left-0 w-full rounded-b-[3rem] shadow-inner"></div>
 
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center">
+        {/* 🚨 MOBILE + DESKTOP TOP BAR */}
+        <div className="absolute top-4 md:top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[100] flex items-center justify-between md:justify-center">
+          
+          {/* Hamburger Menu (Mobile Only) */}
+          <button 
+            className="md:hidden text-white hover:text-brand-orange transition p-2 bg-white/10 rounded-full backdrop-blur-md border border-white/20"
+            onClick={() => setIsMobileMenuOpen(true)}
+          >
+            <Menu size={24} />
+          </button>
+
+          {/* Date & Notifications Pill */}
           <div className="flex items-center gap-4 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 px-6 py-2.5 rounded-full shadow-lg transition-all duration-300">
             <span className="text-sm font-medium text-white/90 tracking-wide drop-shadow-sm whitespace-nowrap">
               {todayDate}
             </span>
-            <div className="w-px h-5 bg-white/30 rounded-full"></div>
+            <div className="w-px h-5 bg-white/30 rounded-full hidden sm:block"></div>
+            
+            {/* 🚨 STOP PROPAGATION ADDED HERE */}
             <button 
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNotifications(!showNotifications);
+              }}
               className="relative text-white hover:text-brand-orange hover:scale-110 transition-all flex items-center justify-center"
               title="Notifications"
             >
@@ -451,18 +482,21 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             </button>
           </div>
 
-          <div className="relative w-full flex justify-center">
-            <Notification 
-              showNotifications={showNotifications} 
-              setShowNotifications={setShowNotifications}
-              closeNotification={() => setShowNotifications(false)}
-              setUnreadCount={setUnreadCount} 
-              customClasses="top-4 left-1/2 -translate-x-1/2" 
-            />
-          </div>
+          {/* Invisible spacer for mobile flex-between balance */}
+          <div className="w-10 md:hidden"></div>
         </div>
         
-        <div className="relative z-10 p-8 max-w-7xl mx-auto w-full mt-8 flex-1 flex flex-col min-h-0">
+        <div className="relative w-full flex justify-center z-[105]">
+          <Notification 
+            showNotifications={showNotifications} 
+            setShowNotifications={setShowNotifications}
+            closeNotification={() => setShowNotifications(false)}
+            setUnreadCount={setUnreadCount} 
+            customClasses="top-20 md:top-4 left-1/2 -translate-x-1/2" 
+          />
+        </div>
+        
+        <div className="relative z-10 p-4 md:p-8 max-w-7xl mx-auto w-full mt-16 md:mt-8 flex-1 flex flex-col min-h-0">
           
           {isPremiumTeacher && ["syllabus", "my-courses"].includes(currentView) && (
             <div className="mb-6 bg-white px-6 py-4 rounded-[24px] shadow-sm border border-gray-100 flex items-center gap-4 overflow-x-auto custom-scrollbar flex-shrink-0">
@@ -492,18 +526,16 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             </div>
           )}
 
-          <div className={`relative flex-1 min-h-0 flex flex-col bg-white rounded-[32px] shadow-xl border border-gray-100 transition-all duration-300 ${currentView === "report" ? "p-0 overflow-hidden" : "p-6 overflow-y-auto dashboard-content-scroll"}`}>
+          <div className={`relative flex-1 min-h-0 flex flex-col bg-white rounded-[32px] shadow-xl border border-gray-100 transition-all duration-300 ${currentView === "report" ? "p-0 overflow-hidden" : "p-4 md:p-6 overflow-y-auto dashboard-content-scroll"}`}>
             <div className={`relative w-full ${currentView === "report" ? "h-full" : "min-h-full"} rounded-[8px]`}>
               
               {/* COMPONENT RENDERING ROUTER */}
               {currentView === "profile" && <Profile />}
-              {/* 🚨 REMOVED !isParent so Parents can use the Calendar & Posts! */}
               {currentView === "schedule" && <Calendar role={userData.Role || "student"} currentUserId={userData._id} />}
               {currentView === "settings" && <SettingsPanel userData={userData} setUserData={setUserData} />}
               {currentView === "saved-posts" && <SavedPosts userData={userData} setUserData={setUserData} />}
               {currentView === "my-posts" && <MyPosts userData={userData} setUserData={setUserData} />}
               
-              {/* 🚨 Kept !isParent on the heavy academic stuff */}
               {currentView === "syllabus" && !isParent && <SyllabusTracker role={userData.Role || "student"} selectedStudentUsername={selectedStudentUsername} />}
               {currentView === "my-courses" && !isParent && <MyCourses role={userData.Role} selectedStudentUsername={selectedStudentUsername || undefined} />}
               {currentView === "report" && userData?.Role?.toLowerCase() === "student" && <PlanetryPath />}
@@ -511,7 +543,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               {currentView === "manage-users" && userData?.isAdmin && <Admin userData={userData} setUserData={setUserData} />}
               {currentView === "admin-audit-log" && userData?.isAdmin && <AdminAuditLog />}
               
-              {/* 🚨 NEW PARENT PLACEHOLDERS */}
               {currentView === "the-village" && isParent && (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-4">
@@ -524,7 +555,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               )}
               {currentView === "expert-connect" && isParent && (
                 isVerifiedParent ? (
-                  <ExpertConnect userData={userData} /> // 🚨 RENDER THE REAL COMPONENT HERE
+                  <ExpertConnect userData={userData} /> 
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-center p-8">
                     <div className="w-24 h-24 bg-rose-50 text-rose-300 rounded-full flex items-center justify-center mb-6">
@@ -554,26 +585,21 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center shadow-2xl relative animate-in zoom-in duration-200">
             <button onClick={() => setShowUnlockModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition">✕</button>
             
-            {/* Dynamic Icon */}
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isUnverifiedParent ? 'bg-rose-50' : 'bg-blue-50'}`}>
               {isUnverifiedParent ? <ShieldAlert className="text-rose-500 w-8 h-8" /> : <Lock className="text-brand-blue w-8 h-8" />}
             </div>
             
-            {/* Dynamic Title */}
             <h3 className="text-xl font-black text-slate-800 mb-2">
               {isUnverifiedParent ? "Verify Your Account" : "Unlock Academy"}
             </h3>
             
-            {/* Dynamic Description */}
             <p className="text-sm text-slate-500 mb-6 font-medium">
               {isUnverifiedParent 
                 ? "Protecting our community is our top priority. Request verification to unlock direct messaging with our Verified Educators."
                 : "Are you an official educator at Cute Learning? Request admin approval to access student management and syllabus tools."}
             </p>
             
-            {/* 🚨 SMART DYNAMIC BUTTON */}
             {(() => {
-              // Check which pending status applies based on their role
               const isPending = isUnverifiedParent 
                 ? userData.parentVerificationRequested 
                 : userData.staffApprovalRequested;

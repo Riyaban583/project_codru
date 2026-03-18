@@ -43,8 +43,8 @@ const Notification = ({
         closeNotification(); 
       }
     };
-    if (showNotifications) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    if (showNotifications) document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, [showNotifications, closeNotification]);
 
   // 2. Update the Red Dot Badge
@@ -183,11 +183,16 @@ const Notification = ({
   return (
     <div 
       ref={notificationRef}
-      className={`absolute w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 z-50 transform origin-top-right transition-all ${
-        customClasses ? customClasses : "top-20 right-4 md:right-24"
-      }`}
+      className={`
+        fixed z-[60] bg-white overflow-hidden flex flex-col p-5 border border-gray-100
+        /* 📱 MOBILE: Bottom Sheet (Sits right above the bottom nav) */
+        bottom-16 left-0 w-full max-h-[75vh] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.15)] animate-slide-up
+        /* 💻 DESKTOP: Top Right Dropdown */
+        md:bottom-auto md:top-20 md:right-8 md:left-auto md:w-[400px] md:max-h-[80vh] md:rounded-3xl md:shadow-2xl md:animate-fade-in-down
+        ${customClasses || ""}
+      `}
     >
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 flex-shrink-0">
         <div className="flex items-center gap-2 text-brand-blue">
           <Bell className="w-5 h-5" />
           <h3 className="font-display font-bold text-lg text-gray-800">Notifications</h3>
@@ -205,18 +210,18 @@ const Notification = ({
         )}
       </div>
       
-      <hr className="border-gray-100 mb-4" />
+      <hr className="border-gray-100 mb-4 flex-shrink-0" />
 
-      <div className="max-h-80 overflow-y-auto pr-2 dashboard-content-scroll">
+      {/* Added flex-1 to this container so it scrolls perfectly inside the fixed height sheet */}
+      <div className="flex-1 overflow-y-auto pr-2 dashboard-content-scroll">
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="w-8 h-8 animate-spin text-brand-blue" /></div>
         ) : unreadNotifications.length > 0 ? (
-          <ul className="space-y-3">
-            {/* 🚨 Now mapping over unreadNotifications instead of notifications */}
+          <ul className="space-y-3 pb-4">
             {unreadNotifications.map((notification) => (
               <li
                 key={notification._id} 
-                onClick={() => handleNotificationClick(notification._id,notification.link.startsWith('/') ? notification.link : `/${notification.link}`)} 
+                onClick={() => handleNotificationClick(notification._id, notification.link?.startsWith('/') ? notification.link : `/${notification.link}`)} 
                 className={`group relative border p-4 rounded-xl cursor-pointer transition-all duration-300 bg-brand-orange/5 border-brand-orange/20 hover:bg-brand-orange/10 ${
                   dismissing.includes(notification._id) ? "opacity-0 scale-95" : "opacity-100"
                 }`}
@@ -252,4 +257,5 @@ const Notification = ({
     </div>
   );
 };
+
 export default Notification;

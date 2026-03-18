@@ -13,15 +13,33 @@ export default defineConfig({
       srcDir: 'src',                // Look in the 'src' folder
       filename: 'sw.js',            // The file is named 'sw.js'
       registerType: 'autoUpdate', 
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'], 
+      includeAssets: ['favicon.png', 'logo192.png', 'logo512.png'], 
 
       manifest: {
-        name: 'Codru Student Dashboard',
-        short_name: 'Codru',
-        description: 'Manage your syllabus and tasks',
+        name: 'Curious Team Learning Dashboard',
+        short_name: 'CuTe Learning',
+        description: 'The Curious Team Learning Platform',
         theme_color: '#ffffff',
-        background_color: '#f8fafc', 
+        background_color: '#f8fafc',
         display: 'standalone',
+        icons: [
+          {
+            src: '/favicon.png',
+            sizes: '64x64',
+            type: 'image/png'
+          },
+          {
+            src: '/logo192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: '/logo512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
       },
       // 🚨 Renamed from 'workbox' to 'injectManifest'
       injectManifest: {

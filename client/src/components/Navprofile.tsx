@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Pen, User, LogOut, FileText, Loader2 } from "lucide-react";
+import { X, Pen, User, LogOut, FileText, Loader2, Shield, Users, Home } from "lucide-react";
 import Muialert from "./Muialert";
 
 interface NavprofileProps {
@@ -13,6 +13,7 @@ interface NavprofileProps {
 
 export default function Navprofile({
   setShowProfile,
+  showProfile,
   closeNavProfile,
   userData,
   setUserData,
@@ -24,6 +25,12 @@ export default function Navprofile({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navProfileRef = useRef<HTMLDivElement>(null);
+
+  // --- ROLE CHECKS ---
+  const isStudent = userData?.role === "Student";
+  const isTeacher = userData?.role === "Teacher";
+  const isParent = userData?.role === "Parent";
+  const isAdmin = userData?.isAdmin;
 
   const SignOut = async () => {
     try {
@@ -37,28 +44,26 @@ export default function Navprofile({
       setUserData({});
       closeNavProfile();
       navigate("/signin");
-      window.location.reload(); // Hard reset to clear memory
+      window.location.reload(); 
     } catch (error) {
       console.error("Logout error", error);
     }
   };
 
-  // 2. FIXED API URL
-const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
 
     try {
-      // 1. Send the image straight to Cloudinary first
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("upload_preset", "cute_profiles"); // <-- CHANGE THIS
-      formData.append("cloud_name", "da6jhcsmm");       // <-- CHANGE THIS
+      formData.append("upload_preset", "cute_profiles"); 
+      formData.append("cloud_name", "da6jhcsmm");       
 
       const cloudinaryRes = await fetch(
-        "https://api.cloudinary.com/v1_1/da6jhcsmm/image/upload", // <-- CHANGE THIS
+        "https://api.cloudinary.com/v1_1/da6jhcsmm/image/upload", 
         {
           method: "POST",
           body: formData,
@@ -67,14 +72,10 @@ const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
       const cloudinaryData = await cloudinaryRes.json();
 
-      if (!cloudinaryRes.ok) {
-        throw new Error("Failed to upload to Cloudinary");
-      }
+      if (!cloudinaryRes.ok) throw new Error("Failed to upload to Cloudinary");
 
-      // This is the clean, secure URL from Cloudinary
       const secureUrl = cloudinaryData.secure_url;
 
-      // 2. Immediately tell your backend to save this new URL
       const dbRes = await fetch(`${import.meta.env.VITE_API}profile-edit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,15 +88,12 @@ const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const jsondata = await dbRes.json();
 
       if (dbRes.ok) {
-        // 3. Update the UI instantly without reloading the page!
         setUserData((prevData: any) => ({
           ...prevData,
           Photo: secureUrl,
         }));
         
-        // Update local storage so a hard refresh keeps the photo
         localStorage.setItem("Photo", secureUrl);
-
         setAlertMessage("Profile picture updated!");
         setShowAlert(true);
       } else {
@@ -107,13 +105,13 @@ const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
       setShowAlert(true);
     } finally {
       setIsUploading(false);
-      // Reset the input so the user can upload the same file again if needed
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const handlePenClick = () => fileInputRef.current?.click();
 
+  // 🚨 FIX: Using "click" instead of "mousedown" prevents the double-toggle bug!
   const handleClickOutside = (event: MouseEvent) => {
     if (navProfileRef.current && !navProfileRef.current.contains(event.target as Node)) {
       closeNavProfile();
@@ -121,36 +119,46 @@ const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
+  // Helper function for navigating to specific dashboard tabs
+  const handleNav = (targetView: string) => {
+    closeNavProfile();
+    navigate("/dashboard", { state: { targetView } });
+  };
+
+  if (!showProfile) return null;
+
   return (
-    // The "absolute top-20 right-4" is what makes it float beautifully under the navbar
     <div 
       ref={navProfileRef} 
-      className="absolute top-20 right-4 md:right-8 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 z-50 transform origin-top-right transition-all"
+      className="
+        fixed z-[60] bg-white overflow-hidden flex flex-col p-5 border border-gray-100
+        /* 📱 MOBILE: Bottom Sheet */
+        bottom-16 left-0 w-full max-h-[85vh] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.15)] animate-slide-up
+        /* 💻 DESKTOP: Top Right Dropdown */
+        md:bottom-auto md:top-20 md:right-8 md:left-auto md:w-80 md:rounded-3xl md:shadow-2xl md:animate-fade-in-down
+      "
     >
       {/* Close Button */}
       <button 
-        onClick={() => setShowProfile(false)}
+        onClick={closeNavProfile}
         className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors"
       >
         <X className="w-5 h-5" />
       </button>
 
       {/* Profile Header */}
-      <div className="flex flex-col items-center mt-2 mb-4">
+      <div className="flex flex-col items-center mt-2 mb-4 flex-shrink-0">
         <div className="relative group cursor-pointer" onClick={handlePenClick}>
           <div className="w-20 h-20 rounded-full border-4 border-brand-orange/20 overflow-hidden relative">
-            
-            {/* The Loading Overlay */}
             {isUploading && (
               <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
                 <Loader2 className="w-6 h-6 text-brand-orange animate-spin" />
               </div>
             )}
-
             {userData?.Photo ? (
               <img src={userData.Photo} alt="Profile" className="w-full h-full object-cover" />
             ) : (
@@ -168,32 +176,67 @@ const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
         
         <h3 className="mt-3 font-display font-bold text-lg text-gray-800">Hi, {userData?.Name || "Explorer"}</h3>
         <p className="text-xs text-gray-400 font-medium">@{localStorage.getItem("Username")}</p>
+        
+        {/* Cute Role Badge */}
+        <span className="mt-2 text-[10px] uppercase tracking-widest font-black text-brand-orange bg-brand-orange/10 px-3 py-1 rounded-full">
+          {userData?.role || "User"} {isAdmin && "• ADMIN"}
+        </span>
       </div>
 
-      <hr className="border-gray-100 my-4" />
+      <hr className="border-gray-100 my-4 flex-shrink-0" />
 
-      {/* Action Buttons */}
-      <div className="flex flex-col gap-2">
-        <button
-          onClick={() => { 
-            navigate("/dashboard", { state: { targetView: "report" } }); 
-          }}
-          className="flex items-center gap-3 w-full px-4 py-2 text-sm font-bold text-brand-blue bg-blue-50 rounded-xl hover:bg-brand-blue hover:text-white transition-colors"
-        >
-          <FileText className="w-4 h-4" /> See My Report
-        </button>
+      {/* Action Buttons Container (Scrollable on tiny mobile screens) */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2 pb-2">
+        
+        {/* 🚨 Dynamic Role-Based Buttons */}
+        {isStudent && (
+          <button
+            onClick={() => handleNav("report")}
+            className="flex items-center gap-3 w-full px-4 py-3 md:py-2 text-sm font-bold text-brand-blue bg-blue-50 rounded-xl hover:bg-brand-blue hover:text-white transition-colors"
+          >
+            <FileText className="w-4 h-4" /> See My Report
+          </button>
+        )}
 
+        {isTeacher && (
+          <button
+            onClick={() => handleNav("management")}
+            className="flex items-center gap-3 w-full px-4 py-3 md:py-2 text-sm font-bold text-brand-blue bg-blue-50 rounded-xl hover:bg-brand-blue hover:text-white transition-colors"
+          >
+            <Users className="w-4 h-4" /> Management
+          </button>
+        )}
+
+        {isParent && (
+          <button
+            onClick={() => handleNav("village")}
+            className="flex items-center gap-3 w-full px-4 py-3 md:py-2 text-sm font-bold text-brand-blue bg-blue-50 rounded-xl hover:bg-brand-blue hover:text-white transition-colors"
+          >
+            <Home className="w-4 h-4" /> My Village
+          </button>
+        )}
+
+        {isAdmin && (
+          <button
+            onClick={() => handleNav("audit-log")}
+            className="flex items-center gap-3 w-full px-4 py-3 md:py-2 text-sm font-bold text-emerald-600 bg-emerald-50 rounded-xl hover:bg-emerald-600 hover:text-white transition-colors"
+          >
+            <Shield className="w-4 h-4" /> Security Audit Log
+          </button>
+        )}
+
+        {/* 🚨 Universal Manage & Sign Out Buttons */}
         <div className="grid grid-cols-2 gap-2 mt-2">
           <button 
-            onClick={() => { closeNavProfile(); navigate(`/public-profile/${localStorage.getItem("Username")}`); }}
-            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:border-brand-orange hover:text-brand-orange transition-colors"
+            onClick={() => handleNav("profile")}
+            className="flex items-center justify-center gap-2 px-3 py-3 md:py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:border-brand-orange hover:text-brand-orange transition-colors"
           >
             <User className="w-4 h-4" /> Manage
           </button>
           
           <button 
             onClick={SignOut}
-            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 border border-red-100 bg-red-50 rounded-xl hover:bg-red-500 hover:text-white transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-3 md:py-2 text-sm font-medium text-red-600 border border-red-100 bg-red-50 rounded-xl hover:bg-red-500 hover:text-white transition-colors"
           >
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
@@ -201,7 +244,7 @@ const handlePhotoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
       </div>
 
       {showAlert && (
-        <div className="mt-4">
+        <div className="mt-4 flex-shrink-0">
           <Muialert message={alertMessage} severity="error" onClose={() => setShowAlert(false)} />
         </div>
       )}
