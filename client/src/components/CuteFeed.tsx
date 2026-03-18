@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import CommentItem from "./CommentItem";
-// Update this line at the top
 import { 
   Heart, 
   MessageCircle, 
@@ -9,9 +8,10 @@ import {
   Share2, 
   MoreHorizontal, 
   Loader2, 
-  ThumbsDown, // <--- Add this
-  Reply,      // <--- Add this too if you're using it
-  MessageSquare 
+  ThumbsDown, 
+  Reply,      
+  MessageSquare,
+  UserPlus // 🚨 NEW: Added icon for the Follow button!
 } from "lucide-react";
 import { UserData } from "../App";
 
@@ -35,7 +35,7 @@ interface Post {
   likes: number;
   comments: any[];
   createdAt: string;
-  likedBy: string[]; // Array of User IDs
+  likedBy: string[];
 }
 
 const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
@@ -44,24 +44,100 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
   const [error, setError] = useState("");
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
-  // New States for Editing and Replying
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null); // For the 3-dots menu
+  
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null); 
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState<string>("");
-  // Tracks which post's likes we are currently viewing
   const [showLikesModal, setShowLikesModal] = useState<any[] | null>(null);  
-  // Tracks who we are replying to: { postId: parentCommentId }
   const [replyTargets, setReplyTargets] = useState<Record<string, string | null>>({});
   
-
   const currentUsername = localStorage.getItem("Username");
-
   const currentUserId = localStorage.getItem("userId");
   
-  // We track saved posts locally so the bookmark icon instantly changes color!
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
+  
+  // 🚨 NEW: Track who the current user is already following
+  const [followingUsernames, setFollowingUsernames] = useState<string[]>([]);
 
-  // --- THE LIKE FUNCTION ---
+  useEffect(() => {
+    fetchPosts();
+    fetchFollowingList(); // 🚨 NEW: Fetch following list on load
+  }, [refreshTrigger]);
+
+  // 🚨 NEW: Grab the current user's profile to see who they follow
+  const fetchFollowingList = async () => {
+    try {
+      const token = localStorage.getItem("jwtoken");
+      const res = await fetch(`${import.meta.env.VITE_API}profile`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Extract just the usernames of the people they follow
+        const fList = data.user.following.map((f: any) => f.username);
+        setFollowingUsernames(fList);
+      }
+    } catch (err) {
+      console.error("Failed to fetch following list", err);
+    }
+  };
+
+  const fetchPosts = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("jwtoken");
+      
+      const res = await fetch(`${import.meta.env.VITE_API}posts`, { 
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to load feed");
+      const data = await res.json();
+      setPosts(data);
+
+      const savedRes = await fetch(`${import.meta.env.VITE_API}saved-posts/ids`, { 
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (savedRes.ok) {
+        const savedData = await savedRes.json();
+        setSavedPostIds(savedData); 
+      }
+    } catch (err: any) {
+      setError(err.message || "Could not load posts.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 🚨 NEW: Handle Follow action directly from the feed
+  const handleFollow = async (targetUsername: string) => {
+    try {
+      const token = localStorage.getItem("jwtoken");
+      
+      // OPTIMISTIC UI: Instantly hide the button so it feels blazing fast!
+      setFollowingUsernames(prev => [...prev, targetUsername]);
+
+      const res = await fetch(`${import.meta.env.VITE_API}follow`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` 
+        },
+        body: JSON.stringify({ 
+          currentUserId: currentUsername, 
+          targetUserId: targetUsername 
+        })
+      });
+
+      if (!res.ok) {
+        // If the server fails, revert the button back
+        setFollowingUsernames(prev => prev.filter(u => u !== targetUsername));
+      }
+    } catch (error) {
+      console.error("Follow failed", error);
+      setFollowingUsernames(prev => prev.filter(u => u !== targetUsername));
+    }
+  };
+
   const handleLike = async (postId: string) => {
     try {
       const token = localStorage.getItem("jwtoken");
@@ -72,7 +148,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
       
       if (res.ok) {
         const updatedPost = await res.json();
-        // Instantly update the specific post in our feed with the new likes!
         setPosts(posts.map(p => p._id === postId ? { ...p, likes: updatedPost.likes, likedBy: updatedPost.likedBy } : p));
       }
     } catch (error) {
@@ -80,41 +155,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     }
   };
 
-  useEffect(() => {
-    fetchPosts();
-  }, [refreshTrigger]);
-
-  // --- FETCH FEED & SAVED BOOKMARKS ---
-  const fetchPosts = async () => {
-    setIsLoading(true);
-    try {
-      const token = localStorage.getItem("jwtoken");
-      
-      // 1. Fetch the main feed
-      const res = await fetch(`${import.meta.env.VITE_API}posts`, { 
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error("Failed to load feed");
-      const data = await res.json();
-      setPosts(data);
-
-      // 2. Fetch the user's saved post IDs so the ribbons stay orange on refresh!
-      const savedRes = await fetch(`${import.meta.env.VITE_API}saved-posts/ids`, { 
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (savedRes.ok) {
-        const savedData = await savedRes.json();
-        setSavedPostIds(savedData); 
-      }
-
-    } catch (err: any) {
-      setError(err.message || "Could not load posts.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // --- THE SAVE TOGGLE FUNCTION ---
   const handleSave = async (postId: string) => {
     try {
       const token = localStorage.getItem("jwtoken");
@@ -124,7 +164,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
       });
       
       if (res.ok) {
-        // Instantly toggle the orange ribbon locally so it feels lightning fast
         if (savedPostIds.includes(postId)) {
           setSavedPostIds(savedPostIds.filter(id => id !== postId));
         } else {
@@ -136,12 +175,10 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     }
   };
 
-  // --- TOGGLE COMMENTS VISIBILITY ---
   const toggleComments = (postId: string) => {
     setExpandedComments((prev) => ({ ...prev, [postId]: !prev[postId] }));
   };
 
-  // --- SUBMIT A NEW COMMENT ---
   const handleCommentSubmit = async (postId: string, e?: React.FormEvent, parentId?: string, manualText?: string) => {
     if (e) e.preventDefault();
     
@@ -156,7 +193,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}` 
         },
-        body: JSON.stringify({ text, parentId }) // parentId is the magic key here
+        body: JSON.stringify({ text, parentId })
       });
       
       if (res.ok) {
@@ -169,7 +206,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     }
   };
 
-  // --- HANDLE COMMENT DELETE ---
   const handleCommentDelete = async (postId: string, commentId: string) => {
     if (!window.confirm("Are you sure you want to delete this comment?")) return;
     
@@ -182,7 +218,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
 
       if (res.ok) {
         const data = await res.json();
-        // Instantly update the UI with the fresh comments array from the backend
         setPosts((prevPosts) => 
           prevPosts.map(p => p._id === postId ? { ...p, comments: data.comments } : p)
         );
@@ -195,7 +230,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     }
   };
 
-  // A handy function to turn dates into "2 hours ago"
   const timeAgo = (date: string) => {
     const diff = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
     if (diff < 60) return `${diff}s`;
@@ -216,7 +250,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     return <div className="text-center text-red-500 font-medium py-10">{error}</div>;
   }
 
-  // Scans text and highlights @mentions
   const renderTextWithMentions = (text: string) => {
     if (!text) return null;
     const parts = text.split(/(@\w+)/g);
@@ -231,7 +264,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     );
   };
 
-  // --- DELETE POST ---
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm("Are you sure you want to delete this post?")) return;
     try {
@@ -248,7 +280,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     }
   };
 
-  // --- SUBMIT EDITED POST ---
   const handleEditSubmit = async (postId: string) => {
     try {
       const token = localStorage.getItem("jwtoken");
@@ -266,17 +297,12 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     }
   };
 
-  // --- COPY SHARE LINK ---
   const handleShare = (postId: string) => {
-    // Generates the exact URL for this specific post based on your website's domain
     const url = `${window.location.origin}/post/${postId}`;
     navigator.clipboard.writeText(url);
-    
-    // You can replace this with your nice Muialert if you prefer!
     alert("🔗 Link copied to clipboard!"); 
   };
 
-// --- HANDLE COMMENT LIKES ---
   const handleCommentVote = async (postId: string, commentId: string) => {
     try {
       const token = localStorage.getItem("jwtoken");
@@ -286,7 +312,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}` 
         },
-        // We no longer need to send voteType or userId, the backend handles it!
       });
 
       if (res.ok) {
@@ -295,15 +320,10 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
         setPosts((prevPosts) => prevPosts.map((post) => {
           if (post._id !== postId) return post;
 
-          // Recursively find the comment and update ONLY the likes
           const updateRecursive = (comments: any[]): any[] => {
             return comments.map((c) => {
               if (c._id === commentId) {
-                return { 
-                  ...c, 
-                  likes: updatedData.likes, 
-                  likedBy: updatedData.likedBy 
-                };
+                return { ...c, likes: updatedData.likes, likedBy: updatedData.likedBy };
               }
               if (c.replies) return { ...c, replies: updateRecursive(c.replies) };
               return c;
@@ -318,7 +338,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     }
   };
 
-// --- HANDLE NESTED REPLIES ---
   const handleCommentReply = async (postId: string, parentId: string, text: string) => {
     if (!text.trim()) return;
 
@@ -332,13 +351,12 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
         },
         body: JSON.stringify({ 
           text: text,
-          parentId: parentId // This tells the backend exactly which comment to attach to
+          parentId: parentId 
         })
       });
 
       if (res.ok) {
         const data = await res.json();
-        // Update the posts state with the new comments array returned from backend
         setPosts(posts.map(p => p._id === postId ? { ...p, comments: data.comments } : p));
       }
     } catch (error) {
@@ -361,64 +379,81 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
             {/* Post Header */}
             <div className="flex items-center justify-between p-4">
               
-              {/* Wrap the avatar and text in a Link! Change the URL to match your routing setup */}
-              <Link to={`/profile/${post.userId?.username}`} className="flex items-center gap-3 group cursor-pointer">
-                
-                {/* Author Avatar */}
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 transform group-hover:scale-105 transition-transform">
-                  {post.userId?.photo ? (
-                    <img src={post.userId.photo} alt={post.userId.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-brand-orange/20 text-brand-orange flex items-center justify-center font-bold">
-                      {post.userId?.name?.charAt(0).toUpperCase() || "U"}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Author Info */}
-                <div>
-                  <h3 className="font-bold text-gray-800 text-sm group-hover:text-brand-orange transition-colors">
-                    {post.userId?.name || "Unknown User"}
-                  </h3>
-                  <div className="flex items-center text-xs text-gray-400 gap-1">
-                    <span className="group-hover:text-brand-blue transition-colors">@{post.userId?.username || "user"}</span>
-                    <span>•</span>
-                    <span>{timeAgo(post.createdAt)}</span>
+              <div className="flex items-center gap-3">
+                {/* Wrap ONLY the avatar and text in the Link */}
+                <Link to={`/profile/${post.userId?.username}`} className="flex items-center gap-3 group cursor-pointer">
+                  {/* Author Avatar */}
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 transform group-hover:scale-105 transition-transform">
+                    {post.userId?.photo ? (
+                      <img src={post.userId.photo} alt={post.userId.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-brand-orange/20 text-brand-orange flex items-center justify-center font-bold">
+                        {post.userId?.name?.charAt(0).toUpperCase() || "U"}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </Link>
-
-              {/* Options Menu (e.g., Delete/Report) */}
-              {post.userId._id === currentUserId && (
-                <div className="relative">
-                  <button 
-                    onClick={() => setOpenMenuId(openMenuId === post._id ? null : post._id)}
-                    className="text-gray-400 hover:text-brand-blue p-2 rounded-full hover:bg-gray-50 transition-colors"
-                  >
-                    <MoreHorizontal className="w-5 h-5" />
-                  </button>
                   
-                  {openMenuId === post._id && (
-                    <div className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-10">
-                      <button 
-                        onClick={() => { setEditingPostId(post._id); setEditContent(post.content); setOpenMenuId(null); }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        Edit Post
-                      </button>
-                      <button 
-                        onClick={() => handleDeletePost(post._id)}
-                        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
+                  {/* Author Info */}
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-sm group-hover:text-brand-orange transition-colors">
+                      {post.userId?.name || "Unknown User"}
+                    </h3>
+                    <div className="flex items-center text-xs text-gray-400 gap-1">
+                      <span className="group-hover:text-brand-blue transition-colors">@{post.userId?.username || "user"}</span>
+                      <span>•</span>
+                      <span>{timeAgo(post.createdAt)}</span>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                </Link>
+              </div>
+
+              {/* 🚨 NEW: Dynamic Action Area (Follow OR Edit/Delete) */}
+              <div className="flex items-center gap-2">
+                
+                {post.userId._id === currentUserId ? (
+                  /* User's OWN post: Show 3-dots menu */
+                  <div className="relative">
+                    <button 
+                      onClick={() => setOpenMenuId(openMenuId === post._id ? null : post._id)}
+                      className="text-gray-400 hover:text-brand-blue p-2 rounded-full hover:bg-gray-50 transition-colors"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+                    
+                    {openMenuId === post._id && (
+                      <div className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-10">
+                        <button 
+                          onClick={() => { setEditingPostId(post._id); setEditContent(post.content); setOpenMenuId(null); }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          Edit Post
+                        </button>
+                        <button 
+                          onClick={() => handleDeletePost(post._id)}
+                          className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* SOMEONE ELSE'S post: Show Follow Button if not already following! */
+                  post.userId.username && !followingUsernames.includes(post.userId.username) && (
+                    <button 
+                      onClick={() => handleFollow(post.userId.username)}
+                      className="flex items-center gap-1.5 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange hover:text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Follow
+                    </button>
+                  )
+                )}
+              </div>
+
             </div>
 
-            {/* Post Image (Only renders if imageUrl exists!) */}
+            {/* Post Image */}
             {post.imageUrl && (
               <div className="w-full max-h-[600px] overflow-hidden bg-gray-50 flex items-center justify-center">
                 <img 
@@ -430,7 +465,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
               </div>
             )}
 
-            {/* Post Content / Caption (Now supports Editing and @mentions!) */}
+            {/* Post Content */}
             <div className="p-4">
               {editingPostId === post._id ? (
                 <div className="space-y-2">
@@ -452,11 +487,10 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
               )}
             </div>
 
-            {/* Action Bar (Like, Comment, Save) */}
+            {/* Action Bar */}
             <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
               <div className="flex items-center gap-6">
                 
-                {/* Dynamic Like Button */}
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => handleLike(post._id)}
@@ -471,7 +505,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                       fill={post.likedBy?.some((u: any) => (u._id || u) === currentUserId) ? "currentColor" : "none"} 
                     />
                   </button>
-                  {/* Clickable Likes Count! */}
                   <span 
                     onClick={() => setShowLikesModal(post.likedBy)}
                     className="text-sm font-semibold text-gray-500 hover:underline cursor-pointer"
@@ -480,7 +513,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                   </span>
                 </div>
                 
-                {/* Comment Button (Now clickable!) */}
                 <button 
                   onClick={() => toggleComments(post._id)}
                   className="flex items-center gap-2 text-gray-500 hover:text-brand-blue transition-colors group"
@@ -489,7 +521,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                   <span className="text-sm font-semibold">{post.comments?.length || 0}</span>
                 </button>
 
-                {/* Share Button UI */}
                 <button 
                   onClick={() => handleShare(post._id)}
                   className="flex items-center gap-2 text-gray-500 hover:text-green-500 transition-colors group"
@@ -498,7 +529,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                 </button>
               </div>
 
-              {/* Dynamic Bookmark/Save Button */}
               <button 
                 onClick={() => handleSave(post._id)}
                 className={`transition-colors group ${
@@ -514,6 +544,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
               </button>
             </div>
 
+            {/* Comments Section */}
             {expandedComments[post._id] && (
             <div className="px-4 pb-4 border-t border-gray-50 bg-slate-50/50">
               <div className="max-h-96 overflow-y-auto custom-scrollbar py-3">
@@ -524,7 +555,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                     <CommentItem 
                       key={comment._id} 
                       comment={comment} 
-                      postId={post._id} // <--- Pass the post ID here
+                      postId={post._id}
                       currentUserId={currentUserId}
                       onVote={handleCommentVote}
                       onReply={handleCommentReply}
@@ -533,7 +564,6 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                   ))
                 )}
                 </div>
-                {/* Add a New Comment Input */}
                 <form 
                   onSubmit={(e) => handleCommentSubmit(post._id, e)} 
                   className="mt-2 flex gap-2 items-center"
@@ -564,12 +594,11 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                 </form>
               </div>
             )}
-            {/* --- END COMMENTS SECTION --- */}
-            
           </article>
         ))
       )}
-      {/* --- LIKES MODAL --- */}
+
+      {/* Likes Modal */}
       {showLikesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
           <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">

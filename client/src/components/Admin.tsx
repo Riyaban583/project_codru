@@ -363,6 +363,12 @@ function Admin() {
         setCurrentUsername(username);
         setOtpValue("");
         setOpen(true);
+      } else {
+        // Handle error if generation fails
+        const data = await response.json();
+        setAlertMessage(data.message || "Failed to generate OTP.");
+        setAlertSeverity("error");
+        setShowAlert(true);
       }
     } catch (error) {
       setWaitingAlert(false);
@@ -372,10 +378,17 @@ function Admin() {
   };
 
   const handleOtpVerification = async (finalOtp: string) => {
+    // 1. Grab the token from local storage
+    const token = localStorage.getItem("jwtoken");
+
     try {
       const res = await fetch(`${import.meta.env.VITE_API}verify-bigbro`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          // 🚨 Attach the token so the backend knows who you are!
+          "Authorization": `Bearer ${token}` 
+        },
         body: JSON.stringify({ username: currentUsername, otp: finalOtp }),
       });
       const data = await res.json();
@@ -387,11 +400,12 @@ function Admin() {
         setTimeout(() => window.location.reload(), 1500); 
       } else {
         setAlertSeverity("error");
-        setAlertMessage(data.error || "Invalid OTP");
+        setAlertMessage(data.error || data.message || "Invalid OTP");
         setShowAlert(true);
       }
     } catch (err) {
       setAlertSeverity("error");
+      setAlertMessage("Network error during verification");
       setShowAlert(true);
     }
   };

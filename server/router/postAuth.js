@@ -43,22 +43,50 @@ router.post("/posts", authenticate, async (req, res) => {
 // ==========================================
 router.get("/posts", authenticate, async (req, res) => {
   try {
-    const posts = await Post.find()
-    .populate({
+    // 1. Get the current user to find out who they are following
+    const userId = req.userId || req.user._id;
+    const currentUser = await User.findById(userId).select("following");
+    
+    // Convert ObjectIds to strings for easy comparison
+    const followingIds = currentUser.following.map(id => id.toString());
+
+    // 2. Fetch ALL posts, pre-sorted by newest first
+    const allPosts = await Post.find()
+      .populate({
         path: "comments",
         populate: { 
-          path: "user replies.user", // Level 0 and Level 1
+          path: "user replies.user", 
           select: "name username photo" 
         }
       })
       .populate("userId", "name username photo")
       .populate("likedBy", "name username photo")
-      .populate({ path: "comments.user", select: "name username photo" })
-      .populate({ path: "comments.replies.user", select: "name username photo" }) // <-- Fetches nested reply avatars!
       .sort({ createdAt: -1 });
 
-    return res.status(200).json(posts);
+    // 3. The Sorting Magic: Split into "Followed" and "Global"
+    const followedPosts = [];
+    const globalPosts = [];
+
+    allPosts.forEach(post => {
+      // Safety check in case a user was deleted but their post remains
+      if (!post.userId) return; 
+
+      const postAuthorId = post.userId._id.toString();
+
+      // If the user follows the author, OR if it's the user's own post, put it at the top!
+      if (followingIds.includes(postAuthorId) || postAuthorId === userId.toString()) {
+        followedPosts.push(post);
+      } else {
+        globalPosts.push(post);
+      }
+    });
+
+    // 4. Combine them: Followed/Own posts first, then everyone else's!
+    const personalizedFeed = [...followedPosts, ...globalPosts];
+
+    return res.status(200).json(personalizedFeed);
   } catch (err) {
+    console.error("Feed Fetch Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
