@@ -9,11 +9,20 @@ const authenticate = require('../middleware/authenticate'); // Fixed import form
 const router = express.Router();
 
 // 1. Initialize Web Push 
-webpush.setVapidDetails(
-  'mailto:admin@cutelearning.com',
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+// 1. Initialize Web Push SAFELY
+try {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      'mailto:admin@cutelearning.com',
+      process.env.VAPID_PUBLIC_KEY.trim(),
+      process.env.VAPID_PRIVATE_KEY.trim()
+    );
+  } else {
+    console.warn("⚠️ VAPID keys missing in notification.js - Push disabled.");
+  }
+} catch (error) {
+  console.error("❌ Web-Push Setup Failed in notification.js:", error.message);
+}
 
 // --- DEVICE SUBSCRIPTION ROUTES ---
 router.post("/api/save-subscription", authenticate, async (req, res) => {

@@ -1,26 +1,6 @@
-const mongoose = require("mongoose"); 
+const mongoose = require("mongoose"); // 🚨 Required for forcing the ID
 const webpush = require("web-push"); 
 const User = require("../models/userSchema"); 
-
-// ============================================================================
-// 🚨 THE FIX: INITIALIZE WEB-PUSH HERE SO IT KNOWS YOUR KEYS!
-// ============================================================================
-try {
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    webpush.setVapidDetails(
-      // The subject must be a mailto: URL or a standard URL
-      `mailto:${process.env.EMAIL || 'admin@curiousteamlearning.com'}`, 
-      process.env.VAPID_PUBLIC_KEY.trim(), 
-      process.env.VAPID_PRIVATE_KEY.trim()
-    );
-    console.log("✅ Web-Push VAPID keys loaded successfully in notify.js!");
-  } else {
-    console.warn("⚠️ WARNING: VAPID keys are missing from Environment Variables. Push notifications will silently fail.");
-  }
-} catch (error) {
-  console.error("❌ Web-Push Initialization Failed:", error.message);
-}
-// ============================================================================
 
 const sendAutoNotification = async (app, recipientId, message, link, triggeredBy) => {
   try {
@@ -29,7 +9,7 @@ const sendAutoNotification = async (app, recipientId, message, link, triggeredBy
 
     const safeLink = link.startsWith('/') ? link : `/${link}`;
 
-    // 1. Force a unique ID so React doesn't crash when rendering!
+    // 1. 🚨 THE ID FIX: Force a unique ID so React doesn't crash when rendering!
     const newNotif = {
       _id: new mongoose.Types.ObjectId(), 
       message: message,
@@ -39,7 +19,7 @@ const sendAutoNotification = async (app, recipientId, message, link, triggeredBy
       isRead: false
     };
 
-    // 2. Split Push and Pull into TWO separate operations
+    // 2. 🚨 THE MONGODB FIX: Split Push and Pull into TWO separate operations
     // Step A: Push the new notification safely
     await User.findByIdAndUpdate(recipientId, {
       $push: {
@@ -50,7 +30,7 @@ const sendAutoNotification = async (app, recipientId, message, link, triggeredBy
       }
     });
 
-    // Step B: The 7-Day Cleanup 
+    // Step B: The 7-Day Cleanup (Runs separately so it doesn't conflict!)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
@@ -60,7 +40,7 @@ const sendAutoNotification = async (app, recipientId, message, link, triggeredBy
       }
     });
 
-    // 3. Web Push Logic (This will now work because of the code at the top!)
+    // 3. Web Push Logic
     if (user.pushSubscriptions && user.pushSubscriptions.length > 0) {
       const pushPayload = JSON.stringify({
         title: "New Activity", 
@@ -77,7 +57,6 @@ const sendAutoNotification = async (app, recipientId, message, link, triggeredBy
           if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
             deadEndpoints.push(sub.endpoint);
           } else {
-            // Silently log push errors so it doesn't crash the rest of the app
             console.error("Web Push Error:", pushErr.statusCode);
           }
         }
@@ -85,7 +64,6 @@ const sendAutoNotification = async (app, recipientId, message, link, triggeredBy
 
       await Promise.all(pushPromises);
 
-      // Clean up users who uninstalled the app or revoked permissions
       if (deadEndpoints.length > 0) {
         await User.findByIdAndUpdate(recipientId, {
           $pull: { pushSubscriptions: { endpoint: { $in: deadEndpoints } } }
