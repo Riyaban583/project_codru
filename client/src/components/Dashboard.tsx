@@ -383,7 +383,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-body relative">
+    <div className="fixed inset-0 flex h-[100dvh] w-full bg-slate-50 overflow-hidden font-body overscroll-none">
       
       {/* 🚨 MOBILE BACKDROP */}
       {isMobileMenuOpen && (

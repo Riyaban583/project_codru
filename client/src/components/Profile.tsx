@@ -156,19 +156,26 @@ const Profile = () => {
     <div className="animate-fade-in-up bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
       
       {/* 🚨 UPDATED: Header with Orange branding and Logo */}
-      <div className="bg-brand-blue text-white p-6 md:p-8 relative overflow-hidden flex items-center justify-center min-h-[140px]">
-        <div className="absolute left-4 md:left-8 z-10">
+      <div className="bg-brand-blue text-white p-6 md:p-8 relative overflow-hidden flex flex-col md:flex-row items-center justify-center min-h-[140px]">
+  
+        {/* LOGO */}
+        {/* On mobile: relative (stacks normally). Decreased bottom margin to 'mb-2'. On desktop: absolute on the left! */}
+        <div className="relative md:absolute md:left-8 z-10 mb-0 md:mb-0">
           <img 
             src="/logo.svg" 
             alt="Logo" 
-            className="w-20 h-20 md:w-28 md:h-28 object-contain drop-shadow-md" 
+            className="w-16 h-16 sm:w-20 sm:h-20 md:w-28 md:h-28 object-contain drop-shadow-md" 
             draggable="false"
           />
         </div>
-        <div className="text-center relative z-10 pl-24 md:pl-0"> {/* padding-left added for mobile to prevent text overlapping logo */}
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-display font-bold">Curious Team Learning Pvt. Ltd</h1>
-          <p className="text-orange-100 font-body mt-1 italic md:text-lg">Learn how to learn.</p>
+
+        {/* TEXT */}
+        <div className="text-center relative z-10"> 
+          <h1 className="text-lg sm:text-xl md:text-3xl font-display font-bold">
+            Curious Team Learning Pvt. Ltd
+          </h1>
         </div>
+        
       </div>
 
       <div className="p-8 md:p-12">

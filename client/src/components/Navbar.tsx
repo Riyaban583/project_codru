@@ -45,7 +45,7 @@ function Navbar({ userData, setUserData }: NavbarProps) {
             
             {/* Logo (Points back to Main Site Home) */}
             <a href={`${MAIN_SITE}/index.html`} className="flex-shrink-0 flex items-center gap-2 cursor-pointer">
-              <img className="w-[6.5rem] h-auto block drop-shadow-[0_4px_6px_rgba(0,0,0,0.3)]" src="/logo.svg" alt="CuTe Learning" draggable="false" />
+              <img className="w-[5rem] md:w-[6.5rem] h-auto block drop-shadow-[0_4px_6px_rgba(0,0,0,0.3)] transition-all" src="/logo.svg" alt="CuTe Learning" draggable="false" />
             </a>
 
             <GlobalSearch />
@@ -69,8 +69,8 @@ function Navbar({ userData, setUserData }: NavbarProps) {
                     to="/dashboard" 
                     className="text-gray-400 hover:text-brand-blue transition transform hover:scale-110"
                     onClick={() => {
-                      localStorage.setItem("currentView", "dashboard");
-                      localStorage.setItem("activeTab", "Dashboard");
+                      localStorage.setItem("currentView", "schedule");
+                      localStorage.setItem("activeTab", "Schedule");
                     }}
                   >
                     <LayoutDashboard className="w-5 h-5" />
