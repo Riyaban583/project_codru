@@ -80,7 +80,9 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
     
     if (username) {
       const baseUrl = import.meta.env.VITE_API.replace(/\/$/, "");
-      socket = io(baseUrl);
+      socket = io(baseUrl, {
+      transports: ["websocket"],
+    });
       socket.emit("join", username);
       socket.on("force-refresh-circle", handleRefreshCircle);
     }

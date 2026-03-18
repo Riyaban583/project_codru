@@ -36,7 +36,9 @@ const HandshakeDrawer = () => {
     let socket: any;
     if (username) {
       const baseUrl = import.meta.env.VITE_API.replace(/\/$/, "");
-      socket = io(baseUrl);
+      socket = io(baseUrl, {
+      transports: ["websocket"],
+    });
       
       socket.emit("join", username);
 

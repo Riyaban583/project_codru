@@ -11,7 +11,8 @@ import {
   Bell,
   Heart, 
   MessageCircle,
-  Menu // 🚨 NEW ICON FOR MOBILE
+  Menu,
+  Rocket
 } from "lucide-react";
 
 // Components
@@ -70,12 +71,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const [selectedStudentUsername, setSelectedStudentUsername] = useState<string | null>(null);
 
   const [currentView, setCurrentView] = useState(() => {
-    let savedView = location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "schedule";
-    if (savedView === "dashboard") {
-      savedView = isParent ? "profile" : "schedule";
-      localStorage.setItem("currentView", savedView);
-    }
-    return savedView;
+    return location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "schedule";
   });
 
   const todayDate = new Date().toLocaleDateString('en-US', { 
@@ -444,7 +440,72 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
 
       {/* RIGHT AREA: MAIN CONTENT */}
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
-        <div className="h-48 bg-brand-blue absolute top-0 left-0 w-full rounded-b-[3rem] shadow-inner"></div>
+        {/* 🌌 DYNAMIC DEEP SPACE HEADER */}
+        <div className="h-48 md:h-56 bg-slate-900 absolute top-0 left-0 w-full rounded-b-[3rem] shadow-inner overflow-hidden z-0">
+          
+          {/* Faint, Drifting Nebula Orbs */}
+          <div className="absolute top-0 right-0 md:right-32 w-96 h-96 bg-brand-orange opacity-10 rounded-full blur-[80px] animate-nebula-drift" style={{ animationDelay: '0s' }}></div>
+          <div className="absolute bottom-0 left-10 md:left-48 w-96 h-96 bg-brand-blue opacity-[0.15] rounded-full blur-[80px] animate-nebula-drift" style={{ animationDelay: '-20s', animationDirection: 'reverse' }}></div>
+          
+          {/* Starry Background Pattern (Slowly drifting across the screen) */}
+          <div className="absolute inset-0 opacity-30 pointer-events-none animate-star-pan" style={{
+            backgroundImage: 'radial-gradient(1px 1px at 15% 25%, white, transparent), radial-gradient(1.5px 1.5px at 45% 65%, rgba(255,255,255,0.8), transparent), radial-gradient(1px 1px at 75% 15%, rgba(255,255,255,0.4), transparent), radial-gradient(2px 2px at 85% 75%, rgba(255,255,255,0.6), transparent), radial-gradient(1px 1px at 25% 85%, white, transparent)',
+            backgroundSize: '130px 130px, 190px 190px, 230px 230px, 290px 290px, 110px 110px'
+          }}></div>
+
+          {/* 🚀 Calmly Floating Rocket */}
+          <div className="absolute z-10 animate-space-wander opacity-70">
+            <Rocket size={32} className="text-white fill-white/5 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]" strokeWidth={1} />
+            
+            {/* Extremely subtle thruster glow */}
+            <div className="absolute -bottom-2 -left-2 w-6 h-6 bg-brand-orange rounded-full blur-md opacity-30 animate-thruster"></div>
+          </div>
+          
+          {/* Cinematic CSS Animations */}
+          <style>{`
+            /* Slowly pans the stars diagonally across the screen forever */
+            @keyframes star-pan {
+              0% { background-position: 0px 0px; }
+              100% { background-position: -500px 200px; }
+            }
+            .animate-star-pan {
+              animation: star-pan 150s linear infinite;
+            }
+
+            /* Makes the colored background orbs slowly breathe, fade, and shift position */
+            @keyframes nebula-drift {
+              0% { transform: translate(0, 0) scale(1); opacity: 0.08; }
+              33% { transform: translate(40px, -40px) scale(1.1); opacity: 0.12; }
+              66% { transform: translate(-30px, 30px) scale(0.95); opacity: 0.05; }
+              100% { transform: translate(0, 0) scale(1); opacity: 0.08; }
+            }
+            .animate-nebula-drift {
+              animation: nebula-drift 45s ease-in-out infinite;
+            }
+
+            /* A 60-second organic wandering path for the rocket */
+            @keyframes space-wander {
+              0%   { transform: translate(5vw, 20px) rotate(15deg); }
+              20%  { transform: translate(30vw, 80px) rotate(35deg); }
+              40%  { transform: translate(65vw, 10px) rotate(5deg); }
+              60%  { transform: translate(85vw, 90px) rotate(-15deg); }
+              80%  { transform: translate(40vw, 50px) rotate(-5deg); }
+              100% { transform: translate(5vw, 20px) rotate(15deg); }
+            }
+            .animate-space-wander {
+              animation: space-wander 60s ease-in-out infinite;
+            }
+
+            /* Very gentle glow variation for the thruster */
+            @keyframes thruster {
+              0%, 100% { transform: scale(1); opacity: 0.2; }
+              50% { transform: scale(1.1); opacity: 0.4; }
+            }
+            .animate-thruster {
+              animation: thruster 4s ease-in-out infinite;
+            }
+          `}</style>
+        </div>
 
         {/* 🚨 MOBILE + DESKTOP TOP BAR */}
         <div className="absolute top-4 md:top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[100] flex items-center justify-between md:justify-center">

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import io from "socket.io-client";
+import { io } from "socket.io-client";
 import { Bell, Loader2, CheckCheck, X } from "lucide-react";
 import { useNavigate } from "react-router-dom"; 
 
@@ -75,7 +75,9 @@ const Notification = ({
     fetchNotifications();
 
     const baseUrl = import.meta.env.VITE_API.replace(/\/$/, "");
-    const socket = io(baseUrl);
+    const socket = io(baseUrl, {
+      transports: ["websocket"],
+    });
     socket.emit("join", username);
 
     socket.on("notification", (notification) => {
