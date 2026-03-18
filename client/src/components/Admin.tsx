@@ -298,7 +298,7 @@ function Admin() {
   const handleParentAction = async (id: string, action: "verify" | "reject") => {
     try {
       const token = localStorage.getItem("jwtoken");
-      const res = await fetch(`${import.meta.env.VITE_API}/admin${action}-parent/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API}admin/${action}-parent/${id}`, {
         method: "PUT",
         headers: { "Authorization": `Bearer ${token}` }
       });
