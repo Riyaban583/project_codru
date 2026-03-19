@@ -460,15 +460,6 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
           onDelete={handleDeleteEvent}
         />
       )}
-      {selectedEvent && (
-        <div className="fixed bottom-4 left-4 z-[300] bg-black text-green-400 p-4 rounded text-xs font-mono shadow-lg">
-          <p>Event Name: {selectedEvent.title}</p>
-          <p>Event Creator ID: {selectedEvent.creatorId || "UNDEFINED (Pure Google Event)"}</p>
-          <p>My User ID: {currentUserId || "UNDEFINED (Missing from Dashboard prop)"}</p>
-          <p>Do they match? {String(selectedEvent.creatorId) === String(currentUserId) ? "YES" : "NO"}</p>
-        </div>
-      )}
-
       {/* 🚨 NEW: ADD EVENT MODAL 🚨 */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in px-4">
