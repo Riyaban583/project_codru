@@ -180,8 +180,8 @@ function Navbar({ userData, setUserData }: NavbarProps) {
             <NavLink 
               to="/dashboard" 
               onClick={() => {
-                localStorage.setItem("currentView", "dashboard");
-                localStorage.setItem("activeTab", "Dashboard");
+                localStorage.setItem("currentView", "schedule");
+                localStorage.setItem("activeTab", "Schedule");
                 setShowLinks(false);
                 setShowProfile(false);
                 setShowNotifications(false);
