@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Route, Routes, useLocation, Navigate, useSearchParams } from "react-router-dom"; 
 // Add this to your imports at the top
 import { registerSW } from 'virtual:pwa-register';
+import PwaInstallPrompt from "./PwaInstallPrompt";
 import CommunicationPortal from './components/CommunicationPortal';
 
 // --- TYPESCRIPT DEFINITIONS ---
@@ -195,6 +196,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-gray-900 font-sans selection:bg-brand-orange selection:text-white">
+      <PwaInstallPrompt />
       
       {!hideNavbar && <Navbar userData={userData} setUserData={setUserData} />}
 
