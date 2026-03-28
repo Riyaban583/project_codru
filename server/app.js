@@ -99,7 +99,8 @@ const transporter = nodemailer.createTransport({
   // This helps bypass some strict SSL firewall rules on cloud servers
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4
 });
 
 const oauth2Client = new google.auth.OAuth2(
