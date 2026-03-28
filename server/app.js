@@ -70,7 +70,7 @@ app.use(
 // app.use(express.static(path.join(__dirname, "public")));
 
 require("./db/conn.js");
-const Contact = require("./models/contactSchema");
+const Enquiry = require("./models/enquirySchema.js");
 const ContactInfo = require("./models/trainingSchema");
 const BotEnroll = require("./models/botEnrollSchema");
 const Blog = require("./models/postSchema.js");
@@ -732,23 +732,41 @@ app.post('/botenroll', async (req, res) => {
     return res.status(500).json({ error: "Error saving bot enrollment" });
   }
 });
-app.post("/contact", async (req, res) => {
+app.post("/contactus", async (req, res) => {
   try {
-    const { name, email, subject, message } = req.body;
+    // 1. Extract the exact fields from your frontend form
+    // (Removed 'subject', added 'countryCode' and 'phone')
+    const { name, email, countryCode, phone, city, message } = req.body;
 
-    if (!name || !email || !message) {
+    // 2. Validate all required fields based on your Schema
+    if (!name || !email || !countryCode || !phone || !message) {
       return res.status(400).json({ error: "Please fill in all required fields." });
     }
 
-    // 1. Prepare HTML for the Email
-    const supportEmailHtml = contactUsTemplate(name, email, subject || "No Subject", message);
+    // 3. Save to MongoDB First
+    const newEnquiry = new Enquiry({
+        name,
+        email,
+        countryCode,
+        phone,
+        city: city || "", // City is optional in your schema
+        message 
+    });
+    
+    await newEnquiry.save(); 
 
-    // 2. Send Email to Admin/Support Team
+    // 4. Prepare HTML for the Email
+    // Since 'subject' is gone, we just pass a hardcoded title to your template
+    const emailTitle = "New Website Enquiry"; 
+    const supportEmailHtml = contactUsTemplate(name, email, emailTitle, message);
+
+    // 5. Send Email to Admin/Support Team
     const mailOptions = {
       from: process.env.EMAIL,
-      to: process.env.EMAIL, // Send it to yourself/support inbox
-      replyTo: email,        // So when you click "Reply", it goes to the user
-      subject: `📩 Support: ${subject || "New Message from " + name}`,
+      to: process.env.EMAIL, 
+      replyTo: email,
+      // Added the phone number to the email subject line so you see it instantly!
+      subject: `📩 Enquiry from ${name} (${countryCode} ${phone})`,
       html: supportEmailHtml
     };
 
@@ -756,7 +774,7 @@ app.post("/contact", async (req, res) => {
       if (error) console.error("Contact Email Error:", error);
     });
 
-    // 3. 🚨 NOTIFY ALL ADMINS (In-App + Real-time)
+    // 6. Notify All Admins (In-App + Real-time)
     try {
       const admins = await User.find({ isAdmin: true });
       
@@ -764,9 +782,9 @@ app.post("/contact", async (req, res) => {
         sendAutoNotification(
           req.app, 
           admin._id, 
-          `📩 New Support Message from ${name}`, 
-          "admin/messages", // Link to your admin message dashboard
-          name              // 🕵️‍♂️ Audit: Who sent the message?
+          `📩 New Website Enquiry from ${name}`, 
+          "admin/messages", 
+          name 
         )
       );
       
@@ -775,8 +793,9 @@ app.post("/contact", async (req, res) => {
       console.error("Admin Notification Error:", err);
     }
 
-    res.status(200).json({ success: true, message: "Your message has been sent!" });
+    res.status(200).json({ success: true, message: "Your message has been sent and saved!" });
   } catch (error) {
+    console.error("Contact Form Error:", error);
     res.status(500).json({ error: "Failed to send message." });
   }
 });

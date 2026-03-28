@@ -157,7 +157,7 @@ router.post('/webhook', async (req, res) => {
                         },
                         $inc: { unreadCount: 1 }
                     },
-                    { upsert: true, new: true, strict: false }
+                    { upsert: true, new: true, setDefaultsOnInsert: true, strict: false }
                 );
 
                 // 3. 📣 BROADCAST TO UI
@@ -167,7 +167,7 @@ router.post('/webhook', async (req, res) => {
                 }
 
                 // =========================================================
-                // 4. 🚨 THE NEW MAGIC: SYSTEM NOTIFICATIONS (PUSH + IN-APP)
+                // 4. SYSTEM NOTIFICATIONS (PUSH + IN-APP)
                 // =========================================================
                 try {
                     // Find all Admins (or you could look up the specific assigned teacher)
