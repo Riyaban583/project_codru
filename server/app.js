@@ -23,7 +23,12 @@ const OTP = require("./models/otpSchema");
 
 dotenv.config({ path: "./config.env" });
 const app = express();
-const server = http.createServer(app); // <-- 2. Wrap the express app
+const server = http.createServer(app);
+
+app.get('/health', (req, res) => {
+    res.status(200).send("OK - Server is alive");
+});
+
 const io = new Server(server, { 
   cors: { 
     origin: process.env.FRONTEND_URL,
