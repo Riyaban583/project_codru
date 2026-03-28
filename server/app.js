@@ -90,8 +90,8 @@ let notifications = {};
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,       // Port 465 is specifically for secure TLS connections
-  secure: true,    // MUST be true for port 465!
+  port: 587,       // Port 465 is specifically for secure TLS connections
+  secure: false,    // MUST be true for port 465!
   auth: {
     user: process.env.EMAIL,
     pass: process.env.PASSWORD 
