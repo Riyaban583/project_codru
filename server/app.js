@@ -758,7 +758,7 @@ app.post("/contactus", async (req, res) => {
     // 4. Prepare HTML for the Email
     // Since 'subject' is gone, we just pass a hardcoded title to your template
     const emailTitle = "New Website Enquiry"; 
-    const supportEmailHtml = contactUsTemplate(name, email, emailTitle, message);
+    const supportEmailHtml = contactUsTemplate(name, email, countryCode, phone, message);
 
     // 5. Send Email to Admin/Support Team
     const mailOptions = {
