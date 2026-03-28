@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Video, Users, UserMinus, ArrowLeft, Send, Loader2, CalendarPlus, Link as LinkIcon, User } from "lucide-react";
-import io from "socket.io-client";
+import { socket } from '../socket';
 
 const currentUserId = localStorage.getItem("userId"); 
 const username = localStorage.getItem("Username");
@@ -64,38 +64,38 @@ const CommunicationPortal = () => {
   useEffect(() => {
     // Define what happens when we hear the signal
     const handleRefreshCircle = () => {
-      console.log("Refreshing communication circle...");
+      console.log("🔄 Refreshing communication circle...");
       fetchCircle(); 
     };
 
     // 1. Listen for LOCAL events (when YOU accept someone)
     window.addEventListener('refresh-communication-circle', handleRefreshCircle);
 
-    // 2. Set up SOCKET connection (for when THEY accept you)
-    let socket: any; // Type it as 'any' or 'Socket' to keep TypeScript happy
-    
+    // 2. Set up SHARED SOCKET connection (for when THEY accept you)
     if (username) {
-      const baseUrl = import.meta.env.VITE_API.replace(/\/$/, "");
-      socket = io(baseUrl, {
-      transports: ["websocket"],
-      });
-      socket.emit("join", username);
+      // We just use the imported 'socket' directly! No 'io(...)' needed.
+      socket.emit("join", username); 
 
-      socket.on("force-refresh-circle", () => {
+      const handleSocketSignal = () => {
         console.log("⚡ Socket signal received! Updating chat list.");
         handleRefreshCircle();
         setIsOpen(true);
-      });
+      };
+
+      socket.on("force-refresh-circle", handleSocketSignal);
+
+      // 3. Cleanup on unmount
+      return () => {
+        window.removeEventListener('refresh-communication-circle', handleRefreshCircle);
+        socket.off("force-refresh-circle", handleSocketSignal); // 🚨 Just turn off the listener
+      };
     }
 
-    // 3. Cleanup on unmount
+    // Fallback cleanup if username is missing
     return () => {
       window.removeEventListener('refresh-communication-circle', handleRefreshCircle);
-      if (socket) {
-        socket.disconnect();
-      }
     };
-  }, [username]); // Re-run if username changes
+  }, [username]);
 
   // Fetch Chat History
   const fetchMessages = async () => {

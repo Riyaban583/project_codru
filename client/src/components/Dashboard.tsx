@@ -12,7 +12,8 @@ import {
   Heart, 
   MessageCircle,
   Menu,
-  Rocket
+  Rocket,
+  MessageSquare
 } from "lucide-react";
 
 // Components
@@ -32,6 +33,7 @@ import AdminAuditLog from "./AdminAuditLog";
 import Notification from "./Notification";
 import ExpertConnect from "./ExpertConnect";
 import HandshakeDrawer from "./HandshakeDrawer";
+import WhatsAppChat from "./WhatsAppChat";
 
 interface DashboardProps {
   userData: UserData;
@@ -85,7 +87,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       schedule: "Schedule", syllabus: "Syllabus Tracker", profile: "Profile",
       settings: "Settings", "my-posts": "My Posts", "saved-posts": "Saved Posts",
       report: "Report", management: "Management", "my-courses": "My Courses",
-      "the-village": "The Village (Q&A)", "expert-connect": "Expert Connect" 
+      "the-village": "The Village (Q&A)", "expert-connect": "Expert Connect",
+      "whatsapp-crm": "WhatsApp Support"
     };
     return viewToTabMap[currentView] || "Schedule";
   });
@@ -131,7 +134,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         "the-village": "The Village (Q&A)", 
         "expert-connect": "Expert Connect",
         "manage-users": "Manage Users",           
-        "admin-audit-log": "Security Audit Log"   
+        "admin-audit-log": "Security Audit Log",
+        "whatsapp-crm": "WhatsApp Support"   
       };
 
       setActiveTab(viewToTabMap[target] || "Dashboard"); 
@@ -281,9 +285,11 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       parentItems.push({ text: "Expert Connect", icon: <MessageCircle size={22} />, view: "expert-connect", isLocked: isUnverifiedParent });
     }
 
+    const adminItems = [];
     if (userData.isAdmin) {
-      premiumItems.push({ text: "Manage Users", icon: <UserCog size={22} />, view: "manage-users" });
-      premiumItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
+      adminItems.push({ text: "WhatsApp CRM", icon: <MessageSquare size={22} />, view: "whatsapp-crm" });
+      adminItems.push({ text: "Manage Users", icon: <UserCog size={22} />, view: "manage-users" });
+      adminItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
     }
 
     const renderListItem = (item: any) => {
@@ -352,6 +358,14 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             <div className="my-3 mx-2 border-t border-slate-100"></div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Academy Tools</p>
             {premiumItems.map(renderListItem)}
+          </>
+        )}
+
+        {adminItems.length > 0 && (
+          <>
+            <div className="my-3 mx-2 border-t border-slate-100"></div>
+            <p className="text-[10px] font-bold text-brand-blue uppercase tracking-widest px-4 mb-2">Admin Tools</p>
+            {adminItems.map(renderListItem)}
           </>
         )}
 
@@ -603,6 +617,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               {currentView === "management" && isPremiumTeacher && <StudentManagement userData={userData} />}
               {currentView === "manage-users" && userData?.isAdmin && <Admin userData={userData} setUserData={setUserData} />}
               {currentView === "admin-audit-log" && userData?.isAdmin && <AdminAuditLog />}
+              {currentView === "whatsapp-crm" && userData?.isAdmin && <WhatsAppChat />}
               
               {currentView === "the-village" && isParent && (
                 <div className="flex flex-col items-center justify-center h-full text-center">

@@ -49,7 +49,7 @@ self.addEventListener('notificationclick', function(event) {
   
   const dashboardViews = [
     "schedule", "syllabus", "profile", "settings", "my-posts", 
-    "saved-posts", "report", "management", "my-courses"
+    "saved-posts", "report", "management", "my-courses", "whatsapp-crm"
   ];
 
   // 3. Construct the Full URL

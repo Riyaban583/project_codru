@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { io } from "socket.io-client";
+import { socket } from '../socket';
 import { Bell, Loader2, CheckCheck, X } from "lucide-react";
 import { useNavigate } from "react-router-dom"; 
 
@@ -72,20 +72,30 @@ const Notification = ({
 
   useEffect(() => {
     if (!username) return;
+    
     fetchNotifications();
 
-    const baseUrl = import.meta.env.VITE_API.replace(/\/$/, "");
-    const socket = io(baseUrl, {
-      transports: ["websocket"],
-    });
+    // 1. Tell the shared socket who you are
     socket.emit("join", username);
 
-    socket.on("notification", (notification) => {
-      setNotifications((prev) => [notification, ...prev]);
-    });
+    // 2. Define the function (We need to name it so we can cleanly remove it later)
+    const handleNewNotification = (notification: any) => {
+        setNotifications((prev) => [notification, ...prev]);
 
-    return () => { socket.disconnect(); };
-  }, [username]);
+        if (notification.link?.includes("whatsapp-crm")) {
+             // Note: Make sure you put a file named pop.mp3 inside your React 'public' folder!
+             new Audio('/pop.mp3').play().catch((err) => console.log("Audio blocked by browser:", err));
+        }
+    };
+
+    // 3. Listen for the ping
+    socket.on("notification", handleNewNotification);
+
+    // 4. 🚨 CLEANUP: ONLY remove the listener. DO NOT disconnect the socket!
+    return () => { 
+        socket.off("notification", handleNewNotification); 
+    };
+}, [username]);
 
   // 4. Handle Single Click
   const handleNotificationClick = async (notifId: string, rawLink?: string) => {
@@ -110,7 +120,7 @@ const Notification = ({
       
       const dashboardViews = [
         "schedule", "syllabus", "profile", "settings", "my-posts", 
-        "saved-posts", "report", "management", "my-courses"
+        "saved-posts", "report", "management", "my-courses", "whatsapp-crm"
       ];
 
       if (pathWord.startsWith("portal")) {

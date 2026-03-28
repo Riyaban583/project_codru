@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Loader2, Check, X, Calendar, Sparkles, ChevronRight, MessageCircleHeart } from "lucide-react";
 import Muialert from "./Muialert";
-import { io } from "socket.io-client";
+import { socket } from '../socket';
 
 const HandshakeDrawer = () => {
   const [requests, setRequests] = useState<any[]>([]);
@@ -32,27 +32,25 @@ const HandshakeDrawer = () => {
     // Fallback: Poll every 60 seconds
     const interval = setInterval(fetchRequests, 60000);
 
-    // 🚨 SETUP SOCKET LISTENER
-    let socket: any;
+    // 🚨 SHARED SOCKET SETUP
     if (username) {
-      const baseUrl = import.meta.env.VITE_API.replace(/\/$/, "");
-      socket = io(baseUrl, {
-      transports: ["websocket"],
-    });
-      
-      socket.emit("join", username);
+      socket.emit("join", username); // Make sure they are in their room
 
-      socket.on("new-connection-request", () => {
+      const handleNewRequest = () => {
         console.log("⚡ Socket signal received! You have a new request.");
         fetchRequests(); // Instantly pull the new request from the DB!
-      });
+      };
+
+      socket.on("new-connection-request", handleNewRequest);
+
+      // Cleanup when component unmounts
+      return () => {
+        clearInterval(interval);
+        socket.off("new-connection-request", handleNewRequest); // 🚨 ONLY turn off listener, don't disconnect!
+      };
     }
 
-    // Cleanup when component unmounts
-    return () => {
-      clearInterval(interval);
-      if (socket) socket.disconnect();
-    };
+    return () => clearInterval(interval);
   }, [username]);
 
   const handleResponse = async (id: string, status: "accepted" | "declined") => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Search, Loader2, ShieldCheck, Calendar, MessageSquare, X, Send, Heart } from "lucide-react";
 import Muialert from "./Muialert"; 
 import { UserData } from "../App";
-import { io } from "socket.io-client";
+import { socket } from '../socket';
 
 interface ExpertConnectProps {
   userData: UserData;
@@ -49,7 +49,6 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
   }, []);
 
   // Fetch Parent's Circle (Safely using optional chaining)
-  // 🚨 REPLACED: Fetch Parent's Circle + Socket Real-time Sync
   useEffect(() => {
     if (userData?.Role !== "Parent") return;
 
@@ -71,25 +70,21 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
       fetchCircle();
     };
 
-    // 3. Listen for LOCAL events (like if you accept or disconnect someone elsewhere)
+    // 3. Listen for LOCAL events 
     window.addEventListener('refresh-communication-circle', handleRefreshCircle);
 
-    // 4. Listen for REMOTE Socket events (when an Expert accepts your request)
-    let socket: any;
+    // 4. 🚨 SHARED SOCKET SETUP
     const username = localStorage.getItem("Username");
-    
     if (username) {
-      const baseUrl = import.meta.env.VITE_API.replace(/\/$/, "");
-      socket = io(baseUrl, {
-      transports: ["websocket"],
-    });
-      socket.emit("join", username);
+      socket.emit("join", username); // Ensure they are in their room
       socket.on("force-refresh-circle", handleRefreshCircle);
     }
 
+    // 5. Cleanup
     return () => {
       window.removeEventListener('refresh-communication-circle', handleRefreshCircle);
-      if (socket) socket.disconnect();
+      // 🚨 ONLY turn off the listener, DO NOT disconnect the socket!
+      socket.off("force-refresh-circle", handleRefreshCircle); 
     };
   }, [userData?.Role]);
 

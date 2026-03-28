@@ -79,6 +79,7 @@ app.use(require("./router/training.js"));
 app.use(require("./router/courseRoutes.js"));
 app.use(require("./router/seedroute.js"));
 app.use(require("./router/notification.js"));
+app.use(require('./router/whatsapp'));
 
 let notifications = {};
 
@@ -2225,6 +2226,8 @@ app.put("/expert-connect/schedule/:connectionId", authenticate, async (req, res)
   }
 });
 
-server.listen(process.env.PORT || 8080, () => {
-  console.log("Server running on port " + process.env.PORT || 8080);
+const PORT = process.env.PORT || 8080;
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
 });
