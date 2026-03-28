@@ -88,9 +88,6 @@ app.use(require('./router/whatsapp'));
 
 let notifications = {};
 
-const nodemailer = require("nodemailer");
-
-// 🚨 The Bulletproof Gmail Config for Render
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,       // Port 465 is specifically for secure TLS connections
