@@ -19,7 +19,7 @@ const Event = require("./models/eventSchema");
 const ConnectionRequest = require("./models/connectionRequestSchema");
 const adminOtpTemplate = require("./utils/adminOtpTemplate");
 const OTP = require("./models/otpSchema");
-const transporter = require('../utils/transporter'); // Adjust the path if needed
+const transporter = require('./utils/transporter'); // Adjust the path if needed
 
 dotenv.config({ path: "./config.env" });
 const app = express();
