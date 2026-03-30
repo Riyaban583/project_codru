@@ -571,7 +571,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           />
         </div>
         
-        <div className="relative z-10 p-4 md:p-8 max-w-7xl mx-auto w-full mt-16 md:mt-8 flex-1 flex flex-col min-h-0">
+        {/* 🚨 MOBILE FIX: Changed p-4 to px-0 pt-4 pb-0 on mobile, keeping p-8 on desktop */}
+        <div className="relative z-10 px-0 pt-4 pb-0 md:p-8 max-w-7xl mx-auto w-full mt-16 md:mt-8 flex-1 flex flex-col min-h-0">
           
           {isPremiumTeacher && ["syllabus", "my-courses"].includes(currentView) && (
             <div className="mb-6 bg-white px-6 py-4 rounded-[24px] shadow-sm border border-gray-100 flex items-center gap-4 overflow-x-auto custom-scrollbar flex-shrink-0">
@@ -601,7 +602,21 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             </div>
           )}
 
-          <div className={`relative flex-1 min-h-0 flex flex-col bg-white rounded-[32px] shadow-xl border border-gray-100 transition-all duration-300 ${currentView === "report" ? "p-0 overflow-hidden" : "p-4 md:p-6 overflow-y-auto dashboard-content-scroll"}`}>
+          {/* 🚨 MOBILE FIX: 
+            - md:rounded-[32px] (Only rounded on PC)
+            - md:p-6 (Only padded on PC)
+            - border-x-0 md:border-x (Removes left/right borders on mobile)
+            - shadow-none md:shadow-xl (Removes shadow on mobile since it's flush to the edge)
+          */}
+          <div className={`relative flex-1 min-h-0 flex flex-col bg-white transition-all duration-300
+            rounded-t-[32px] md:rounded-[32px] 
+            border-t md:border border-gray-100 border-x-0 md:border-x
+            shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] md:shadow-xl
+            ${currentView === "report" 
+              ? "p-0 overflow-hidden" 
+              : "p-2 md:p-6 overflow-y-auto dashboard-content-scroll"
+            }
+          `}>
             <div className={`relative w-full ${currentView === "report" ? "h-full" : "min-h-full"} rounded-[8px]`}>
               
               {/* COMPONENT RENDERING ROUTER */}

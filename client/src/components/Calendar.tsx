@@ -32,12 +32,13 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // 🚨 NEW: State for Global Search Guests & Meet Link
+  // 🚨 NEW: State for Mobile Day View Popup
+  const [showMobileDayView, setShowMobileDayView] = useState(false);
+  const [mobileSelectedDate, setMobileSelectedDate] = useState<Date | null>(null);
   const [guestSearch, setGuestSearch] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]); // Will hold your global search results
   const [selectedGuests, setSelectedGuests] = useState<string[]>([]); // Holds the usernames
   const [addGoogleMeet, setAddGoogleMeet] = useState(false);
-
   // 🚨 NEW: State for our custom Add Event Modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEventDraft, setNewEventDraft] = useState({
@@ -136,8 +137,6 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
     if (view === 'day') newDate.setDate(newDate.getDate() + direction);
     setCurrentDate(newDate);
   };
-
-  
 
   const getFormatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -303,7 +302,14 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
     const today = new Date();
 
     for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push(<div key={`empty-${i}`} className="h-28 bg-gray-50/50"></div>);
+      // 🚨 THE FIX: Match the exact responsive height of the real days (h-16 sm:h-20 md:h-28)
+      // I also added a faint border so the grid looks complete!
+      days.push(
+        <div 
+          key={`empty-${i}`} 
+          className="h-16 sm:h-20 md:h-28 bg-gray-50/30 border border-gray-100/50"
+        ></div>
+      );
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -313,34 +319,108 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
       dayEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
 
       days.push(
-        <div key={day} className={`h-28 border border-gray-100 p-2 flex flex-col relative group hover:bg-orange-50 transition ${isToday ? 'bg-blue-50' : 'bg-white'}`}>
-          <div className="flex justify-between items-start mb-1">
-            <div className="flex items-center gap-1.5">
-              <span className={`text-sm font-bold ${isToday ? 'text-brand-blue' : 'text-gray-700'}`}>{day}</span>
-              {isToday && <span className="w-1.5 h-1.5 bg-brand-orange rounded-full"></span>}
+        <div 
+          key={day} 
+          onClick={() => {
+            setMobileSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
+            setShowMobileDayView(true);
+          }}
+          className={`h-16 sm:h-20 md:h-28 border border-gray-100 p-1 md:p-2 flex flex-col relative group hover:bg-orange-50 transition cursor-pointer ${isToday ? 'bg-blue-50/30' : 'bg-white'}`}
+        >
+          <div className="flex justify-between items-start mb-0.5 md:mb-1">
+            <div className="flex items-center gap-1.5 mx-auto md:mx-0">
+              <span className={`text-[12px] md:text-sm font-bold flex items-center justify-center ${isToday ? 'bg-brand-blue text-white w-6 h-6 rounded-full shadow-sm' : 'text-gray-700'}`}>
+                {day}
+              </span>
             </div>
             {!selectedStudentUsername && (
-              <button onClick={(e) => { e.stopPropagation(); handleDateClick(day); }} className="opacity-0 group-hover:opacity-100 text-brand-orange bg-white rounded-full shadow-sm p-1 hover:scale-110 transition -mt-1 -mr-1 z-10"><Plus size={12} /></button>
+              <button onClick={(e) => { e.stopPropagation(); handleDateClick(day); }} className="hidden md:flex opacity-0 group-hover:opacity-100 text-brand-orange bg-white rounded-full shadow-sm p-1 hover:scale-110 transition -mt-1 -mr-1 z-10"><Plus size={12} /></button>
             )}
           </div>
-          <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide">
+          
+          {/* DESKTOP ONLY: Full Event Pills */}
+          <div className="hidden md:flex flex-1 flex-col space-y-1 overflow-y-auto custom-scrollbar w-full min-h-0 pr-1">
             {dayEvents.map(event => (
-              <div key={event.id} onClick={(e) => handleEventClick(e, event)} className={`text-[10px] text-white px-1.5 py-0.5 rounded shadow-sm truncate cursor-pointer hover:opacity-80 transition ${event.color}`} title={event.title}>
+              <div 
+                key={event.id} 
+                onClick={(e) => { e.stopPropagation(); handleEventClick(e, event); }} 
+                // 🚨 THE FIX: Added 'shrink-0' so they don't get squished, and 'py-1' for better height
+                className={`shrink-0 text-[10px] font-medium text-white px-1.5 py-1 rounded shadow-sm truncate cursor-pointer hover:opacity-80 transition ${event.color}`} 
+                title={event.title}
+              >
                 {event.title}
               </div>
             ))}
+          </div>
+
+          {/* MOBILE ONLY: Minimal Event Dots */}
+          <div className="md:hidden flex flex-wrap items-center justify-center gap-1 mt-1 px-0.5">
+            {dayEvents.slice(0, 3).map(event => (
+              <span key={event.id} className={`w-1.5 h-1.5 shrink-0 rounded-full ${event.color}`}></span>
+            ))}
+            {dayEvents.length > 3 && (
+              <span className="text-[8px] font-bold text-gray-400 shrink-0 ml-0.5">
+                +{dayEvents.length - 3}
+              </span>
+            )}
           </div>
         </div>
       );
     }
 
+    // 🚨 Calculate the next 2 upcoming events to display in the empty space!
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const upcomingPreview = events
+      .filter(e => e.date.getTime() >= todayStart.getTime())
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 2); // Show only the next 2 so it fits perfectly
+
     return (
-      <>
-        <div className="grid grid-cols-7 text-center py-3 border-b border-gray-100 bg-gray-50 text-gray-500 font-semibold text-sm">
-          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      <div className="flex flex-col h-full">
+        {/* The Days Header */}
+        <div className="grid grid-cols-7 text-center py-2 md:py-3 border-b border-gray-100 bg-gray-50 text-gray-500 font-bold text-[10px] md:text-sm uppercase tracking-wider shrink-0">
+          <div><span className="md:hidden">S</span><span className="hidden md:inline">Sun</span></div>
+          <div><span className="md:hidden">M</span><span className="hidden md:inline">Mon</span></div>
+          <div><span className="md:hidden">T</span><span className="hidden md:inline">Tue</span></div>
+          <div><span className="md:hidden">W</span><span className="hidden md:inline">Wed</span></div>
+          <div><span className="md:hidden">T</span><span className="hidden md:inline">Thu</span></div>
+          <div><span className="md:hidden">F</span><span className="hidden md:inline">Fri</span></div>
+          <div><span className="md:hidden">S</span><span className="hidden md:inline">Sat</span></div>
         </div>
-        <div className="grid grid-cols-7 bg-gray-100 gap-[1px]">{days}</div>
-      </>
+        
+        {/* The Grid */}
+        <div className="grid grid-cols-7 bg-gray-100 gap-[1px] shrink-0">{days}</div>
+
+        {/* 🚨 THE FIX: "Up Next" Mobile Agenda to beautifully fill the empty space */}
+        <div className="md:hidden flex-1 bg-slate-50/50 p-4 border-t border-gray-100 flex flex-col justify-center">
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5 pl-1">
+            <CalendarIcon size={12} className="text-brand-orange" /> Coming Up Next
+          </h3>
+          {upcomingPreview.length > 0 ? (
+            <div className="space-y-2">
+              {upcomingPreview.map(event => (
+                <div key={`preview-${event.id}`} className={`p-3 rounded-2xl flex items-center gap-3 shadow-sm ${event.color}`}>
+                  <div className="bg-white/20 px-2.5 py-1.5 rounded-lg text-white font-bold whitespace-nowrap text-[10px]">
+                    {getFormatTime(event.date)}
+                  </div>
+                  <div className="text-white text-xs font-bold truncate flex-1">
+                    {event.title}
+                    <div className="text-[9px] font-medium opacity-80 mt-0.5">
+                      {event.date.toLocaleDateString('default', { month: 'short', day: 'numeric' })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <p className="text-xs text-gray-400 font-bold">No upcoming classes.</p>
+              <p className="text-[10px] text-gray-400/70 mt-1">Enjoy your free time! 🚀</p>
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
@@ -357,24 +437,42 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
       const dayEvents = events.filter(e => e.date.toDateString() === dayDate.toDateString());
       dayEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
 
+      // 🚨 RESTORED: The proper tall vertical columns for the week view!
       days.push(
-        <div key={i} className={`min-h-[400px] p-3 border-r border-gray-100 ${isToday ? 'bg-blue-50/30' : 'bg-white'}`}>
+        <div key={i} className={`min-h-[400px] p-2 md:p-3 border-r border-gray-100 ${isToday ? 'bg-blue-50/30' : 'bg-white'}`}>
           <div className="text-center mb-4">
-            <div className={`text-xs font-bold uppercase ${isToday ? 'text-brand-blue' : 'text-gray-400'}`}>{dayDate.toLocaleDateString('default', { weekday: 'short' })}</div>
-            <div className={`text-2xl font-display font-bold ${isToday ? 'text-brand-blue' : 'text-gray-700'}`}>{dayDate.getDate()}</div>
+            <div className={`text-[10px] md:text-xs font-bold uppercase tracking-wider ${isToday ? 'text-brand-blue' : 'text-gray-400'}`}>
+              {dayDate.toLocaleDateString('default', { weekday: 'short' })}
+            </div>
+            <div className={`text-xl md:text-2xl mt-1 w-8 h-8 md:w-10 md:h-10 mx-auto flex items-center justify-center rounded-full font-display font-bold ${isToday ? 'bg-brand-blue text-white shadow-md' : 'text-gray-700'}`}>
+              {dayDate.getDate()}
+            </div>
           </div>
+          
           <div className="space-y-1.5">
             {dayEvents.map(event => (
-              <div key={event.id} onClick={(e) => handleEventClick(e, event)} className={`px-2 py-1.5 rounded text-white shadow-sm cursor-pointer hover:opacity-80 transition ${event.color}`}>
-                <div className="text-[10px] font-bold mb-0.5 opacity-90">{getFormatTime(event.date)}</div>
-                <div className="text-xs font-medium leading-tight">{event.title}</div>
+              <div key={event.id} onClick={(e) => handleEventClick(e, event)} className={`px-1.5 md:px-2 py-1 md:py-1.5 rounded text-white shadow-sm cursor-pointer hover:opacity-80 transition ${event.color}`}>
+                <div className="text-[9px] md:text-[10px] font-bold mb-0.5 opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">
+                  {getFormatTime(event.date)}
+                </div>
+                <div className="text-[10px] md:text-xs font-medium leading-tight line-clamp-2">
+                  {event.title}
+                </div>
               </div>
             ))}
           </div>
         </div>
       );
     }
-    return <div className="grid grid-cols-7 bg-gray-100 gap-[1px] border-t border-gray-100">{days}</div>;
+    
+    // 🚨 MOBILE FIX: Keeps the horizontal swiping for phones!
+    return (
+      <div className="overflow-x-auto custom-scrollbar w-full pb-2">
+        <div className="grid grid-cols-7 bg-gray-100 gap-[1px] border-t border-gray-100 min-w-[700px]">
+          {days}
+        </div>
+      </div>
+    );
   };
 
   const renderDayView = () => {
@@ -403,16 +501,19 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
   };
 
   return (
-    <div className="w-full flex flex-col gap-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-4 px-2">
-        <div>
-          <h2 className="text-3xl font-display font-bold text-brand-blue">Class Schedule</h2>
-          <p className="text-gray-500 font-medium text-sm mt-1">View your upcoming sessions securely</p>
+    <div className="w-full flex flex-col gap-4 md:gap-8 h-full min-h-0 flex-1">
+      {/* 🚨 THE FIX: Added w-full, text-center for mobile, md:text-left for PC */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-0 md:mb-2 gap-4 px-2 shrink-0 w-full">
+        <div className="w-full text-center md:text-left">
+          <h2 className="text-2xl md:text-3xl font-display font-bold text-brand-blue">Class Schedule</h2>
+          <p className="text-gray-500 font-medium text-xs md:text-sm mt-1 mx-auto md:mx-0 max-w-sm">View your upcoming sessions securely</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden flex-shrink-0 min-h-[500px] flex flex-col">
-        <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between bg-white gap-4">
+      {/* 🚨 2. Added max-h constraint for mobile, flex-1, and min-h-0 */}
+      <div className="bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden flex-1 flex flex-col min-h-0 max-h-[calc(100dvh-160px)] md:max-h-none md:min-h-[500px]">
+        {/* --- HEADER COMPONENT --- */}
+        <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-white gap-4">
           <div className="flex items-center gap-3">
               <div className="p-2 bg-brand-orange/10 rounded-xl text-brand-orange hidden sm:block">
                   <CalendarIcon size={24} />
@@ -421,8 +522,10 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
                 {getHeaderTitle()}
               </h2>
           </div>
-          <div className="flex items-center justify-between lg:justify-end w-full lg:w-auto gap-4">
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+          
+          {/* 🚨 DESKTOP ONLY: Controls (Hidden on Mobile) */}
+          <div className="hidden md:flex items-center justify-end w-auto gap-3">
+            <div className="flex bg-slate-100 p-1 rounded-xl justify-center">
               {(['day', 'week', 'month'] as ViewMode[]).map((mode) => (
                 <button key={mode} onClick={() => setView(mode)} className={`px-4 py-1.5 text-xs font-bold capitalize rounded-lg transition-all ${view === mode ? 'bg-white text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                   {mode}
@@ -430,24 +533,46 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
               ))}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => navigateDate(-1)} className="p-2 bg-gray-50 text-gray-600 hover:text-brand-blue hover:bg-blue-50 rounded-full transition"><ChevronLeft size={20} /></button>
-              <button onClick={() => navigateDate(1)} className="p-2 bg-gray-50 text-gray-600 hover:text-brand-blue hover:bg-blue-50 rounded-full transition"><ChevronRight size={20} /></button>
+              <button onClick={() => navigateDate(-1)} className="p-2 bg-gray-50 text-gray-600 hover:text-brand-blue hover:bg-blue-50 rounded-full transition shadow-sm border border-gray-100"><ChevronLeft size={20} /></button>
+              <button onClick={() => navigateDate(1)} className="p-2 bg-gray-50 text-gray-600 hover:text-brand-blue hover:bg-blue-50 rounded-full transition shadow-sm border border-gray-100"><ChevronRight size={20} /></button>
             </div>
           </div>
         </div>
         
-        {isLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-32 bg-slate-50/50">
-            <Loader2 className="w-10 h-10 text-brand-orange animate-spin mb-4" />
-            <p className="text-gray-400 font-medium font-display tracking-wide">Fetching schedule...</p>
+        {/* 🚨 3. The Fluid Core: This div handles all the scrolling! */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-slate-50/20">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-32 h-full">
+              <Loader2 className="w-10 h-10 text-brand-orange animate-spin mb-4" />
+              <p className="text-gray-400 font-medium font-display tracking-wide">Fetching schedule...</p>
+            </div>
+          ) : (
+            <div className="pb-4 md:pb-0"> {/* Slight padding at the bottom of the scroll */}
+              {view === 'month' && renderMonthView()}
+              {view === 'week' && renderWeekView()}
+              {view === 'day' && renderDayView()}
+            </div>
+          )}
+        </div>
+        {/* 🚨 MOBILE ONLY: Thumb-Friendly Bottom Navigation Bar */}
+        <div className="md:hidden mt-auto border-t border-gray-100 p-3 bg-white flex items-center justify-between gap-2 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] relative z-10">
+          
+          {/* Day/Week/Month Toggles */}
+          <div className="flex bg-slate-100 p-1 rounded-xl flex-1 max-w-[220px]">
+            {(['day', 'week', 'month'] as ViewMode[]).map((mode) => (
+              <button key={mode} onClick={() => setView(mode)} className={`flex-1 py-1.5 text-[11px] font-bold capitalize rounded-lg transition-all ${view === mode ? 'bg-white text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                {mode}
+              </button>
+            ))}
           </div>
-        ) : (
-          <>
-            {view === 'month' && renderMonthView()}
-            {view === 'week' && renderWeekView()}
-            {view === 'day' && renderDayView()}
-          </>
-        )}
+
+          {/* Navigation Arrows */}
+          <div className="flex gap-1.5 shrink-0 ml-auto">
+            <button onClick={() => navigateDate(-1)} className="p-2 bg-gray-50 text-gray-600 active:bg-gray-200 rounded-full transition shadow-sm border border-gray-100"><ChevronLeft size={18} /></button>
+            <button onClick={() => navigateDate(1)} className="p-2 bg-gray-50 text-gray-600 active:bg-gray-200 rounded-full transition shadow-sm border border-gray-100"><ChevronRight size={18} /></button>
+          </div>
+          
+        </div>
       </div>
 
       {selectedEvent && (
@@ -459,6 +584,72 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
         />
+      )}
+      {/* 🚨 NEW: MOBILE DAY VIEW POPUP (Bottom Sheet) */}
+      {showMobileDayView && mobileSelectedDate && (
+        <div className="fixed inset-0 z-[105] flex items-end md:items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-fade-in" onClick={() => setShowMobileDayView(false)}>
+          <div 
+            className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] transform transition-transform animate-in slide-in-from-bottom-8 md:zoom-in-95"
+            onClick={(e) => e.stopPropagation()} // Prevents clicking the backdrop from closing it
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0">
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                  {mobileSelectedDate.toLocaleDateString('default', { weekday: 'long' })}
+                </p>
+                <h3 className="font-display font-bold text-xl text-brand-blue">
+                  {mobileSelectedDate.toLocaleDateString('default', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </h3>
+              </div>
+              <button onClick={() => setShowMobileDayView(false)} className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-500 rounded-full hover:bg-gray-200 transition">✕</button>
+            </div>
+            
+            {/* Event List */}
+            <div className="p-4 overflow-y-auto flex-1 custom-scrollbar bg-slate-50 min-h-[250px]">
+              {events.filter(e => e.date.toDateString() === mobileSelectedDate.toDateString()).length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
+                    <CalendarIcon className="text-gray-300" size={24} />
+                  </div>
+                  <p className="text-gray-400 font-medium">No events for this day</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {events.filter(e => e.date.toDateString() === mobileSelectedDate.toDateString())
+                    .sort((a, b) => a.date.getTime() - b.date.getTime())
+                    .map(event => (
+                    <div key={event.id} onClick={(e) => { setShowMobileDayView(false); handleEventClick(e, event); }} className={`p-4 rounded-2xl cursor-pointer hover:-translate-y-0.5 transition shadow-sm flex items-start gap-3 ${event.color}`}>
+                      <div className="bg-white/20 px-2.5 py-1.5 rounded-lg text-white font-bold whitespace-nowrap text-xs">
+                        {getFormatTime(event.date)}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-base text-white font-bold leading-tight">{event.title}</h4>
+                        <p className="text-white/80 text-[10px] mt-1 font-medium underline">Tap to view details</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Big "Add Event" Button inside the Mobile Modal */}
+            {!selectedStudentUsername && (
+              <div className="p-4 bg-white border-t border-gray-100">
+                <button 
+                  onClick={() => {
+                    setShowMobileDayView(false);
+                    // Pass the tapped day number straight into your existing "Add Event" logic!
+                    handleDateClick(mobileSelectedDate.getDate());
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-brand-orange text-white rounded-xl font-bold hover:bg-orange-600 transition shadow-sm active:scale-95"
+                >
+                  <Plus size={18} strokeWidth={3} /> Schedule Event
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
       {/* 🚨 NEW: ADD EVENT MODAL 🚨 */}
       {showAddModal && (
@@ -478,7 +669,8 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
                   value={newEventDraft.title}
                   onChange={(e) => setNewEventDraft({ ...newEventDraft, title: e.target.value })}
                   placeholder="e.g., Math Tutoring Session"
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-orange outline-none"
+                  
+                  className="w-full px-4 py-2 text-base bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-orange outline-none" 
                 />
               </div>
 
