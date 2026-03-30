@@ -1,7 +1,6 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const bodyParser = require("body-parser");
-const nodemailer = require("nodemailer");
 const startCalendarCron = require('./utils/cronJobs');
 const cors = require("cors");
 const path = require("path");
@@ -20,6 +19,7 @@ const Event = require("./models/eventSchema");
 const ConnectionRequest = require("./models/connectionRequestSchema");
 const adminOtpTemplate = require("./utils/adminOtpTemplate");
 const OTP = require("./models/otpSchema");
+const transporter = require('../utils/transporter'); // Adjust the path if needed
 
 dotenv.config({ path: "./config.env" });
 const app = express();
@@ -87,21 +87,6 @@ app.use(require("./router/notification.js"));
 app.use(require('./router/whatsapp'));
 
 let notifications = {};
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,       // Port 465 is specifically for secure TLS connections
-  secure: false,    // MUST be true for port 465!
-  auth: {
-    user: process.env.EMAIL,
-    pass: process.env.PASSWORD 
-  },
-  // This helps bypass some strict SSL firewall rules on cloud servers
-  tls: {
-    rejectUnauthorized: false
-  },
-  family: 4
-});
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,

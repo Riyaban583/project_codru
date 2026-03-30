@@ -6,7 +6,7 @@ const router = express.Router();
 const dotenv = require("dotenv");
 // dotenv.config({ path: "./config.env" });
 dotenv.config();
-const nodemailer = require("nodemailer");
+
 const jwt = require("jsonwebtoken");
 router.use(express.json());
 router.use(bodyParser.json());
@@ -20,14 +20,7 @@ const otpTemplate = require("../utils/otpTemplate"); // Ensure this path is corr
 const actionTemplate = require("../utils/actionTemplate"); // Ensure this path is correct
 const sendAutoNotification = require("../utils/notify");
 const welcomeTemplate = require("../utils/welcomeTemplate"); // For consistent welcome emails
-
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL,
-    pass: process.env.PASSWORD,
-  },
-});
+const transporter = require('../utils/transporter'); // Adjust the path if needed
 
 // ==========================================
 // UPDATE SYLLABUS PROGRESS (Checkmark or Doubt)
