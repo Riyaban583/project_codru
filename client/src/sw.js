@@ -30,7 +30,7 @@ self.addEventListener('push', function(event) {
   const options = {
     body: data.body || 'You have a new message!',
     icon: "https://res.cloudinary.com/da6jhcsmm/image/upload/v1773202841/CuTe_Logo_dlmvw9.png",
-    badge: "https://res.cloudinary.com/da6jhcsmm/image/upload/v1773202841/CuTe_Logo_dlmvw9.png",
+    badge: "https://res.cloudinary.com/da6jhcsmm/image/upload/v1774941782/badge_t5uyws.png",
     vibrate: [100, 50, 100],
     data: { url: data.link || '/' }
   };
