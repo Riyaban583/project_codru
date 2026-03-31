@@ -29,6 +29,13 @@ import SinglePost from "./components/SinglePost";
 import Publicprofile from "./components/Publicprofile"; 
 import Popup from "./components/Popup";
 import NotFound from "./components/NotFound";
+// Helper for Web Push VAPID keys
+const urlBase64ToUint8Array = (base64String: string) => {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return new Uint8Array([...rawData].map((char) => char.charCodeAt(0)));
+};
 
 
 function App() {
@@ -66,6 +73,55 @@ function App() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // 🚨 THE SILENT SYNC: Automatically links devices that already granted permission
+  useEffect(() => {
+    // Only run this if the user is actually logged in!
+    if (!isAuth) return;
+
+    const silentlySyncPushSubscription = async () => {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+      if (Notification.permission !== "granted") return;
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+
+        if (!subscription) {
+          const publicVapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+          if (!publicVapidKey) return;
+
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicVapidKey),
+          });
+        }
+
+        const token = localStorage.getItem("jwtoken");
+        if (!token || !subscription) return;
+
+        await fetch(`${import.meta.env.VITE_API}save-subscription`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ subscription }),
+        });
+
+        console.log("✅ Device push subscription seamlessly synced across the app!");
+      } catch (error) {
+        console.error("Silent push sync failed:", error);
+      }
+    };
+
+    // 2-second delay so it doesn't block your initial app rendering/data fetching
+    const syncTimeout = setTimeout(() => {
+      silentlySyncPushSubscription();
+    }, 2000);
+
+    return () => clearTimeout(syncTimeout);
+  }, [isAuth]); // 🚨 Dependency array ensures this runs when they log in
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
