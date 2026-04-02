@@ -127,18 +127,7 @@ function App() {
     if ('serviceWorker' in navigator) {
       registerSW({ immediate: true });
     }
-
-    if ("Notification" in window) {
-      Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          console.log("System notifications enabled!");
-        }
-      });
-    }
   }, []);
-
-  // Inside App.tsx or main.tsx
-
 
   useEffect(() => {
   const initializeAuth = async () => {

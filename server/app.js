@@ -900,15 +900,26 @@ app.get("/count", async (req, res) => {
 app.post("/save-subscription", authenticate, async (req, res) => {
   try {
     const { subscription } = req.body;
+    const userId = req.userId || req.user._id;
     
-    // Add the new device subscription to the array, preventing exact duplicates
+    // 🧹 STEP 1: THE MASS CLEANUP
+    // This finds ANY existing subscription with this exact device endpoint and deletes it.
+    // If they have 27 clones from the old bug, this wipes out all 27 instantly!
     await User.findByIdAndUpdate(
-      req.userId || req.user._id,
-      { $addToSet: { pushSubscriptions: subscription } } // $addToSet prevents duplicates!
+      userId,
+      { $pull: { pushSubscriptions: { endpoint: subscription.endpoint } } }
     );
 
-    res.status(200).json({ message: "Subscription saved." });
+    // 🛡️ STEP 2: THE SAFE ADD
+    // Now that the array is perfectly scrubbed of this device, we add exactly ONE fresh copy back.
+    await User.findByIdAndUpdate(
+      userId,
+      { $push: { pushSubscriptions: subscription } } 
+    );
+
+    res.status(200).json({ message: "Subscription saved and deduplicated." });
   } catch (error) {
+    console.error("Save subscription error:", error);
     res.status(500).json({ error: "Failed to save subscription" });
   }
 });
