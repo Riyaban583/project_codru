@@ -34,6 +34,7 @@ import Notification from "./Notification";
 import ExpertConnect from "./ExpertConnect";
 import HandshakeDrawer from "./HandshakeDrawer";
 import WhatsAppChat from "./WhatsAppChat";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface DashboardProps {
   userData: UserData;
@@ -703,32 +704,62 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         </button>
       </div>
 
-      {/* MOBILE ONLY: BOTTOM SHEET MENU */}
-      <div 
-        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-        className={`md:hidden fixed bottom-16 left-0 right-0 bg-white rounded-t-[40px] z-[110] transition-transform duration-300 ease-out shadow-2xl flex flex-col max-h-[80vh] ${isMobileMenuOpen ? "translate-y-0" : "translate-y-full"}`}
-      >
-        <div className="w-full flex justify-center pt-4 pb-2" onClick={() => setIsMobileMenuOpen(false)}>
-          <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
-        </div>
-        
-        {/* 🚨 HEADER WITH LOGOUT BUTTON */}
-        <div className="px-8 pb-4 pt-2 flex items-center justify-between border-b border-slate-50">
-          <h3 className="font-display font-black text-brand-blue text-xl tracking-tight">Menu</h3>
-          
-          <button 
-            onClick={SignOut} 
-            className="flex items-center gap-1.5 text-rose-500 bg-rose-50 px-4 py-1.5 rounded-full active:scale-95 transition-all"
-          >
-            <LogOut size={14} strokeWidth={3} />
-            <span className="text-[11px] font-black uppercase tracking-wider">Sign Out</span>
-          </button>
-        </div>
+      {/* =========================================
+          📱 MOBILE ONLY: BOTTOM SHEET MENU (GRID)
+      ========================================= */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="md:hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[105]"
+            />
 
-        <div className="overflow-y-auto pt-6 pb-10 hide-scrollbar">
-           {getDrawerContent(true)} {/* Passes 'true' for mobile grid */}
-        </div>
-      </div>
+            {/* The Sheet */}
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              
+              // 🚨 THE MAGIC: Native Framer Dragging
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={0.2}
+              onDragEnd={(_, info) => {
+                // If you swipe down more than 100px or flick it down fast, close it
+                if (info.offset.y > 100 || info.velocity.y > 500) {
+                  setIsMobileMenuOpen(false);
+                }
+              }}
+              
+              className="md:hidden fixed bottom-16 left-0 right-0 bg-white rounded-t-[40px] z-[110] shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.15)] flex flex-col max-h-[80vh] touch-none"
+            >
+              {/* Drag Handle - Added touch-pan-y so user can still scroll inside if needed */}
+              <div className="w-full flex justify-center pt-4 pb-2 cursor-grab active:cursor-grabbing">
+                <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+              </div>
+              
+              <div className="px-8 pb-4 pt-2 flex items-center justify-between border-b border-slate-50">
+                <h3 className="font-display font-black text-brand-blue text-xl tracking-tight">Menu</h3>
+                <button onClick={SignOut} className="flex items-center gap-1.5 text-rose-500 bg-rose-50 px-4 py-1.5 rounded-full active:scale-95 transition-all">
+                  <LogOut size={14} strokeWidth={3} />
+                  <span className="text-[11px] font-black uppercase tracking-wider">Sign Out</span>
+                </button>
+              </div>
+
+              {/* 🚨 Scrollable area needs to allow touch for scrolling, but drag happens on the whole sheet */}
+              <div className="overflow-y-auto pt-6 pb-10 hide-scrollbar pointer-events-auto">
+                {getDrawerContent(true)} 
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* =========================================
           MODALS & ALERTS

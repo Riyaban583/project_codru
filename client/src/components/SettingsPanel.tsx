@@ -510,8 +510,18 @@ const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
             dragElastic={0.2}
             onDragEnd={(_, info) => {
               const swipeThreshold = 50;
-              if (info.offset.x < -swipeThreshold) setTabWithDirection(tabs[tabs.indexOf(activeTab) + 1] || activeTab);
-              if (info.offset.x > swipeThreshold) setTabWithDirection(tabs[tabs.indexOf(activeTab) - 1] || activeTab);
+              const velocityThreshold = 500; // 🚨 Added velocity check for fast flicks
+
+              // Swipe Left (Moving finger to the left) -> Go to Next Tab
+              if (info.offset.x < -swipeThreshold || info.velocity.x < -velocityThreshold) {
+                const nextIndex = tabs.indexOf(activeTab) + 1;
+                if (nextIndex < tabs.length) setTabWithDirection(tabs[nextIndex]);
+              } 
+              // Swipe Right (Moving finger to the right) -> Go to Previous Tab
+              else if (info.offset.x > swipeThreshold || info.velocity.x > velocityThreshold) {
+                const prevIndex = tabs.indexOf(activeTab) - 1;
+                if (prevIndex >= 0) setTabWithDirection(tabs[prevIndex]);
+              }
             }}
             className="w-full h-full px-4 md:px-0"
           >
