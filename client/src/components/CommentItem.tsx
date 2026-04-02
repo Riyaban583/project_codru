@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Heart, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const CommentItem = ({ comment, postId, currentUserId, onVote, onReply, onDelete, level = 0 }: any) => {
+const CommentItem = ({ comment, postId, currentUserId, onVote, onReply, onDelete, level = 0, isSubmitting }: any) => {
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -93,16 +93,33 @@ const CommentItem = ({ comment, postId, currentUserId, onVote, onReply, onDelete
                 autoFocus
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && replyText.trim() && (onReply(postId, comment._id, replyText), setReplyText(""), setIsReplying(false), setShowReplies(true))}
-                className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-brand-blue/20"
+                // 🚨 Added isSubmitting check to prevent double Enter press
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && replyText.trim() && !isSubmitting[comment._id]) {
+                    onReply(postId, comment._id, replyText);
+                    setReplyText("");
+                    setIsReplying(false);
+                    setShowReplies(true);
+                  }
+                }}
+                disabled={isSubmitting[comment._id]} // 🚨 Lock Input visually
+                className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-brand-blue/20 disabled:opacity-50"
                 placeholder={`Reply to @${comment.user?.username}...`}
               />
               <button 
-                onClick={() => { onReply(postId, comment._id, replyText); setIsReplying(false); setReplyText(""); setShowReplies(true); }}
-                disabled={!replyText.trim()}
-                className="bg-brand-blue text-white px-3 py-1.5 rounded-xl text-[10px] font-bold disabled:opacity-50"
+                onClick={() => { 
+                  // Ensure we don't proceed if it's already submitting!
+                  if(isSubmitting[comment._id]) return;
+                  onReply(postId, comment._id, replyText); 
+                  setIsReplying(false); 
+                  setReplyText(""); 
+                  setShowReplies(true); 
+                }}
+                // 🚨 Added isSubmitting[comment._id] to the disabled condition
+                disabled={!replyText.trim() || isSubmitting[comment._id]} 
+                className="touch-manipulation bg-brand-blue text-white px-3 py-1.5 rounded-xl text-[10px] font-bold disabled:opacity-50"
               >
-                Post
+                {isSubmitting[comment._id] ? "..." : "Post"}
               </button>
             </div>
           )}
@@ -118,6 +135,7 @@ const CommentItem = ({ comment, postId, currentUserId, onVote, onReply, onDelete
               onReply={onReply}
               onDelete={onDelete}
               level={level + 1} // CRITICAL: This is what tells the next comment it is NOT top-level!
+              isSubmitting={isSubmitting}
             />
           ))}
         </div>

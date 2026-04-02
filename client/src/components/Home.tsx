@@ -9,7 +9,6 @@ interface HomeProps {
 }
 
 const Home = ({ userData }: HomeProps) => {
-  // 1. ADD THIS STATE: It acts as a signal between CreatePost and CuteFeed
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const isLoggedIn = !!localStorage.getItem("jwtoken");
@@ -32,16 +31,15 @@ const Home = ({ userData }: HomeProps) => {
   }
 
   return (
-    <div className="bg-slate-50 min-h-screen py-8">
-      <div className="max-w-2xl mx-auto space-y-8 px-4 sm:px-0">
+    // Clean, normal wrapper. The global CSS will hide the scrollbar automatically.
+    <div className="bg-slate-50 min-h-screen py-8 pb-24">
+      <div className="max-w-2xl mx-auto space-y-8 px-4 sm:px-0 relative">
         
-        {/* 2. Pass a function to trigger the refresh when a post is made */}
         <CreatePost 
           userData={userData} 
           onPostCreated={() => setRefreshTrigger(prev => prev + 1)} 
         />
         
-        {/* 3. Pass the trigger value so the feed knows when to update */}
         <CuteFeed 
           userData={userData} 
           refreshTrigger={refreshTrigger} 

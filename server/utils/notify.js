@@ -30,13 +30,14 @@ const sendAutoNotification = async (app, recipientId, message, link, triggeredBy
       }
     });
 
-    // Step B: The 7-Day Cleanup (Runs separately so it doesn't conflict!)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    // Step B: The 1-Year Database Cleanup 
+    const oneYearAgo = new Date();
+    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
     
+    // This silently deletes notifications older than 1 year to protect DB size
     await User.findByIdAndUpdate(recipientId, {
       $pull: {
-        notifications: { date: { $lt: sevenDaysAgo } }
+        notifications: { date: { $lt: oneYearAgo } }
       }
     });
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"; 
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, NavLink, useParams, useLocation } from "react-router-dom";
 import { List, ListItem, ListItemButton, ListItemText, ListItemIcon } from "@mui/material";
 import { 
@@ -71,6 +71,16 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   // Global State for Teachers to select a student
   const [teacherStudents, setTeacherStudents] = useState<any[]>([]);
   const [selectedStudentUsername, setSelectedStudentUsername] = useState<string | null>(null);
+
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const onTouchStart = (e: React.TouchEvent) => { setTouchEnd(null); setTouchStart(e.targetTouches[0].clientY); };
+  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientY);
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    if (touchStart - touchEnd < -50) setIsMobileMenuOpen(false); // If swiped down by 50px, close it!
+  };
 
   const [currentView, setCurrentView] = useState(() => {
     return location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "schedule";
@@ -259,10 +269,10 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
     }
   };
 
-  const getDrawerContent = () => {
+  const getDrawerContent = (isMobile: boolean = false) => {
     const basicItems = [
-      { text: "Home", icon: <Home size={22} />, path: "/" },
-      { text: "Schedule", icon: <CalendarClock size={22} />, view: "schedule" }, 
+      { text: "Home", icon: <Home size={22} />, path: "/", mobileHidden: true },
+      { text: "Schedule", icon: <CalendarClock size={22} />, view: "schedule" },
       { text: "Profile", icon: <User size={22} />, view: "profile" },
       { text: "Settings", icon: <Settings size={22} />, view: "settings" },
       { text: "My Posts", icon: <Rss size={22} />, view: "my-posts" },
@@ -292,50 +302,105 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       adminItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
     }
 
+    // --- MOBILE GRID RENDERER ---
+    if (isMobile) {
+      // --- Inside getDrawerContent(isMobile: true) ---
+      const renderGridGroup = (title: string, items: any[], colorClass: string) => {
+        if (items.length === 0) return null;
+        return (
+          <div className="mb-10 px-2">
+            {/* 🚨 THE FIX: Added a flex container with a line after the title */}
+            {title && (
+              <div className="flex items-center gap-3 mb-6">
+                <p className={`text-[10px] font-black ${colorClass} uppercase tracking-widest whitespace-nowrap opacity-70`}>
+                  {title}
+                </p>
+                <div className="flex-1 h-px bg-slate-100"></div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-3 gap-y-8 gap-x-4">
+              {items.map(item => {
+                const isActive = activeTab === item.text;
+                return (
+                  <button
+                    key={item.text}
+                    onClick={() => {
+                      if (item.path) { handleNavigation(item.path); }
+                      else {
+                        setCurrentView(item.view); setActiveTab(item.text);
+                        localStorage.setItem("currentView", item.view);
+                        localStorage.setItem("activeTab", item.text);
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex flex-col items-center gap-2.5 relative"
+                  >
+                    <div className={`w-14 h-14 rounded-[22px] flex items-center justify-center transition-all duration-200 ${
+                      item.isLocked ? "bg-rose-50 text-rose-300" :
+                      isActive ? "bg-brand-orange text-white shadow-lg shadow-orange-500/30 scale-105" : "bg-slate-50 text-slate-500 active:scale-95"
+                    }`}>
+                      {React.cloneElement(item.icon as React.ReactElement, { size: 24 })}
+                      {item.isLocked && <Lock size={12} strokeWidth={3} className="absolute top-0 right-1 text-rose-500" />}
+                    </div>
+                    <span className={`text-[10px] font-bold text-center leading-tight px-1 tracking-tight ${item.isLocked ? 'text-rose-300' : isActive ? 'text-brand-orange' : 'text-slate-600'}`}>
+                      {item.text}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      };
+
+      return (
+        <div className="px-4 py-2 mt-2">
+          {renderGridGroup("", basicItems.filter((i: any) => !i.mobileHidden), "text-slate-400")}
+          {renderGridGroup("Guidance & Support", parentItems, "text-rose-400")}
+          {renderGridGroup("Academy Tools", premiumItems, "text-slate-400")}
+          {renderGridGroup("Admin Tools", adminItems, "text-brand-blue")}
+
+          {isUnverifiedTeacher && (
+            <div className="mt-2 mx-2 bg-gradient-to-br from-brand-blue to-blue-600 rounded-2xl p-5 text-white text-center shadow-lg">
+              <Lock className="mx-auto mb-2 opacity-80" size={24} />
+              <p className="text-xs font-medium mb-3">Official educator tools</p>
+              <button onClick={() => setShowUnlockModal(true)} className="w-full bg-white text-brand-blue text-xs font-black py-2.5 rounded-xl">UNLOCK ACADEMY</button>
+            </div>
+          )}
+          {/* 🚨 LOGOUT REMOVED FROM HERE FOR MOBILE */}
+        </div>
+      );
+    }
+
+    // --- DESKTOP LIST RENDERER ---
     const renderListItem = (item: any) => {
       const isActive = activeTab === item.text;
-      
       return (
-        <ListItem disablePadding key={item.text} className="mb-1">
+        <ListItem 
+          disablePadding 
+          key={item.text} 
+          className={`mb-1 ${item.mobileHidden ? 'hidden md:block' : ''}`}
+          sx={{ display: item.mobileHidden ? { xs: 'none', md: 'block' } : 'block' }}
+        >
           <ListItemButton
             onClick={() => {
               if (item.path) { handleNavigation(item.path); } 
               else {
                 setCurrentView(item.view); setActiveTab(item.text);
-                localStorage.setItem("currentView", item.view); localStorage.setItem("activeTab", item.text);
+                localStorage.setItem("currentView", item.view);
+                localStorage.setItem("activeTab", item.text);
               }
-              // 🚨 Closes the mobile menu when an item is clicked
-              setIsMobileMenuOpen(false); 
             }}
             sx={{
               borderRadius: "12px",
-              background: item.isLocked 
-                ? "linear-gradient(to bottom right, #fb7185, #e11d48)" 
-                : (isActive ? "#fff7ed" : "transparent"),
-              color: item.isLocked 
-                ? "#ffffff" 
-                : (isActive ? "#ed7f23" : "#64748b"),
-              boxShadow: item.isLocked ? "0 4px 14px 0 rgba(225, 29, 72, 0.3)" : "none",
-              "&:hover": { 
-                background: item.isLocked 
-                  ? "linear-gradient(to bottom right, #f43f5e, #be123c)" 
-                  : (isActive ? "#ffedd5" : "#f1f5f9"), 
-                color: item.isLocked 
-                  ? "#ffffff" 
-                  : (isActive ? "#ed7f23" : "#1765a4") 
-              },
+              background: item.isLocked ? "linear-gradient(to bottom right, #fb7185, #e11d48)" : (isActive ? "#fff7ed" : "transparent"),
+              color: item.isLocked ? "#ffffff" : (isActive ? "#ed7f23" : "#64748b"),
+              "&:hover": { background: item.isLocked ? "linear-gradient(to bottom right, #f43f5e, #be123c)" : (isActive ? "#ffedd5" : "#f1f5f9") },
             }}
           >
             <ListItemIcon sx={{ color: "inherit", minWidth: "40px" }}>{item.icon}</ListItemIcon>
-            <ListItemText 
-              primary={
-                <div className="flex items-center gap-2">
-                  <span>{item.text}</span>
-                  {item.isLocked && <Lock size={16} strokeWidth={2.5} className="opacity-90" />}
-                </div>
-              } 
-              primaryTypographyProps={{ fontWeight: isActive || item.isLocked ? 700 : 500, fontFamily: '"Arimo", sans-serif' }} 
-            />
+            <ListItemText primary={<div className="flex items-center gap-2"><span>{item.text}</span>{item.isLocked && <Lock size={16} strokeWidth={2.5} className="opacity-90" />}</div>} primaryTypographyProps={{ fontWeight: isActive || item.isLocked ? 700 : 500, fontFamily: '"Arimo", sans-serif' }} />
           </ListItemButton>
         </ListItem>
       );
@@ -344,48 +409,15 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
     return (
       <List className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar flex flex-col">
         {basicItems.map(renderListItem)}
-
-        {parentItems.length > 0 && (
-          <>
-            <div className="my-3 mx-2 border-t border-slate-100"></div>
-            <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest px-4 mb-2">Guidance & Support</p>
-            {parentItems.map(renderListItem)}
-          </>
-        )}
-
-        {premiumItems.length > 0 && (
-          <>
-            <div className="my-3 mx-2 border-t border-slate-100"></div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Academy Tools</p>
-            {premiumItems.map(renderListItem)}
-          </>
-        )}
-
-        {adminItems.length > 0 && (
-          <>
-            <div className="my-3 mx-2 border-t border-slate-100"></div>
-            <p className="text-[10px] font-bold text-brand-blue uppercase tracking-widest px-4 mb-2">Admin Tools</p>
-            {adminItems.map(renderListItem)}
-          </>
-        )}
-
-        {isUnverifiedTeacher && (
-          <div className="mt-auto mx-2 bg-gradient-to-br from-brand-blue to-blue-600 rounded-2xl p-4 text-white text-center shadow-lg shadow-blue-500/20">
-            <Lock className="mx-auto mb-2 opacity-80" size={24} />
-            <p className="text-xs font-medium mb-3 opacity-90">Are you a teacher at Cute Learning?</p>
-            <button 
-              onClick={() => setShowUnlockModal(true)}
-              className="w-full bg-white text-brand-blue text-xs font-black py-2.5 rounded-xl hover:bg-blue-50 transition active:scale-95 shadow-sm"
-            >
-              UNLOCK ACADEMY
-            </button>
-          </div>
-        )}
-
-        <ListItem disablePadding className={`mb-4 ${!isUnverifiedTeacher ? "mt-10" : "mt-6"}`}>
+        {parentItems.length > 0 && (<><div className="my-3 mx-2 border-t border-slate-100"></div>{parentItems.map(renderListItem)}</>)}
+        {premiumItems.length > 0 && (<><div className="my-3 mx-2 border-t border-slate-100"></div>{premiumItems.map(renderListItem)}</>)}
+        {adminItems.length > 0 && (<><div className="my-3 mx-2 border-t border-slate-100"></div>{adminItems.map(renderListItem)}</>)}
+        
+        {/* Logout button stays at the bottom for Desktop sidebar only */}
+        <ListItem disablePadding className="mt-auto mb-4">
           <ListItemButton onClick={SignOut}>
             <ListItemIcon sx={{ color: "inherit", minWidth: "40px" }}><LogOut size={22} /></ListItemIcon>
-            <ListItemText primary="Logout" primaryTypographyProps={{ fontWeight: 600, fontFamily: '"Arimo", sans-serif' }} />
+            <ListItemText primary="Logout" primaryTypographyProps={{ fontWeight: 600 }} />
           </ListItemButton>
         </ListItem>
       </List>
@@ -395,21 +427,10 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   return (
     <div className="fixed inset-0 flex h-[100dvh] w-full bg-slate-50 overflow-hidden font-body overscroll-none">
       
-      {/* 🚨 MOBILE BACKDROP */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[105] md:hidden transition-opacity" 
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* LEFT AREA: SIDEBAR (Now handles mobile sliding) */}
-      <div className={`
-        fixed inset-y-0 left-0 z-[110] transform transition-transform duration-300 ease-in-out
-        md:relative md:translate-x-0 w-72 bg-white border-r border-gray-100 flex flex-col shadow-2xl md:shadow-lg flex-shrink-0
-        ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
-      `}>
-        
+      {/* =========================================
+          DESKTOP LEFT SIDEBAR (Hidden on Mobile) 
+      ========================================= */}
+      <div className="hidden md:flex relative w-72 bg-white border-r border-gray-100 flex-col shadow-lg flex-shrink-0 z-[110]">
         <div className="h-20 flex items-center justify-center border-b border-gray-100">
           <NavLink to="/" className="cursor-pointer">
             <img src="/logo.svg" alt="CuTe Learning" className="w-[6.5rem] drop-shadow-md transition transform hover:scale-105" draggable="false" />
@@ -436,13 +457,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             <input type="file" ref={fileInputRef} className="hidden" onChange={handlePhotoInput} accept="image/*" />
           </div>
           <h2 className="mt-4 text-lg font-display font-bold text-brand-blue">Hi, {userData.Name ? userData.Name.split(' ')[0] : "Explorer"}!</h2>
-          
-          <p className={`text-xs font-bold uppercase tracking-wider mt-1 ${
-            userData.Role === 'Teacher' ? 'text-brand-orange' : 
-            userData.Role === 'Student' ? 'text-brand-blue' : 
-            userData.Role === 'Parent' ? 'text-rose-500' : 
-            'text-gray-400'
-          }`}>
+          <p className="text-xs font-bold uppercase tracking-wider mt-1 text-gray-400">
             {userData.Role || "User"}
           </p>
         </div>
@@ -452,32 +467,26 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         </div>
       </div>
 
-      {/* RIGHT AREA: MAIN CONTENT */}
-      <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
+      {/* =========================================
+          RIGHT AREA: MAIN CONTENT 
+      ========================================= */}
+      {/* Added pb-16 on mobile to make room for the new bottom nav bar */}
+      <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col pb-16 md:pb-0">
+        
         {/* 🌌 DYNAMIC DEEP SPACE HEADER */}
         <div className="h-48 md:h-56 bg-slate-900 absolute top-0 left-0 w-full rounded-b-[3rem] shadow-inner overflow-hidden z-0">
-          
-          {/* Faint, Drifting Nebula Orbs */}
           <div className="absolute top-0 right-0 md:right-32 w-96 h-96 bg-brand-orange opacity-10 rounded-full blur-[80px] animate-nebula-drift" style={{ animationDelay: '0s' }}></div>
           <div className="absolute bottom-0 left-10 md:left-48 w-96 h-96 bg-brand-blue opacity-[0.15] rounded-full blur-[80px] animate-nebula-drift" style={{ animationDelay: '-20s', animationDirection: 'reverse' }}></div>
-          
-          {/* Starry Background Pattern (Slowly drifting across the screen) */}
           <div className="absolute inset-0 opacity-30 pointer-events-none animate-star-pan" style={{
             backgroundImage: 'radial-gradient(1px 1px at 15% 25%, white, transparent), radial-gradient(1.5px 1.5px at 45% 65%, rgba(255,255,255,0.8), transparent), radial-gradient(1px 1px at 75% 15%, rgba(255,255,255,0.4), transparent), radial-gradient(2px 2px at 85% 75%, rgba(255,255,255,0.6), transparent), radial-gradient(1px 1px at 25% 85%, white, transparent)',
             backgroundSize: '130px 130px, 190px 190px, 230px 230px, 290px 290px, 110px 110px'
           }}></div>
-
-          {/* 🚀 Calmly Floating Rocket */}
           <div className="absolute z-10 animate-space-wander opacity-70">
             <Rocket size={32} className="text-white fill-white/5 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]" strokeWidth={1} />
-            
-            {/* Extremely subtle thruster glow */}
             <div className="absolute -bottom-2 -left-2 w-6 h-6 bg-brand-orange rounded-full blur-md opacity-30 animate-thruster"></div>
           </div>
-          
-          {/* Cinematic CSS Animations */}
+
           <style>{`
-            /* Slowly pans the stars diagonally across the screen forever */
             @keyframes star-pan {
               0% { background-position: 0px 0px; }
               100% { background-position: -500px 200px; }
@@ -486,7 +495,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               animation: star-pan 150s linear infinite;
             }
 
-            /* Makes the colored background orbs slowly breathe, fade, and shift position */
             @keyframes nebula-drift {
               0% { transform: translate(0, 0) scale(1); opacity: 0.08; }
               33% { transform: translate(40px, -40px) scale(1.1); opacity: 0.12; }
@@ -497,7 +505,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               animation: nebula-drift 45s ease-in-out infinite;
             }
 
-            /* A 60-second organic wandering path for the rocket */
             @keyframes space-wander {
               0%   { transform: translate(5vw, 20px) rotate(15deg); }
               20%  { transform: translate(30vw, 80px) rotate(35deg); }
@@ -510,7 +517,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               animation: space-wander 60s ease-in-out infinite;
             }
 
-            /* Very gentle glow variation for the thruster */
             @keyframes thruster {
               0%, 100% { transform: scale(1); opacity: 0.2; }
               50% { transform: scale(1.1); opacity: 0.4; }
@@ -521,30 +527,33 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           `}</style>
         </div>
 
-        {/* 🚨 MOBILE + DESKTOP TOP BAR */}
-        <div className="absolute top-4 md:top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[100] flex items-center justify-between md:justify-center">
+        {/* TOP BAR (Desktop Date, Mobile Logo) */}
+        <div className="absolute top-4 md:top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[90] flex items-center justify-center">
           
-          {/* Hamburger Menu (Mobile Only) */}
-          <button 
-            className="md:hidden text-white hover:text-brand-orange transition p-2 bg-white/10 rounded-full backdrop-blur-md border border-white/20"
-            onClick={() => setIsMobileMenuOpen(true)}
-          >
-            <Menu size={24} />
-          </button>
+          {/* Mobile Logo */}
+          {/* 🚨 THE FIX: Added absolute left-0 so the logo stays pinned left without ruining the center alignment */}
+          <div className="md:hidden absolute left-0 flex items-center">
+            <img src="/logo-white.svg" alt="CuTe" className="h-8 drop-shadow-md" onError={(e) => e.currentTarget.style.display = 'none'} />
+            {!document.querySelector('img[src="/logo-white.svg"]') && (
+               <span className="text-white font-display font-bold text-xl tracking-wide ml-2">CuTe</span>
+            )}
+          </div>
 
-          {/* Date & Notifications Pill */}
-          <div className="flex items-center gap-4 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 px-6 py-2.5 rounded-full shadow-lg transition-all duration-300">
+          {/* Mobile Date Pill */}
+          <div className="md:hidden flex items-center bg-white/10 backdrop-blur-md border border-white/20 px-4 py-1.5 rounded-full shadow-lg">
+            <span className="text-[11px] font-bold tracking-wider text-white/90 drop-shadow-sm uppercase">
+              {todayDate}
+            </span>
+          </div>
+
+          {/* Desktop Date & Notif Pill */}
+          <div className="hidden md:flex items-center gap-4 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 px-6 py-2.5 rounded-full shadow-lg transition-all duration-300">
             <span className="text-sm font-medium text-white/90 tracking-wide drop-shadow-sm whitespace-nowrap">
               {todayDate}
             </span>
-            <div className="w-px h-5 bg-white/30 rounded-full hidden sm:block"></div>
-            
-            {/* 🚨 STOP PROPAGATION ADDED HERE */}
+            <div className="w-px h-5 bg-white/30 rounded-full"></div>
             <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowNotifications(!showNotifications);
-              }}
+              onClick={(e) => { e.stopPropagation(); setShowNotifications(!showNotifications); }}
               className="relative text-white hover:text-brand-orange hover:scale-110 transition-all flex items-center justify-center"
               title="Notifications"
             >
@@ -556,9 +565,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               )}
             </button>
           </div>
-
-          {/* Invisible spacer for mobile flex-between balance */}
-          <div className="w-10 md:hidden"></div>
         </div>
         
         <div className="relative w-full flex justify-center z-[105]">
@@ -567,15 +573,16 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             setShowNotifications={setShowNotifications}
             closeNotification={() => setShowNotifications(false)}
             setUnreadCount={setUnreadCount} 
-            customClasses="top-20 md:top-4 left-1/2 -translate-x-1/2" 
+            ustomClasses="fixed bottom-[76px] left-1/2 -translate-x-1/2 w-[92vw] max-w-sm rounded-2xl shadow-2xl md:absolute md:bottom-auto md:top-4 md:left-1/2 md:-translate-x-1/2 md:w-96" 
+          
           />
         </div>
         
-        {/* 🚨 MOBILE FIX: Changed p-4 to px-0 pt-4 pb-0 on mobile, keeping p-8 on desktop */}
-        <div className="relative z-10 px-0 pt-4 pb-0 md:p-8 max-w-7xl mx-auto w-full mt-16 md:mt-8 flex-1 flex flex-col min-h-0">
+        {/* MAIN CONTENT AREA */}
+        <div className="relative z-10 px-0 pt-16 pb-0 md:p-8 max-w-7xl mx-auto w-full mt-2 md:mt-8 flex-1 flex flex-col min-h-0">
           
           {isPremiumTeacher && ["syllabus", "my-courses"].includes(currentView) && (
-            <div className="mb-6 bg-white px-6 py-4 rounded-[24px] shadow-sm border border-gray-100 flex items-center gap-4 overflow-x-auto custom-scrollbar flex-shrink-0">
+            <div className="mb-6 mx-4 md:mx-0 bg-white px-6 py-4 rounded-[24px] shadow-sm border border-gray-100 flex items-center gap-4 overflow-x-auto custom-scrollbar flex-shrink-0">
               <span className="text-sm font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Select Student:</span>
               {teacherStudents.length === 0 ? (
                 <span className="text-sm text-gray-500 italic">No students in roster. Add them in Management!</span>
@@ -602,20 +609,11 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             </div>
           )}
 
-          {/* 🚨 MOBILE FIX: 
-            - md:rounded-[32px] (Only rounded on PC)
-            - md:p-6 (Only padded on PC)
-            - border-x-0 md:border-x (Removes left/right borders on mobile)
-            - shadow-none md:shadow-xl (Removes shadow on mobile since it's flush to the edge)
-          */}
           <div className={`relative flex-1 min-h-0 flex flex-col bg-white transition-all duration-300
             rounded-t-[32px] md:rounded-[32px] 
             border-t md:border border-gray-100 border-x-0 md:border-x
             shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] md:shadow-xl
-            ${currentView === "report" 
-              ? "p-0 overflow-hidden" 
-              : "p-2 md:p-6 overflow-y-auto dashboard-content-scroll"
-            }
+            ${currentView === "report" ? "p-0 overflow-hidden" : "p-4 md:p-6 overflow-y-auto dashboard-content-scroll"}
           `}>
             <div className={`relative w-full ${currentView === "report" ? "h-full" : "min-h-full"} rounded-[8px]`}>
               
@@ -671,6 +669,70 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         </div>
       </div>
 
+      {/* =========================================
+          📱 MOBILE ONLY: BOTTOM NAVIGATION BAR 
+      ========================================= */}
+      {/* 🚨 THE FIX: z-[120] forces this bar to ALWAYS stay above the menu and backdrop! */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 flex justify-around items-center z-[120] pb-safe shadow-[0_-8px_15px_-3px_rgba(0,0,0,0.05)]">
+        
+        <button onClick={() => handleNavigation("/")} className="flex flex-col items-center justify-center w-16 h-full text-gray-400 hover:text-brand-orange transition-colors">
+          <Home size={24} />
+          <span className="text-[10px] font-bold mt-1">Home</span>
+        </button>
+
+        <button 
+          onClick={(e) => { e.stopPropagation(); setShowNotifications(!showNotifications); }}
+          className="flex flex-col items-center justify-center w-16 h-full text-gray-400 hover:text-brand-orange transition-colors relative"
+        >
+          <div className="relative">
+            <Bell size={24} className={unreadCount > 0 ? "text-brand-orange" : ""} />
+            {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-brand-orange text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border border-white">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+          </div>
+          <span className="text-[10px] font-bold mt-1">Alerts</span>
+        </button>
+
+        {/* 🚨 THE FIX: This now Toggles the menu! You can click it again to close it. */}
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className={`flex flex-col items-center justify-center w-16 h-full transition-colors ${isMobileMenuOpen ? "text-brand-orange" : "text-brand-blue hover:text-blue-700"}`}
+        >
+          <div className={`${isMobileMenuOpen ? "bg-orange-50" : "bg-blue-50"} p-1.5 rounded-full transition-colors`}>
+            <Menu size={24} />
+          </div>
+          <span className="text-[10px] font-bold mt-0.5">Menu</span>
+        </button>
+      </div>
+
+      {/* MOBILE ONLY: BOTTOM SHEET MENU */}
+      <div 
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+        className={`md:hidden fixed bottom-16 left-0 right-0 bg-white rounded-t-[40px] z-[110] transition-transform duration-300 ease-out shadow-2xl flex flex-col max-h-[80vh] ${isMobileMenuOpen ? "translate-y-0" : "translate-y-full"}`}
+      >
+        <div className="w-full flex justify-center pt-4 pb-2" onClick={() => setIsMobileMenuOpen(false)}>
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+        </div>
+        
+        {/* 🚨 HEADER WITH LOGOUT BUTTON */}
+        <div className="px-8 pb-4 pt-2 flex items-center justify-between border-b border-slate-50">
+          <h3 className="font-display font-black text-brand-blue text-xl tracking-tight">Menu</h3>
+          
+          <button 
+            onClick={SignOut} 
+            className="flex items-center gap-1.5 text-rose-500 bg-rose-50 px-4 py-1.5 rounded-full active:scale-95 transition-all"
+          >
+            <LogOut size={14} strokeWidth={3} />
+            <span className="text-[11px] font-black uppercase tracking-wider">Sign Out</span>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto pt-6 pb-10 hide-scrollbar">
+           {getDrawerContent(true)} {/* Passes 'true' for mobile grid */}
+        </div>
+      </div>
+
+      {/* =========================================
+          MODALS & ALERTS
+      ========================================= */}
       {showUnlockModal && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center shadow-2xl relative animate-in zoom-in duration-200">
@@ -721,12 +783,13 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
                 </button>
               );
             })()}
-            
           </div>
         </div>
       )}
-      <HandshakeDrawer  />
+
+      <HandshakeDrawer />
       {showAlert && <Muialert message={alertMessage} severity={alertSeverity} onClose={() => setShowAlert(false)} />}
+      
     </div>
   );
 };

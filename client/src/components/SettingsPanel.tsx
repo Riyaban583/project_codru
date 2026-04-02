@@ -1,4 +1,5 @@
-import { useState, useContext, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Bell, BellOff, ArrowRight, CheckCheck, Loader2 } from "lucide-react";
 import {
@@ -166,9 +167,20 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
             "Authorization": `Bearer ${localStorage.getItem("jwtoken")}`
           }
         });
+        
         if (res.ok) {
           const data = await res.json();
-          setHistory(data);
+          
+          // Calculate exactly 7 days ago
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          
+          // Filter so the user ONLY sees the last 7 days in the UI
+          const recentNotifications = data.filter((notif: any) => {
+            return new Date(notif.date) >= sevenDaysAgo;
+          });
+
+          setHistory(recentNotifications);
         }
       } catch (error) {
         console.error("Failed to fetch notification history", error);
@@ -405,15 +417,38 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
 
 // --- 4. MAIN PARENT COMPONENT ---
 const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
-  // 1. 🚨 Check localStorage first, fallback to "general" if empty
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem("settingsActiveTab") || "general";
-  });
+  const tabs = ["general", "account", "notifications"];
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem("settingsActiveTab") || "general");
+  
+  // 🚨 Track direction for the slide effect
+  const [direction, setDirection] = useState(0);
 
-  // 2. 🚨 Save the active tab to localStorage every time it changes
+  const setTabWithDirection = (newTab: string) => {
+    const newIndex = tabs.indexOf(newTab);
+    const currentIndex = tabs.indexOf(activeTab);
+    setDirection(newIndex > currentIndex ? 1 : -1);
+    setActiveTab(newTab);
+  };
+
   useEffect(() => {
     localStorage.setItem("settingsActiveTab", activeTab);
   }, [activeTab]);
+
+  // 🚨 Framer Motion Variants for the "Sliding" logic
+  const slideVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? "100%" : "-100%",
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (direction: number) => ({
+      x: direction < 0 ? "100%" : "-100%",
+      opacity: 0,
+    }),
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -425,24 +460,66 @@ const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
   };
 
   return (
-    <div className="w-full">
-      <div className="mb-8">
-        <h2 className="text-3xl font-display font-bold text-brand-blue mb-6">Settings</h2>
-        <div className="flex space-x-8 border-b border-gray-200">
-          {["general", "account", "notifications"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-4 text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${
-                activeTab === tab ? "border-b-2 border-brand-orange text-brand-orange" : "text-gray-400 hover:text-gray-700"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+    <div className="w-full flex flex-col overflow-hidden">
+      
+      {/* --- HEADING --- */}
+      <div className="mb-6 md:mb-8 px-4">
+        <h2 className="text-3xl font-display font-bold text-brand-blue text-center md:text-left">
+          Settings
+        </h2>
       </div>
-      <div className="pt-2">{renderContent()}</div>
+
+      {/* --- TAB NAVIGATION --- */}
+      <div className="sticky top-0 z-30 bg-white flex justify-center md:justify-start space-x-6 md:space-x-8 border-b border-gray-100 pt-2 pb-4 mb-6 hide-scrollbar px-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setTabWithDirection(tab)}
+            className={`whitespace-nowrap text-[11px] md:text-sm font-bold uppercase tracking-widest transition-colors relative ${
+              activeTab === tab ? "text-brand-orange" : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            {tab}
+            {activeTab === tab && (
+              <motion.div 
+                layoutId="activeTabUnderline"
+                className="absolute -bottom-4 left-0 right-0 h-0.5 bg-brand-orange rounded-full"
+              />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* --- SWIPEABLE CONTENT AREA --- */}
+      <div className="relative flex-1">
+        <AnimatePresence initial={false} custom={direction} mode="wait">
+          <motion.div
+            key={activeTab}
+            custom={direction}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: { type: "spring", stiffness: 300, damping: 30 },
+              opacity: { duration: 0.2 }
+            }}
+            // 🚨 THE SWIPE GESTURE:
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={(_, info) => {
+              const swipeThreshold = 50;
+              if (info.offset.x < -swipeThreshold) setTabWithDirection(tabs[tabs.indexOf(activeTab) + 1] || activeTab);
+              if (info.offset.x > swipeThreshold) setTabWithDirection(tabs[tabs.indexOf(activeTab) - 1] || activeTab);
+            }}
+            className="w-full h-full px-4 md:px-0"
+          >
+            {renderContent()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
     </div>
   );
 };

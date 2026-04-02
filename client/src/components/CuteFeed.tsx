@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import CommentItem from "./CommentItem";
+import Muialert from "./Muialert";
 import { 
   Heart, 
   MessageCircle, 
@@ -56,8 +57,11 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
   
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   
-  // 🚨 NEW: Track who the current user is already following
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("success");
   const [followingUsernames, setFollowingUsernames] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchPosts();
@@ -167,7 +171,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
         if (savedPostIds.includes(postId)) {
           setSavedPostIds(savedPostIds.filter(id => id !== postId));
         } else {
-          setSavedPostIds([...savedPostIds, postId]);
+          setSavedPostIds(prev => [...prev, postId]);
         }
       }
     } catch (error) {
@@ -183,7 +187,9 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
     if (e) e.preventDefault();
     
     const text = manualText || commentInputs[postId];
-    if (!text?.trim()) return;
+    if (!text?.trim() || isSubmitting[postId]) return;
+
+    setIsSubmitting(prev => ({ ...prev, [postId]: true }));
 
     try {
       const token = localStorage.getItem("jwtoken");
@@ -198,11 +204,17 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
       
       if (res.ok) {
         const data = await res.json();
-        setPosts(posts.map(p => p._id === postId ? { ...p, comments: data.comments } : p));
-        setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
+        // Updated to use prevPosts safely!
+        setPosts(prevPosts => prevPosts.map(p => p._id === postId ? { ...p, comments: data.comments } : p));
+        setCommentInputs(prev => ({ ...prev, [postId]: "" }));
       }
     } catch (error) {
       console.error("Failed to post comment", error);
+      setAlertMessage("Failed to post comment");
+      setAlertSeverity("error");
+      setShowAlert(true);
+    } finally {
+      setIsSubmitting(prev => ({ ...prev, [postId]: false }));
     }
   };
 
@@ -300,7 +312,9 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
   const handleShare = (postId: string) => {
     const url = `${window.location.origin}/post/${postId}`;
     navigator.clipboard.writeText(url);
-    alert("🔗 Link copied to clipboard!"); 
+    setAlertMessage("🔗 Link copied to clipboard!");
+    setAlertSeverity("success");
+    setShowAlert(true);
   };
 
   const handleCommentVote = async (postId: string, commentId: string) => {
@@ -339,7 +353,8 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
   };
 
   const handleCommentReply = async (postId: string, parentId: string, text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isSubmitting[parentId]) return;
+    setIsSubmitting(prev => ({ ...prev, [parentId]: true }));
 
     try {
       const token = localStorage.getItem("jwtoken");
@@ -361,11 +376,13 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
       }
     } catch (error) {
       console.error("Failed to post reply", error);
+    } finally {
+      setIsSubmitting(prev => ({ ...prev, [parentId]: false }));
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 py-6 pb-20">
+    <div className="max-w-2xl mx-auto space-y-8 py-6 pb-20 hide-scrollbar">
       {posts.length === 0 ? (
         <div className="text-center text-gray-400 py-10 font-display text-xl">
           No posts yet. Be the first to share something cute!
@@ -477,7 +494,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                   />
                   <div className="flex gap-2 justify-end">
                     <button onClick={() => setEditingPostId(null)} className="text-xs font-bold text-gray-400 hover:text-gray-600">Cancel</button>
-                    <button onClick={() => handleEditSubmit(post._id)} className="text-xs font-bold bg-brand-orange text-white px-3 py-1.5 rounded-full">Save</button>
+                    <button onClick={() => handleEditSubmit(post._id)} disabled={!editContent.trim()} className="text-xs font-bold bg-brand-orange text-white px-3 py-1.5 rounded-full">Save</button>
                   </div>
                 </div>
               ) : (
@@ -548,7 +565,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
             {expandedComments[post._id] && (
             <div className="px-4 pb-4 border-t border-gray-50 bg-slate-50/50">
               <div className="max-h-96 overflow-y-auto custom-scrollbar py-3">
-                {post.comments?.length === 0 ? (
+                {(!post.comments || post.comments.length === 0) ? (
                   <p className="text-xs text-center text-gray-400 py-4">No comments yet. ✨</p>
                 ) : (
                   post.comments.map((comment: any) => (
@@ -560,6 +577,7 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                       onVote={handleCommentVote}
                       onReply={handleCommentReply}
                       onDelete={handleCommentDelete}
+                      isSubmitting={isSubmitting}
                     />
                   ))
                 )}
@@ -586,10 +604,10 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
                   />
                   <button 
                     type="submit"
-                    disabled={!commentInputs[post._id]?.trim()}
+                    disabled={!commentInputs[post._id]?.trim() || isSubmitting[post._id]}
                     className="text-brand-blue font-bold text-sm px-2 disabled:opacity-50 hover:text-brand-orange transition-colors"
                   >
-                    Post
+                    {isSubmitting[post._id] ? "Posting..." : "Post"}
                   </button>
                 </form>
               </div>
@@ -625,6 +643,13 @@ const CuteFeed = ({ userData, refreshTrigger }: CuteFeedProps) => {
             </div>
           </div>
         </div>
+      )}
+      {showAlert && (
+        <Muialert 
+          message={alertMessage} 
+          severity={alertSeverity} 
+          onClose={() => setShowAlert(false)} 
+        />
       )}
     </div>
   );

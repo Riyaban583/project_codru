@@ -1,5 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+/* 🚨 THE NUCLEAR SCROLLBAR KILLER */
+/* This forces every single element in your app to hide its scrollbar */
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+}
 
 .god-mode-active {
   animation: pulse-red-div 2s infinite !important;
