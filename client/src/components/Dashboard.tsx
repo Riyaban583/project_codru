@@ -531,14 +531,12 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         {/* TOP BAR (Desktop Date, Mobile Logo) */}
         <div className="absolute top-4 md:top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[90] flex items-center justify-center">
           
-          {/* Mobile Logo */}
-          {/* 🚨 THE FIX: Added absolute left-0 so the logo stays pinned left without ruining the center alignment */}
-          <div className="md:hidden absolute left-0 flex items-center">
+          {/* <div className="md:hidden absolute left-0 flex items-center">
             <img src="/logo-white.svg" alt="CuTe" className="h-8 drop-shadow-md" onError={(e) => e.currentTarget.style.display = 'none'} />
             {!document.querySelector('img[src="/logo-white.svg"]') && (
                <span className="text-white font-display font-bold text-xl tracking-wide ml-2">CuTe</span>
             )}
-          </div>
+          </div> */}
 
           {/* Mobile Date Pill */}
           <div className="md:hidden flex items-center bg-white/10 backdrop-blur-md border border-white/20 px-4 py-1.5 rounded-full shadow-lg">
@@ -580,7 +578,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         </div>
         
         {/* MAIN CONTENT AREA */}
-        <div className="relative z-10 px-0 pt-16 pb-0 md:p-8 max-w-7xl mx-auto w-full mt-2 md:mt-8 flex-1 flex flex-col min-h-0">
+        <div className="relative z-130 px-0 pt-16 pb-0 md:p-8 max-w-7xl mx-auto w-full mt-2 md:mt-8 flex-1 flex flex-col min-h-0">
           
           {isPremiumTeacher && ["syllabus", "my-courses"].includes(currentView) && (
             <div className="mb-6 mx-4 md:mx-0 bg-white px-6 py-4 rounded-[24px] shadow-sm border border-gray-100 flex items-center gap-4 overflow-x-auto custom-scrollbar flex-shrink-0">

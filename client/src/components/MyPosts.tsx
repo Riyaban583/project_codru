@@ -4,9 +4,10 @@ import { Loader2, Trash2, Edit3, Image as ImageIcon, X, AlertTriangle } from "lu
 
 interface MyPostsProps {
   preloadedPosts?: any[];
+  isOwner?: boolean;
 }
 
-const MyPosts = ({ preloadedPosts }: MyPostsProps) => {
+const MyPosts = ({ preloadedPosts, isOwner = true }: MyPostsProps) => {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -126,30 +127,32 @@ const MyPosts = ({ preloadedPosts }: MyPostsProps) => {
               className="group cursor-pointer bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all overflow-hidden h-64 relative flex flex-col"
             >
               
-              {/* ACTION BUTTONS (Only visible on hover) */}
-              <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditContent(post.content);
-                    setPostToEdit(post);
-                  }}
-                  className="p-2 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-700 hover:text-brand-blue rounded-full shadow-md transition transform hover:scale-110"
-                  title="Edit Post"
-                >
-                  <Edit3 size={16} />
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPostToDelete(post._id);
-                  }}
-                  className="p-2 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-700 hover:text-red-500 rounded-full shadow-md transition transform hover:scale-110"
-                  title="Delete Post"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
+              {/* 🚨 3. THE FIX: Wrap action buttons in isOwner check */}
+              {isOwner && (
+                <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditContent(post.content);
+                      setPostToEdit(post);
+                    }}
+                    className="p-2 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-700 hover:text-brand-blue rounded-full shadow-md transition transform hover:scale-110"
+                    title="Edit Post"
+                  >
+                    <Edit3 size={16} />
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPostToDelete(post._id);
+                    }}
+                    className="p-2 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-700 hover:text-red-500 rounded-full shadow-md transition transform hover:scale-110"
+                    title="Delete Post"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              )}
 
               {/* IMAGE CHECK */}
               {post.imageUrl || post.photo ? (
@@ -195,7 +198,7 @@ const MyPosts = ({ preloadedPosts }: MyPostsProps) => {
 
       {/* 1. DELETE CONFIRMATION MODAL */}
       {postToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setPostToDelete(null)}>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setPostToDelete(null)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center" onClick={e => e.stopPropagation()}>
             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 size={32} />
@@ -212,7 +215,7 @@ const MyPosts = ({ preloadedPosts }: MyPostsProps) => {
 
       {/* 2. EDIT POST MODAL */}
       {postToEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setPostToEdit(null)}>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setPostToEdit(null)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-slate-50">
               <h3 className="text-lg font-display font-bold text-gray-800 flex items-center gap-2">
@@ -240,7 +243,7 @@ const MyPosts = ({ preloadedPosts }: MyPostsProps) => {
 
       {/* 3. ERROR POP-UP */}
       {errorMsg && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setErrorMsg(null)}>
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setErrorMsg(null)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center border-t-4 border-red-500" onClick={e => e.stopPropagation()}>
             <AlertTriangle className="mx-auto text-red-500 mb-3" size={32} />
             <h3 className="font-bold text-gray-800 mb-1">Oops!</h3>

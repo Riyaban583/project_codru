@@ -209,7 +209,10 @@ function Publicprofile() {
     
       {/* The beautiful Posts Grid! */}
       <div className="w-full mt-4">
-        <MyPosts preloadedPosts={user.posts} />
+        <MyPosts 
+          preloadedPosts={user.posts} 
+          isOwner={currentUsername === user.username} 
+        />
       </div>
 
       </div>
