@@ -566,7 +566,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           </div>
         </div>
         
-        <div className="relative w-full flex justify-center z-[105]">
+        <div className="relative w-full flex justify-center z-[1000]">
           <Notification 
             showNotifications={showNotifications} 
             setShowNotifications={setShowNotifications}
@@ -578,7 +578,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         </div>
         
         {/* MAIN CONTENT AREA */}
-        <div className="relative z-130 px-0 pt-16 pb-0 md:p-8 max-w-7xl mx-auto w-full mt-2 md:mt-8 flex-1 flex flex-col min-h-0">
+        <div className="relative z-0 px-0 pt-16 pb-0 md:p-8 max-w-7xl mx-auto w-full mt-2 md:mt-8 flex-1 flex flex-col min-h-0">
           
           {isPremiumTeacher && ["syllabus", "my-courses"].includes(currentView) && (
             <div className="mb-6 mx-4 md:mx-0 bg-white px-6 py-4 rounded-[24px] shadow-sm border border-gray-100 flex items-center gap-4 overflow-x-auto custom-scrollbar flex-shrink-0">
@@ -672,7 +672,10 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           📱 MOBILE ONLY: BOTTOM NAVIGATION BAR 
       ========================================= */}
       {/* 🚨 THE FIX: z-[120] forces this bar to ALWAYS stay above the menu and backdrop! */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 flex justify-around items-center z-[120] pb-safe shadow-[0_-8px_15px_-3px_rgba(0,0,0,0.05)]">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white flex justify-around items-center z-[300] pb-safe 
+        shadow-[0_-15px_30px_-5px_rgba(0,0,0,0.12),0_-1px_0_rgba(0,0,0,0.05)] 
+        border-t border-gray-100 transform-gpu"
+        style={{ backfaceVisibility: 'hidden' }}>
         
         <button onClick={() => handleNavigation("/")} className="flex flex-col items-center justify-center w-16 h-full text-gray-400 hover:text-brand-orange transition-colors">
           <Home size={24} />
@@ -714,7 +717,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[105]"
+              className="md:hidden fixed inset-x-0 top-0 bottom-16 bg-slate-900/60 backdrop-blur-sm z-[150] "
             />
 
             {/* The Sheet */}
@@ -735,7 +738,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
                 }
               }}
               
-              className="md:hidden fixed bottom-16 left-0 right-0 bg-white rounded-t-[40px] z-[110] shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.15)] flex flex-col max-h-[80vh] touch-none"
+              className="md:hidden fixed bottom-16 left-0 right-0 bg-white rounded-t-[40px] z-[200] shadow-[0_-20px_50px_-12px_rgba(0,0,0,0.15)] flex flex-col max-h-[80vh] touch-none transform-gpu"
+              style={{ backfaceVisibility: 'hidden' }}
             >
               {/* Drag Handle - Added touch-pan-y so user can still scroll inside if needed */}
               <div className="w-full flex justify-center pt-4 pb-2 cursor-grab active:cursor-grabbing">
