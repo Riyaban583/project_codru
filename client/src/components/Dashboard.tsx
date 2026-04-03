@@ -13,7 +13,8 @@ import {
   MessageCircle,
   Menu,
   Rocket,
-  MessageSquare
+  MessageSquare,
+  X
 } from "lucide-react";
 
 // Components
@@ -35,6 +36,7 @@ import ExpertConnect from "./ExpertConnect";
 import HandshakeDrawer from "./HandshakeDrawer";
 import WhatsAppChat from "./WhatsAppChat";
 import { AnimatePresence, motion } from "framer-motion";
+import Navprofile from "./Navprofile";
 
 interface DashboardProps {
   userData: UserData;
@@ -56,11 +58,11 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   
-  // 🚨 NEW STATE: Mobile Menu Drawer
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   // State for the Freemium Modal
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // 1. Define who gets to see what
   const isPremiumTeacher = userData.Role === "Teacher" && userData.isVerifiedStaff;
@@ -270,7 +272,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
     }
   };
 
-  const getDrawerContent = (isMobile: boolean = false) => {
+  const getDrawerContent = () => {
     const basicItems = [
       { text: "Home", icon: <Home size={22} />, path: "/", mobileHidden: true },
       { text: "Schedule", icon: <CalendarClock size={22} />, view: "schedule" },
@@ -303,78 +305,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       adminItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
     }
 
-    // --- MOBILE GRID RENDERER ---
-    if (isMobile) {
-      // --- Inside getDrawerContent(isMobile: true) ---
-      const renderGridGroup = (title: string, items: any[], colorClass: string) => {
-        if (items.length === 0) return null;
-        return (
-          <div className="mb-10 px-2">
-            {/* 🚨 THE FIX: Added a flex container with a line after the title */}
-            {title && (
-              <div className="flex items-center gap-3 mb-6">
-                <p className={`text-[10px] font-black ${colorClass} uppercase tracking-widest whitespace-nowrap opacity-70`}>
-                  {title}
-                </p>
-                <div className="flex-1 h-px bg-slate-100"></div>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-3 gap-y-8 gap-x-4">
-              {items.map(item => {
-                const isActive = activeTab === item.text;
-                return (
-                  <button
-                    key={item.text}
-                    onClick={() => {
-                      if (item.path) { handleNavigation(item.path); }
-                      else {
-                        setCurrentView(item.view); setActiveTab(item.text);
-                        localStorage.setItem("currentView", item.view);
-                        localStorage.setItem("activeTab", item.text);
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="flex flex-col items-center gap-2.5 relative"
-                  >
-                    <div className={`w-14 h-14 rounded-[22px] flex items-center justify-center transition-all duration-200 ${
-                      item.isLocked ? "bg-rose-50 text-rose-300" :
-                      isActive ? "bg-brand-orange text-white shadow-lg shadow-orange-500/30 scale-105" : "bg-slate-50 text-slate-500 active:scale-95"
-                    }`}>
-                      {React.cloneElement(item.icon as React.ReactElement, { size: 24 })}
-                      {item.isLocked && <Lock size={12} strokeWidth={3} className="absolute top-0 right-1 text-rose-500" />}
-                    </div>
-                    <span className={`text-[10px] font-bold text-center leading-tight px-1 tracking-tight ${item.isLocked ? 'text-rose-300' : isActive ? 'text-brand-orange' : 'text-slate-600'}`}>
-                      {item.text}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      };
-
-      return (
-        <div className="px-4 py-2 mt-2">
-          {renderGridGroup("", basicItems.filter((i: any) => !i.mobileHidden), "text-slate-400")}
-          {renderGridGroup("Guidance & Support", parentItems, "text-rose-400")}
-          {renderGridGroup("Academy Tools", premiumItems, "text-slate-400")}
-          {renderGridGroup("Admin Tools", adminItems, "text-brand-blue")}
-
-          {isUnverifiedTeacher && (
-            <div className="mt-2 mx-2 bg-gradient-to-br from-brand-blue to-blue-600 rounded-2xl p-5 text-white text-center shadow-lg">
-              <Lock className="mx-auto mb-2 opacity-80" size={24} />
-              <p className="text-xs font-medium mb-3">Official educator tools</p>
-              <button onClick={() => setShowUnlockModal(true)} className="w-full bg-white text-brand-blue text-xs font-black py-2.5 rounded-xl">UNLOCK ACADEMY</button>
-            </div>
-          )}
-          {/* 🚨 LOGOUT REMOVED FROM HERE FOR MOBILE */}
-        </div>
-      );
-    }
-
-    // --- DESKTOP LIST RENDERER ---
+    // --- 1. SINGLE LIST ITEM RENDERER (Used for both Desktop & Mobile) ---
     const renderListItem = (item: any) => {
       const isActive = activeTab === item.text;
       return (
@@ -388,10 +319,13 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             onClick={() => {
               if (item.path) { handleNavigation(item.path); } 
               else {
-                setCurrentView(item.view); setActiveTab(item.text);
+                setCurrentView(item.view); 
+                setActiveTab(item.text);
                 localStorage.setItem("currentView", item.view);
                 localStorage.setItem("activeTab", item.text);
               }
+              // 🚨 THE FIX: Automatically close the sidebar on mobile when a link is clicked!
+              setIsSidebarOpen(false); 
             }}
             sx={{
               borderRadius: "12px",
@@ -401,26 +335,72 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             }}
           >
             <ListItemIcon sx={{ color: "inherit", minWidth: "40px" }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={<div className="flex items-center gap-2"><span>{item.text}</span>{item.isLocked && <Lock size={16} strokeWidth={2.5} className="opacity-90" />}</div>} primaryTypographyProps={{ fontWeight: isActive || item.isLocked ? 700 : 500, fontFamily: '"Arimo", sans-serif' }} />
+            <ListItemText 
+              primary={
+                <div className="flex items-center gap-2">
+                  <span>{item.text}</span>
+                  {item.isLocked && <Lock size={16} strokeWidth={2.5} className="opacity-90" />}
+                </div>
+              } 
+              primaryTypographyProps={{ fontWeight: isActive || item.isLocked ? 700 : 500, fontFamily: '"Arimo", sans-serif' }} 
+            />
           </ListItemButton>
         </ListItem>
       );
     };
 
+    // --- 2. HELPER TO RENDER CATEGORY GROUPS ---
+    const renderGroup = (title: string, items: any[], colorClass: string) => {
+      if (items.length === 0) return null;
+      return (
+        <div className="mb-2">
+          {title && (
+            <div className="mt-4 mb-2 px-4 flex items-center gap-3">
+              <p className={`text-[10px] font-black ${colorClass} uppercase tracking-widest whitespace-nowrap opacity-70`}>
+                {title}
+              </p>
+              <div className="flex-1 h-px bg-slate-100"></div>
+            </div>
+          )}
+          {items.map(renderListItem)}
+        </div>
+      );
+    };
+
+    // --- 3. RETURN THE UNIFIED LIST ---
     return (
-      <List className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar flex flex-col">
-        {basicItems.map(renderListItem)}
-        {parentItems.length > 0 && (<><div className="my-3 mx-2 border-t border-slate-100"></div>{parentItems.map(renderListItem)}</>)}
-        {premiumItems.length > 0 && (<><div className="my-3 mx-2 border-t border-slate-100"></div>{premiumItems.map(renderListItem)}</>)}
-        {adminItems.length > 0 && (<><div className="my-3 mx-2 border-t border-slate-100"></div>{adminItems.map(renderListItem)}</>)}
+      <List className="flex-1 overflow-y-auto px-2 py-2 custom-scrollbar flex flex-col">
         
-        {/* Logout button stays at the bottom for Desktop sidebar only */}
-        <ListItem disablePadding className="mt-auto mb-4">
-          <ListItemButton onClick={SignOut}>
+        {/* Basic Items (No Header) */}
+        {renderGroup("", basicItems, "")}
+        
+        {/* Category Headers */}
+        {renderGroup("Guidance & Support", parentItems, "text-rose-400")}
+        {renderGroup("Academy Tools", premiumItems, "text-slate-400")}
+        {renderGroup("Admin Tools", adminItems, "text-brand-blue")}
+        
+        {/* Unverified Teacher Banner */}
+        {isUnverifiedTeacher && (
+          <div className="mt-6 mx-4 bg-gradient-to-br from-brand-blue to-blue-600 rounded-2xl p-5 text-white text-center shadow-lg">
+            <Lock className="mx-auto mb-2 opacity-80" size={24} />
+            <p className="text-xs font-medium mb-3">Official educator tools</p>
+            <button 
+              onClick={() => { setShowUnlockModal(true); setIsSidebarOpen(false); }} 
+              className="w-full bg-white text-brand-blue text-xs font-black py-2.5 rounded-xl active:scale-95 transition"
+            >
+              UNLOCK ACADEMY
+            </button>
+          </div>
+        )}
+
+        {/* Desktop Logout Button (Hidden on mobile because mobile users sign out from the Profile popup) */}
+        <ListItem disablePadding className="mt-auto pt-8 mb-4 px-2 hidden md:block">
+          <ListItemButton onClick={SignOut} sx={{ borderRadius: "12px", color: "#e11d48", "&:hover": { backgroundColor: "#fff1f2" } }}>
             <ListItemIcon sx={{ color: "inherit", minWidth: "40px" }}><LogOut size={22} /></ListItemIcon>
-            <ListItemText primary="Logout" primaryTypographyProps={{ fontWeight: 600 }} />
+            <ListItemText primary="Sign Out" primaryTypographyProps={{ fontWeight: 700 }} />
           </ListItemButton>
         </ListItem>
+        
       </List>
     );
   };
@@ -528,15 +508,16 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           `}</style>
         </div>
 
-        {/* TOP BAR (Desktop Date, Mobile Logo) */}
-        <div className="absolute top-4 md:top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[90] flex items-center justify-center">
+        {/* TOP BAR (Hamburger + Mobile Date) */}
+        <div className="absolute top-4 md:top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[90] flex items-center justify-between md:justify-center">
           
-          {/* <div className="md:hidden absolute left-0 flex items-center">
-            <img src="/logo-white.svg" alt="CuTe" className="h-8 drop-shadow-md" onError={(e) => e.currentTarget.style.display = 'none'} />
-            {!document.querySelector('img[src="/logo-white.svg"]') && (
-               <span className="text-white font-display font-bold text-xl tracking-wide ml-2">CuTe</span>
-            )}
-          </div> */}
+          {/* 🚨 NEW: Mobile Top-Left Hamburger Menu */}
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="md:hidden w-10 h-10 flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white shadow-lg hover:bg-white/20 active:scale-95 transition-all"
+          >
+            <Menu size={20} strokeWidth={2.5} />
+          </button>
 
           {/* Mobile Date Pill */}
           <div className="md:hidden flex items-center bg-white/10 backdrop-blur-md border border-white/20 px-4 py-1.5 rounded-full shadow-lg">
@@ -545,23 +526,18 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             </span>
           </div>
 
-          {/* Desktop Date & Notif Pill */}
+          {/* Invisible spacer to keep the Date perfectly centered on mobile */}
+          <div className="w-10 md:hidden pointer-events-none"></div>
+
+          {/* Desktop Date & Notif Pill (Unchanged) */}
           <div className="hidden md:flex items-center gap-4 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 px-6 py-2.5 rounded-full shadow-lg transition-all duration-300">
             <span className="text-sm font-medium text-white/90 tracking-wide drop-shadow-sm whitespace-nowrap">
               {todayDate}
             </span>
             <div className="w-px h-5 bg-white/30 rounded-full"></div>
-            <button 
-              onClick={(e) => { e.stopPropagation(); setShowNotifications(!showNotifications); }}
-              className="relative text-white hover:text-brand-orange hover:scale-110 transition-all flex items-center justify-center"
-              title="Notifications"
-            >
+            <button onClick={(e) => { e.stopPropagation(); setShowNotifications(!showNotifications); }} className="relative text-white hover:text-brand-orange hover:scale-110 transition-all" title="Notifications">
               <Bell size={20} className={unreadCount > 0 ? "animate-wiggle" : ""} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-brand-orange text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full shadow-sm border border-brand-orange">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
+              {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-brand-orange text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full shadow-sm border border-brand-orange">{unreadCount > 9 ? "9+" : unreadCount}</span>}
             </button>
           </div>
         </div>
@@ -669,99 +645,45 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       </div>
 
       {/* =========================================
-          📱 MOBILE ONLY: BOTTOM NAVIGATION BAR 
+          📱 DASHBOARD NAVBAR (Focus Context)
       ========================================= */}
-      {/* 🚨 THE FIX: z-[120] forces this bar to ALWAYS stay above the menu and backdrop! */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white flex justify-around items-center z-[300] pb-safe 
-        shadow-[0_-15px_30px_-5px_rgba(0,0,0,0.12),0_-1px_0_rgba(0,0,0,0.05)] 
-        border-t border-gray-100 transform-gpu"
-        style={{ backfaceVisibility: 'hidden' }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white flex items-center z-[1000] pb-safe 
+        shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] border-t border-gray-100">
         
-        <button onClick={() => handleNavigation("/")} className="flex flex-col items-center justify-center w-16 h-full text-gray-400 hover:text-brand-orange transition-colors">
-          <Home size={24} />
+        {/* ESCAPE HATCH TO SOCIAL FEED */}
+        <button 
+          onClick={() => navigate("/")} 
+          className="flex flex-col items-center justify-center flex-1 h-full text-gray-400 hover:text-brand-orange transition-colors"
+        >
+          <Home size={24} strokeWidth={2} />
           <span className="text-[10px] font-bold mt-1">Home</span>
         </button>
 
+        {/* ALERTS */}
         <button 
           onClick={(e) => { e.stopPropagation(); setShowNotifications(!showNotifications); }}
-          className="flex flex-col items-center justify-center w-16 h-full text-gray-400 hover:text-brand-orange transition-colors relative"
+          className="flex flex-col items-center justify-center flex-1 h-full text-gray-400 hover:text-brand-orange transition-colors"
         >
           <div className="relative">
-            <Bell size={24} className={unreadCount > 0 ? "text-brand-orange" : ""} />
+            <Bell size={24} strokeWidth={2} className={unreadCount > 0 ? "text-brand-orange" : ""} />
             {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-brand-orange text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border border-white">{unreadCount > 9 ? "9+" : unreadCount}</span>}
           </div>
           <span className="text-[10px] font-bold mt-1">Alerts</span>
         </button>
 
-        {/* 🚨 THE FIX: This now Toggles the menu! You can click it again to close it. */}
+        {/* PROFILE */}
         <button 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className={`flex flex-col items-center justify-center w-16 h-full transition-colors ${isMobileMenuOpen ? "text-brand-orange" : "text-brand-blue hover:text-blue-700"}`}
+          onClick={(e) => { e.stopPropagation(); setShowProfile(!showProfile); }}
+          className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${showProfile ? "text-brand-orange" : "text-gray-400 hover:text-brand-orange"}`}
         >
-          <div className={`${isMobileMenuOpen ? "bg-orange-50" : "bg-blue-50"} p-1.5 rounded-full transition-colors`}>
-            <Menu size={24} />
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border-[1.5px] ${showProfile ? "border-brand-orange" : "border-transparent"}`}>
+            {userData?.Photo ? <img src={userData.Photo} alt="Profile" className="w-full h-full object-cover" /> : <User size={20} strokeWidth={2} className={showProfile ? "text-brand-orange" : "text-gray-400"} />}
           </div>
-          <span className="text-[10px] font-bold mt-0.5">Menu</span>
+          <span className="text-[10px] font-bold mt-1">Profile</span>
         </button>
       </div>
 
-      {/* =========================================
-          📱 MOBILE ONLY: BOTTOM SHEET MENU (GRID)
-      ========================================= */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden fixed inset-x-0 top-0 bottom-16 bg-slate-900/60 backdrop-blur-sm z-[150] "
-            />
-
-            {/* The Sheet */}
-            <motion.div 
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              
-              // 🚨 THE MAGIC: Native Framer Dragging
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={0.2}
-              onDragEnd={(_, info) => {
-                // If you swipe down more than 100px or flick it down fast, close it
-                if (info.offset.y > 100 || info.velocity.y > 500) {
-                  setIsMobileMenuOpen(false);
-                }
-              }}
-              
-              className="md:hidden fixed bottom-16 left-0 right-0 bg-white rounded-t-[40px] z-[200] shadow-[0_-20px_50px_-12px_rgba(0,0,0,0.15)] flex flex-col max-h-[80vh] touch-none transform-gpu"
-              style={{ backfaceVisibility: 'hidden' }}
-            >
-              {/* Drag Handle - Added touch-pan-y so user can still scroll inside if needed */}
-              <div className="w-full flex justify-center pt-4 pb-2 cursor-grab active:cursor-grabbing">
-                <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
-              </div>
-              
-              <div className="px-8 pb-4 pt-2 flex items-center justify-between border-b border-slate-50">
-                <h3 className="font-display font-black text-brand-blue text-xl tracking-tight">Menu</h3>
-                <button onClick={SignOut} className="flex items-center gap-1.5 text-rose-500 bg-rose-50 px-4 py-1.5 rounded-full active:scale-95 transition-all">
-                  <LogOut size={14} strokeWidth={3} />
-                  <span className="text-[11px] font-black uppercase tracking-wider">Sign Out</span>
-                </button>
-              </div>
-
-              {/* 🚨 Scrollable area needs to allow touch for scrolling, but drag happens on the whole sheet */}
-              <div className="overflow-y-auto pt-6 pb-10 hide-scrollbar pointer-events-auto">
-                {getDrawerContent(true)} 
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      
 
       {/* =========================================
           MODALS & ALERTS
@@ -820,9 +742,67 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         </div>
       )}
 
+      
+      {/* 🚨 YOUR NAVPROFILE COMPONENT */}
+      <Navprofile 
+        setShowProfile={setShowProfile} 
+        showProfile={showProfile} 
+        closeNavProfile={() => setShowProfile(false)} 
+        userData={userData} 
+        setUserData={setUserData} 
+      />
+
+      {/* =========================================
+          📱 MOBILE ONLY: SLIDE-OVER SIDEBAR
+      ========================================= */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="md:hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2000]" 
+            />
+
+            {/* Sidebar Drawer */}
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 250 }}
+              className="md:hidden fixed top-0 left-0 bottom-0 w-[80%] max-w-[300px] bg-white z-[2100] shadow-2xl flex flex-col"
+            >
+              {/* Header (Logo + Close Button) */}
+              <div className="h-16 flex items-center justify-center border-b border-gray-100 relative shrink-0">
+                <img src="/logo.svg" alt="CuTe Learning" className="w-[5.5rem] drop-shadow-md" draggable="false" />
+                
+              </div>
+
+              {/* Profile Overview (Mimics Desktop exactly) */}
+              <div className="flex flex-col items-center py-6 border-b border-gray-100 relative shrink-0">
+                <div className="w-20 h-20 rounded-full border-4 border-white shadow-md overflow-hidden bg-brand-orange text-white flex items-center justify-center text-2xl font-bold">
+                  {userData.Photo ? <img src={userData.Photo} alt="Profile" className="w-full h-full object-cover" /> : (userData.Name?.charAt(0).toUpperCase() || "U")}
+                </div>
+                <h2 className="mt-4 text-lg font-display font-bold text-brand-blue">Hi, {userData.Name ? userData.Name.split(' ')[0] : "Explorer"}!</h2>
+                <p className="text-[10px] font-bold uppercase tracking-wider mt-1 text-gray-400">
+                  {userData.Role || "User"}
+                </p>
+              </div>
+
+              {/* 🚨 THE MAGIC: Calls the exact same List items as Desktop! */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col pt-2 pb-6">
+                {getDrawerContent()} 
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <HandshakeDrawer />
       {showAlert && <Muialert message={alertMessage} severity={alertSeverity} onClose={() => setShowAlert(false)} />}
-      
     </div>
   );
 };

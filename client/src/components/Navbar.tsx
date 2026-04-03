@@ -170,69 +170,69 @@ function Navbar({ userData, setUserData }: NavbarProps) {
       </header>
 
       {/* =========================================
-          🚨 NEW: MOBILE BOTTOM NAVBAR 
+          📱 MOBILE BOTTOM NAVBAR (Social Context)
           ========================================= */}
       {isLoggedIn && (
-        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-50 pb-safe">
-          <div className="flex justify-around items-center h-16 px-2">
-            
-            {/* Dashboard Bottom Button */}
-            <NavLink 
-              to="/dashboard" 
-              onClick={() => {
-                localStorage.setItem("currentView", "schedule");
-                localStorage.setItem("activeTab", "Schedule");
-                setShowLinks(false);
-                setShowProfile(false);
-                setShowNotifications(false);
-              }} 
-              className={({ isActive }) => `flex flex-col items-center justify-center w-full h-full transition-colors ${isActive ? 'text-brand-blue' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              <LayoutDashboard className="w-6 h-6 mb-1" />
-              <span className="text-[10px] font-bold">Dashboard</span>
-            </NavLink>
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white flex items-center z-[1000] pb-safe shadow-[0_-15px_30px_-5px_rgba(0,0,0,0.15)] border-t border-gray-100">
+          
+          {/* Dashboard Bottom Button (Escape Hatch to Workspace) */}
+          <NavLink 
+            to="/dashboard" 
+            onClick={() => {
+              localStorage.setItem("currentView", "schedule");
+              localStorage.setItem("activeTab", "Schedule");
+              setShowLinks(false);
+              setShowProfile(false);
+              setShowNotifications(false);
+            }} 
+        
+            className="flex flex-col items-center justify-center flex-1 h-full text-gray-400 hover:text-brand-blue transition-colors"
+          >
+            <LayoutDashboard size={24} strokeWidth={2} />
+            <span className="text-[10px] font-bold mt-1">Dashboard</span>
+          </NavLink>
 
-            {/* Notifications Bottom Button */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation(); 
-                toggleNotifications();
-                setShowLinks(false);
-              }}
-              className={`flex flex-col items-center justify-center w-full h-full transition-colors ${showNotifications ? 'text-brand-orange' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              <div className="relative">
-                <Bell className="w-6 h-6 mb-1" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">
-                    {unreadCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] font-bold">Alerts</span>
-            </button>
-
-            {/* Profile Bottom Button */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation(); // 🚨 AND ADD IT HERE!
-                setShowProfile(!showProfile);
-                setShowNotifications(false);
-                setShowLinks(false);
-              }}
-              className={`flex flex-col items-center justify-center w-full h-full transition-colors ${showProfile ? 'text-brand-orange' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              {userData.Photo ? (
-                <div className={`w-7 h-7 mb-1 rounded-full overflow-hidden border-2 transition-colors ${showProfile ? 'border-brand-orange' : 'border-transparent'}`}>
-                  <img src={userData.Photo} alt="Profile" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <User className="w-6 h-6 mb-1" />
+          {/* Notifications Bottom Button */}
+          <button 
+            onClick={(e) => {
+              e.stopPropagation(); 
+              toggleNotifications();
+              setShowLinks(false);
+            }}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${showNotifications ? 'text-brand-orange' : 'text-gray-400 hover:text-brand-orange'}`}
+          >
+            <div className="relative">
+              <Bell size={24} strokeWidth={2} className={unreadCount > 0 ? "text-brand-orange" : ""} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full shadow-sm">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
               )}
-              <span className="text-[10px] font-bold">Profile</span>
-            </button>
+            </div>
+            <span className="text-[10px] font-bold mt-1">Alerts</span>
+          </button>
 
-          </div>
+          {/* Profile Bottom Button */}
+          <button 
+            onClick={(e) => {
+              e.stopPropagation(); 
+              setShowProfile(!showProfile);
+              setShowNotifications(false);
+              setShowLinks(false);
+            }}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${showProfile ? 'text-brand-orange' : 'text-gray-400 hover:text-brand-orange'}`}
+          >
+            {/* 🚨 THE FIX: Reduced to w-6 h-6 to perfectly match the size={24} of Dashboard and Bell */}
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border-[1.5px] ${showProfile ? "border-brand-orange" : "border-transparent"}`}>
+              {userData?.Photo ? (
+                <img src={userData.Photo} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <User size={20} strokeWidth={2} className={showProfile ? "text-brand-orange" : "text-gray-400"} />
+              )}
+            </div>
+            <span className="text-[10px] font-bold mt-1">Profile</span>
+          </button>
+
         </nav>
       )}
     </>

@@ -589,7 +589,7 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
       )}
       {/* 🚨 NEW: MOBILE DAY VIEW POPUP (Bottom Sheet) */}
       {showMobileDayView && mobileSelectedDate && (
-        <div className="fixed inset-0 z-[500] flex items-end md:items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-fade-in" onClick={() => setShowMobileDayView(false)}>
+        <div className="fixed inset-0 z-[500] flex items-end md:items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-fade-in pb-16 md:pb-0" onClick={() => setShowMobileDayView(false)}>
           <div 
             className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] transform transition-transform animate-in slide-in-from-bottom-8 md:zoom-in-95 z-[500]"
             onClick={(e) => e.stopPropagation()} // Prevents clicking the backdrop from closing it
@@ -655,7 +655,7 @@ const Calendar: React.FC<CalendarProps> = ({ role, selectedStudentUsername, curr
       )}
       {/* 🚨 NEW: ADD EVENT MODAL 🚨 */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-slate-900/70 backdrop-blur-md px-4">
+        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-slate-900/70 backdrop-blur-md pb-16 md:pb-0 px-4">
           <div className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-white/20 transform transition-all animate-in zoom-in-95 duration-200">
             <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
               <CalendarIcon className="w-5 h-5 text-brand-orange" />
