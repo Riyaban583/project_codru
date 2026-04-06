@@ -133,40 +133,44 @@ router.post('/webhook', async (req, res) => {
                 const fromNumber = msg.from; 
                 const senderName = contactInfo?.profile?.name || "New Student";
                 
-                // 🚨 1. Declare variables before using them!
+                // 🚨 Variables declared perfectly
                 let msgText = "";
                 let msgType = msg.type || "text";
                 let mediaUrl = null;
 
-                // 🚨 2. Media Detection Logic
+                // Dynamically grab your live backend URL (or fallback to localhost)
+                const BASE_URL = process.env.VITE_API || "https://api.curiousteamlearning.com";
+
+                // 🚨 Media Detection Logic
                 if (msgType === "text") {
                     msgText = msg.text?.body || "";
                 } else if (msgType === "image") {
-                    // Update this URL prefix if your backend uses /api or something different
-                    mediaUrl = `http://localhost:8080/media/${msg.image.id}`;
+                    // Uses your live API domain!
+                    mediaUrl = `${BASE_URL}/media/${msg.image.id}`;
                     msgText = msg.image.caption || "📷 Image";
                 } else if (msgType === "document") {
-                    mediaUrl = `http://localhost:8080/media/${msg.document.id}`;
+                    // Uses your live API domain!
+                    mediaUrl = `${BASE_URL}/media/${msg.document.id}`;
                     msgText = msg.document.caption || msg.document.filename || "📄 Document";
                 } else {
                     msgText = `[Unsupported message type: ${msgType}]`;
                 }
 
-                // 3. Save to Message Collection
+                // Save to Message Collection
                 const savedMessage = await Message.create({
                     wa_id: msg.id,
                     senderName: senderName,
                     userNumber: fromNumber,
                     botNumberId: value.metadata.phone_number_id,
                     messageBody: msgText,
-                    messageType: msgType,   // Perfectly defined now!
-                    mediaUrl: mediaUrl,     // Image proxy link
+                    messageType: msgType,   
+                    mediaUrl: mediaUrl,     
                     direction: 'incoming',
                     status: 'received',
                     timestamp: new Date()
                 });
 
-                // 4. Update Contact Sidebar & Unread Count
+                // Update Contact Sidebar & Unread Count
                 await Contact.findOneAndUpdate(
                     { phoneNumber: fromNumber }, 
                     { 
@@ -180,13 +184,13 @@ router.post('/webhook', async (req, res) => {
                     { upsert: true, new: true, setDefaultsOnInsert: true, strict: false }
                 );
 
-                // 5. 📣 BROADCAST TO UI
+                // 📣 BROADCAST TO UI
                 if (req.app.get("io")) {
                     console.log(`[Socket] Broadcasting message from ${fromNumber}`);
                     req.app.get("io").emit("whatsapp_message_update", savedMessage);
                 }
 
-                // 6. SYSTEM NOTIFICATIONS
+                // SYSTEM NOTIFICATIONS
                 try {
                     const admins = await User.find({ isAdmin: true });
                     const previewText = msgText.length > 30 ? msgText.substring(0, 30) + "..." : msgText;
