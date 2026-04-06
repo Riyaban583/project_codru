@@ -589,9 +589,9 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
             senderName: "Admin (CuTe)",
             userNumber: to,
             botNumberId: botNumberId,
-            messageBody: messageBody || `[Sent ${mediaType}]`,
+            messageBody: messageBody || "", // Make it blank instead of "[Sent image]" if no caption
             messageType: mediaType,
-            mediaUrl: `http://localhost:8080/media/${secureMediaId}`, // Save proxy link so you can view it too!
+            mediaUrl: `${BASE_URL}/media/${secureMediaId}`, // 🚨 USE THE LIVE URL HERE!
             direction: 'outgoing',
             status: 'sent',
             timestamp: new Date()

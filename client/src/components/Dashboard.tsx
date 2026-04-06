@@ -586,12 +586,17 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           )}
 
           <div className={`relative flex-1 min-h-0 flex flex-col bg-white transition-all duration-300
-            rounded-t-[32px] md:rounded-[32px] 
-            border-t md:border border-gray-100 border-x-0 md:border-x
-            shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] md:shadow-xl
-            ${currentView === "report" ? "p-0 overflow-hidden" : "pt-4 px-4 md:pt-6 md:px-6 overflow-y-auto dashboard-content-scroll"}
+              rounded-t-[32px] md:rounded-[32px] 
+              border-t md:border border-gray-100 border-x-0 md:border-x
+              shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] md:shadow-xl
+              ${(currentView === "report" || currentView === "whatsapp-crm") 
+                  ? "p-0 overflow-hidden" 
+                  : "pt-4 px-4 md:pt-6 md:px-6 overflow-y-auto dashboard-content-scroll"}
           `}>
-            <div className={`relative w-full ${currentView === "report" ? "h-full" : "min-h-full pb-8 md:pb-10"} rounded-[8px]`}>
+            <div className={`relative w-full ${(currentView === "report" || currentView === "whatsapp-crm") 
+              ? "h-full" 
+              : "min-h-full pb-8 md:pb-10"} rounded-[8px]
+            `}>
               
               {/* COMPONENT RENDERING ROUTER */}
               {currentView === "profile" && <Profile />}

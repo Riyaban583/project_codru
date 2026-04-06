@@ -235,9 +235,22 @@ const WhatsAppChat: React.FC = () => {
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
+            const isImage = file.type.startsWith('image/');
+            
+            // 🚨 META API LIMITS: 5MB for images, 100MB for documents
+            const maxSizeMB = isImage ? 5 : 100; 
+            const maxSizeBytes = maxSizeMB * 1024 * 1024;
+
+            if (file.size > maxSizeBytes) {
+                alert(`File too large! WhatsApp limits ${isImage ? 'images to 5MB' : 'documents to 100MB'}. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB.`);
+                e.target.value = ''; // Reset the input
+                return;
+            }
+
             setSelectedFile(file);
+            
             // If it's an image, create a tiny preview url
-            if (file.type.startsWith('image/')) {
+            if (isImage) {
                 setFilePreviewUrl(URL.createObjectURL(file));
             } else {
                 setFilePreviewUrl(null);
@@ -357,7 +370,7 @@ const WhatsAppChat: React.FC = () => {
 
     return (
         <>
-            <div className="flex h-[calc(100%+2rem)] md:h-[calc(100%+2.5rem)] -mb-8 md:-mb-10 w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
+            <div className="flex h-full w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
                 
                 {/* LEFT SIDEBAR */}
                 <div className={`
@@ -521,8 +534,25 @@ const WhatsAppChat: React.FC = () => {
 
                                         {isOutgoing && (
                                             <div className="flex flex-col items-end max-w-[85%] md:max-w-[75%]">
-                                                <div className="p-3.5 shadow-sm text-sm rounded-2xl bg-brand-blue text-white rounded-tr-sm w-full">
-                                                    <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
+                                                <div className="p-3.5 shadow-sm text-sm rounded-2xl bg-brand-blue text-white rounded-tr-sm w-full overflow-hidden">
+                                                    
+                                                    {/* 🚨 OUTGOING MEDIA RENDERER */}
+                                                    {msg.messageType === 'image' && msg.mediaUrl && (
+                                                        <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-blue-900/30">
+                                                            <img src={msg.mediaUrl} alt="Sent Media" className="w-full h-auto object-cover max-h-64" />
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {msg.messageType === 'document' && msg.mediaUrl && (
+                                                        <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition">
+                                                            📄 View Document
+                                                        </a>
+                                                    )}
+
+                                                    {/* Only show the paragraph tag if there's actually a text caption */}
+                                                    {msg.messageBody && msg.messageBody.trim() !== "" && msg.messageBody !== "[Sent image]" && (
+                                                        <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
+                                                    )}
                                                 </div>
                                                 
                                                 <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-medium tracking-wide">
@@ -644,185 +674,7 @@ const WhatsAppChat: React.FC = () => {
                             </button>
                         </div>
                     </form>
-                    {/* ADD CONTACT MODAL */}
-                    {showNewContactModal && (
-                        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                            <div className="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-xl font-bold text-slate-800">Start New Chat</h3>
-                                    <button onClick={() => setShowNewContactModal(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition">
-                                        <X size={20}/>
-                                    </button>
-                                </div>
-                                
-                                <form onSubmit={handleAddContact} className="space-y-4">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Contact Name <span className="text-slate-300 capitalize">(Optional)</span></label>
-                                        <input 
-                                            type="text" 
-                                            value={newContactName} 
-                                            onChange={e => setNewContactName(e.target.value)} 
-                                            placeholder="e.g. John Doe" 
-                                            className="w-full mt-1.5 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all" 
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">WhatsApp Number</label>
-                                        <input 
-                                            type="text" 
-                                            value={newContactPhone} 
-                                            onChange={e => setNewContactPhone(e.target.value)} 
-                                            placeholder="Include country code (e.g. 919876543210)" 
-                                            required 
-                                            className="w-full mt-1.5 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all" 
-                                        />
-                                    </div>
-                                    
-                                    <div className="pt-4">
-                                        <button 
-                                            type="submit" 
-                                            disabled={isAddingContact || !newContactPhone} 
-                                            className="w-full py-3.5 bg-brand-blue text-white font-black rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-all flex justify-center items-center"
-                                        >
-                                            {isAddingContact ? <Loader2 className="w-5 h-5 animate-spin" /> : "START CHAT"}
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* TEMPLATE MANAGER MODAL */}
-                    {showTemplateManager && (
-                        <div className="absolute inset-0 z-[3000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-10">
-                            <div className="bg-white rounded-[32px] w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-                                
-                                {/* Header */}
-                                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-                                    <div>
-                                        <h2 className="text-2xl font-display font-bold text-slate-800">Template Manager</h2>
-                                        <p className="text-sm text-slate-500 mt-1">Sync from Meta and configure Cloudinary URLs.</p>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <button 
-                                            onClick={handleSyncTemplates}
-                                            disabled={isSyncing}
-                                            className="flex items-center gap-2 bg-brand-orange text-white px-5 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition disabled:opacity-50 shadow-md"
-                                        >
-                                            <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} />
-                                            {isSyncing ? "Syncing..." : "Sync Meta"}
-                                        </button>
-                                        <button onClick={() => setShowTemplateManager(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition">
-                                            <X size={24}/>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Body List */}
-                                <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50 space-y-6">
-                                    {allTemplates.length === 0 ? (
-                                        <div className="text-center py-20">
-                                            <Sparkles size={48} className="mx-auto mb-4 text-brand-blue/20" />
-                                            <h3 className="text-lg font-bold text-slate-700">No Templates Found</h3>
-                                            <p className="text-slate-500 mt-2">Click "Sync Meta" to pull your approved templates from WhatsApp.</p>
-                                        </div>
-                                    ) : (
-                                        allTemplates.map((tpl) => (
-                                            <div key={tpl._id} className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-6 items-start">
-                                                
-                                                {/* Left Side: Basic Info */}
-                                                <div className="w-full md:w-1/3">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <h3 className="font-bold text-slate-800 text-lg">{tpl.metaName}</h3>
-                                                        {tpl.isConfigured ? (
-                                                            <span className="bg-green-100 text-green-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 size={12}/> Ready</span>
-                                                        ) : (
-                                                            <span className="bg-yellow-100 text-yellow-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">Setup Needed</span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-xs text-slate-400 uppercase font-bold tracking-widest mb-4">Meta Status: {tpl.metaStatus}</p>
-                                                    
-                                                    {tpl.requiresImage && (
-                                                        <div className="w-full h-32 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
-                                                            {tpl.headerImageUrl ? (
-                                                                <img src={tpl.headerImageUrl} alt="Header Preview" className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <span className="text-xs text-slate-400 font-bold">No Image Provided</span>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Right Side: Edit Form */}
-                                                <div className="flex-1 w-full space-y-4">
-                                                    <div className="flex gap-4">
-                                                        <div className="flex-1">
-                                                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Button Display Name</label>
-                                                            <input 
-                                                                type="text" 
-                                                                value={tpl.displayName} 
-                                                                onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, displayName: e.target.value } : t))}
-                                                                className="w-full mt-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10" 
-                                                            />
-                                                        </div>
-                                                        
-                                                        {/* 🚨 NEW: Variable Count Setup */}
-                                                        <div className="w-24">
-                                                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Variables</label>
-                                                            <input 
-                                                                type="number" 
-                                                                min="0"
-                                                                max="5"
-                                                                value={tpl.variableCount || 0} 
-                                                                onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, variableCount: parseInt(e.target.value) || 0 } : t))}
-                                                                className="w-full mt-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10" 
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {tpl.requiresImage && (
-                                                        <div>
-                                                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Cloudinary Image URL</label>
-                                                            <input 
-                                                                type="text" 
-                                                                value={tpl.headerImageUrl} 
-                                                                onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, headerImageUrl: e.target.value } : t))}
-                                                                placeholder="https://res.cloudinary.com/..." 
-                                                                className="w-full mt-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10" 
-                                                            />
-                                                        </div>
-                                                    )}
-                                                    
-                                                    <div className="flex items-center justify-between pt-2">
-                                                        <div className="flex items-center gap-4">
-                                                            <label className="text-xs font-bold text-slate-500 uppercase">Button Color:</label>
-                                                            <select 
-                                                                value={tpl.buttonColor}
-                                                                onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, buttonColor: e.target.value } : t))}
-                                                                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none cursor-pointer"
-                                                            >
-                                                                <option value="blue">Blue</option>
-                                                                <option value="green">Green</option>
-                                                                <option value="orange">Orange</option>
-                                                            </select>
-                                                        </div>
-
-                                                        <button 
-                                                            onClick={() => handleSaveTemplateConfig(tpl)}
-                                                            disabled={updatingTemplateId === tpl._id}
-                                                            className="bg-brand-blue text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-md disabled:opacity-50 flex items-center gap-2"
-                                                        >
-                                                            {updatingTemplateId === tpl._id ? <Loader2 size={16} className="animate-spin" /> : "Save Config"}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    
                 </div>
             </div>
 
@@ -887,7 +739,185 @@ const WhatsAppChat: React.FC = () => {
                 </div>
             )}
 
-            
+            {/* ADD CONTACT MODAL */}
+            {showNewContactModal && (
+                <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-slate-800">Start New Chat</h3>
+                            <button onClick={() => setShowNewContactModal(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition">
+                                <X size={20}/>
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleAddContact} className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Contact Name <span className="text-slate-300 capitalize">(Optional)</span></label>
+                                <input 
+                                    type="text" 
+                                    value={newContactName} 
+                                    onChange={e => setNewContactName(e.target.value)} 
+                                    placeholder="e.g. John Doe" 
+                                    className="w-full mt-1.5 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">WhatsApp Number</label>
+                                <input 
+                                    type="text" 
+                                    value={newContactPhone} 
+                                    onChange={e => setNewContactPhone(e.target.value)} 
+                                    placeholder="Include country code (e.g. 919876543210)" 
+                                    required 
+                                    className="w-full mt-1.5 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all" 
+                                />
+                            </div>
+                            
+                            <div className="pt-4">
+                                <button 
+                                    type="submit" 
+                                    disabled={isAddingContact || !newContactPhone} 
+                                    className="w-full py-3.5 bg-brand-blue text-white font-black rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-all flex justify-center items-center"
+                                >
+                                    {isAddingContact ? <Loader2 className="w-5 h-5 animate-spin" /> : "START CHAT"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* TEMPLATE MANAGER MODAL */}
+            {showTemplateManager && (
+                <div className="absolute inset-0 z-[3000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-10">
+                    <div className="bg-white rounded-[32px] w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+                        
+                        {/* Header */}
+                        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
+                            <div>
+                                <h2 className="text-2xl font-display font-bold text-slate-800">Template Manager</h2>
+                                <p className="text-sm text-slate-500 mt-1">Sync from Meta and configure Cloudinary URLs.</p>
+                            </div>
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={handleSyncTemplates}
+                                    disabled={isSyncing}
+                                    className="flex items-center gap-2 bg-brand-orange text-white px-5 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition disabled:opacity-50 shadow-md"
+                                >
+                                    <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} />
+                                    {isSyncing ? "Syncing..." : "Sync Meta"}
+                                </button>
+                                <button onClick={() => setShowTemplateManager(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition">
+                                    <X size={24}/>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Body List */}
+                        <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50 space-y-6">
+                            {allTemplates.length === 0 ? (
+                                <div className="text-center py-20">
+                                    <Sparkles size={48} className="mx-auto mb-4 text-brand-blue/20" />
+                                    <h3 className="text-lg font-bold text-slate-700">No Templates Found</h3>
+                                    <p className="text-slate-500 mt-2">Click "Sync Meta" to pull your approved templates from WhatsApp.</p>
+                                </div>
+                            ) : (
+                                allTemplates.map((tpl) => (
+                                    <div key={tpl._id} className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-6 items-start">
+                                        
+                                        {/* Left Side: Basic Info */}
+                                        <div className="w-full md:w-1/3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <h3 className="font-bold text-slate-800 text-lg">{tpl.metaName}</h3>
+                                                {tpl.isConfigured ? (
+                                                    <span className="bg-green-100 text-green-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 size={12}/> Ready</span>
+                                                ) : (
+                                                    <span className="bg-yellow-100 text-yellow-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">Setup Needed</span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-slate-400 uppercase font-bold tracking-widest mb-4">Meta Status: {tpl.metaStatus}</p>
+                                            
+                                            {tpl.requiresImage && (
+                                                <div className="w-full h-32 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
+                                                    {tpl.headerImageUrl ? (
+                                                        <img src={tpl.headerImageUrl} alt="Header Preview" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 font-bold">No Image Provided</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Right Side: Edit Form */}
+                                        <div className="flex-1 w-full space-y-4">
+                                            <div className="flex gap-4">
+                                                <div className="flex-1">
+                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Button Display Name</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={tpl.displayName} 
+                                                        onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, displayName: e.target.value } : t))}
+                                                        className="w-full mt-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10" 
+                                                    />
+                                                </div>
+                                                
+                                                {/* 🚨 NEW: Variable Count Setup */}
+                                                <div className="w-24">
+                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Variables</label>
+                                                    <input 
+                                                        type="number" 
+                                                        min="0"
+                                                        max="5"
+                                                        value={tpl.variableCount || 0} 
+                                                        onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, variableCount: parseInt(e.target.value) || 0 } : t))}
+                                                        className="w-full mt-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10" 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {tpl.requiresImage && (
+                                                <div>
+                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Cloudinary Image URL</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={tpl.headerImageUrl} 
+                                                        onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, headerImageUrl: e.target.value } : t))}
+                                                        placeholder="https://res.cloudinary.com/..." 
+                                                        className="w-full mt-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10" 
+                                                    />
+                                                </div>
+                                            )}
+                                            
+                                            <div className="flex items-center justify-between pt-2">
+                                                <div className="flex items-center gap-4">
+                                                    <label className="text-xs font-bold text-slate-500 uppercase">Button Color:</label>
+                                                    <select 
+                                                        value={tpl.buttonColor}
+                                                        onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, buttonColor: e.target.value } : t))}
+                                                        className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none cursor-pointer"
+                                                    >
+                                                        <option value="blue">Blue</option>
+                                                        <option value="green">Green</option>
+                                                        <option value="orange">Orange</option>
+                                                    </select>
+                                                </div>
+
+                                                <button 
+                                                    onClick={() => handleSaveTemplateConfig(tpl)}
+                                                    disabled={updatingTemplateId === tpl._id}
+                                                    className="bg-brand-blue text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-md disabled:opacity-50 flex items-center gap-2"
+                                                >
+                                                    {updatingTemplateId === tpl._id ? <Loader2 size={16} className="animate-spin" /> : "Save Config"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
