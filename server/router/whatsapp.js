@@ -141,6 +141,8 @@ router.post('/webhook', async (req, res) => {
                     userNumber: fromNumber,
                     botNumberId: value.metadata.phone_number_id,
                     messageBody: msgText,
+                    messageType: msgType,   // 🚨 Now saves 'image' or 'document'
+                    mediaUrl: mediaUrl,
                     direction: 'incoming',
                     status: 'received',
                     timestamp: new Date()
@@ -463,7 +465,7 @@ router.get('/templates/ready', async (req, res) => {
 
 router.get('/templates', async (req, res) => {
     try {
-        const templates = await Template.find({ isActive: true }).sort({ createdAt: -1 });
+        const templates = await Template.find({}).sort({ createdAt: -1 });
         res.status(200).json(templates);
     } catch (error) { res.status(500).json({ error: "Failed to load templates." }); }
 });
@@ -484,6 +486,36 @@ router.post('/templates', async (req, res) => {
         );
         res.status(200).json(savedTemplate);
     } catch (error) { res.status(500).json({ error: "Failed to save template." }); }
+});
+
+// ==========================================
+// 10. GET: SECURE MEDIA PROXY
+// ==========================================
+router.get('/media/:mediaId', async (req, res) => {
+    try {
+        const { mediaId } = req.params;
+        const TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+
+        // 1. Ask Meta for the true download URL using the Media ID
+        const metaResponse = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
+            headers: { Authorization: `Bearer ${TOKEN}` }
+        });
+        
+        const mediaUrl = metaResponse.data.url;
+        const mimeType = metaResponse.data.mime_type;
+
+        // 2. Download the file from Meta and pipe it directly to your React frontend!
+        const imageStream = await axios.get(mediaUrl, {
+            headers: { Authorization: `Bearer ${TOKEN}` },
+            responseType: 'stream'
+        });
+
+        res.setHeader('Content-Type', mimeType);
+        imageStream.data.pipe(res);
+    } catch (error) {
+        console.error("Media Proxy Error:", error.message);
+        res.status(500).send("Failed to load media.");
+    }
 });
 
 module.exports = router;

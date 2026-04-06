@@ -24,6 +24,9 @@ const messageSchema = new mongoose.Schema({
         type: String, 
         default: 'text' 
     },
+    mediaUrl: { 
+        type: String 
+    },
     direction: { 
         type: String, 
         enum: ['incoming', 'outgoing'], 
