@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { socket } from '../socket';
-import { Search, Send, Phone, User, Clock, AlertCircle, Loader2, Sparkles, ArrowLeft, Plus, X, Settings, RefreshCw, CheckCircle2, UserPlus } from 'lucide-react';
+import { Search, Send, Phone, User, Clock, AlertCircle, Loader2, Sparkles, ArrowLeft, Plus, X, Settings, RefreshCw, CheckCircle2, UserPlus, Paperclip, FileText } from 'lucide-react';
 
 export interface WhatsAppMessage {
     _id: string;
@@ -46,6 +46,11 @@ const WhatsAppChat: React.FC = () => {
     const [newContactName, setNewContactName] = useState("");
     const [newContactPhone, setNewContactPhone] = useState("");
     const [isAddingContact, setIsAddingContact] = useState(false);
+
+    // New states for Media Upload
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -184,19 +189,59 @@ const WhatsAppChat: React.FC = () => {
     // ==========================================
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!activeUserNumber || !inputText.trim()) return;
+        if (!activeUserNumber || (!inputText.trim() && !selectedFile)) return;
 
         const tempText = inputText;
+        const tempFile = selectedFile; // Save in case of error
+        
         setInputText("");
+        setSelectedFile(null);
+        setFilePreviewUrl(null);
 
         try {
-            await axios.post(`${API_BASE}/send`, {
-                to: activeUserNumber,
-                messageBody: tempText
-            });
+            if (tempFile) {
+                // SEND MEDIA
+                const formData = new FormData();
+                formData.append('to', activeUserNumber);
+                formData.append('file', tempFile);
+                if (tempText) formData.append('messageBody', tempText);
+                
+                // Determine if it's an image or document
+                const isImage = tempFile.type.startsWith('image/');
+                formData.append('mediaType', isImage ? 'image' : 'document');
+
+                await axios.post(`${API_BASE}/send-media`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            } else {
+                // SEND STANDARD TEXT
+                await axios.post(`${API_BASE}/send`, {
+                    to: activeUserNumber,
+                    messageBody: tempText
+                });
+            }
         } catch (error) {
             console.error("Failed to send message:", error);
+            // Revert UI if it fails
             setInputText(tempText);
+            if (tempFile) {
+                setSelectedFile(tempFile);
+                if (tempFile.type.startsWith('image/')) setFilePreviewUrl(URL.createObjectURL(tempFile));
+            }
+            alert("Failed to send message.");
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setSelectedFile(file);
+            // If it's an image, create a tiny preview url
+            if (file.type.startsWith('image/')) {
+                setFilePreviewUrl(URL.createObjectURL(file));
+            } else {
+                setFilePreviewUrl(null);
+            }
         }
     };
 
@@ -535,23 +580,64 @@ const WhatsAppChat: React.FC = () => {
                         )}
                     </div>
 
-                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 shrink-0">
+                    {/* 🚨 THE UPGRADED CHAT INPUT FORM */}
+                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-2 relative">
+                        
+                        {/* Selected File Preview Box */}
+                        {selectedFile && (
+                            <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-xl mb-1 w-full max-w-sm animate-in fade-in slide-in-from-bottom-2">
+                                <div className="flex items-center gap-3 overflow-hidden">
+                                    {filePreviewUrl ? (
+                                        <img src={filePreviewUrl} alt="Preview" className="w-10 h-10 object-cover rounded-lg border border-slate-200" />
+                                    ) : (
+                                        <div className="w-10 h-10 bg-brand-blue/10 text-brand-blue rounded-lg flex items-center justify-center">
+                                            <FileText size={20} />
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-slate-700 truncate">{selectedFile.name}</p>
+                                        <p className="text-[10px] text-slate-400">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                    </div>
+                                </div>
+                                <button type="button" onClick={() => { setSelectedFile(null); setFilePreviewUrl(null); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        )}
+
                         <div className="relative flex items-center w-full">
+                            {/* Hidden File Input */}
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleFileSelect} 
+                                className="hidden" 
+                                accept="image/*,application/pdf,.doc,.docx"
+                            />
+                            
+                            {/* Attachment Button */}
+                            <button 
+                                type="button" 
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={!activeUserNumber}
+                                className="absolute left-1.5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-full transition-all disabled:opacity-50 z-10"
+                            >
+                                <Paperclip size={20} />
+                            </button>
+
                             <input 
                                 type="text" 
                                 value={inputText} 
                                 onChange={(e) => setInputText(e.target.value)} 
-                                placeholder={activeUserNumber ? "Type your message..." : "Select a valid contact to chat"}
+                                placeholder={activeUserNumber ? "Type a message or attach file..." : "Select a valid contact to chat"}
                                 disabled={!activeUserNumber}
-                                // 🚨 Added massive right padding (pr-28) so typing doesn't hide behind the button
-                                className="w-full bg-slate-50 border border-gray-200 py-3.5 pl-6 pr-28 rounded-full text-sm outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all disabled:opacity-50"
+                                className="w-full bg-slate-50 border border-gray-200 py-3.5 pl-12 pr-28 rounded-full text-sm outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all disabled:opacity-50"
                             />
                             
-                            {/* 🚨 Button is now absolutely positioned inside the right corner of the input */}
                             <button 
                                 type="submit" 
-                                disabled={!inputText.trim() || !activeUserNumber} 
-                                className="absolute right-1.5 flex items-center gap-2 bg-brand-orange text-white px-5 py-2.5 rounded-full font-bold text-sm hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"
+                                disabled={(!inputText.trim() && !selectedFile) || !activeUserNumber} 
+                                className="absolute right-1.5 flex items-center gap-2 bg-brand-blue text-white px-5 py-2.5 rounded-full font-bold text-sm hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"
                             >
                                 <span>Send</span>
                                 <Send size={16} />

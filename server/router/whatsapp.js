@@ -5,6 +5,10 @@ const Contact = require('../models/Contact');
 const Message = require('../models/Message');
 const User = require("../models/userSchema"); 
 const sendAutoNotification = require("../utils/notify");
+const multer = require('multer');
+const FormData = require('form-data');
+// Store files in memory temporarily while we shoot them to Meta
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
 // 1. GET: FETCH CHAT HISTORY
@@ -528,6 +532,92 @@ router.get('/media/:mediaId', async (req, res) => {
     } catch (error) {
         console.error("Media Proxy Error:", error.message);
         res.status(500).send("Failed to load media.");
+    }
+});
+
+// ==========================================
+// 2.5 POST: SEND MEDIA (Image/Document)
+// ==========================================
+router.post('/send-media', upload.single('file'), async (req, res) => {
+    try {
+        const { to, messageBody, mediaType } = req.body; 
+        const file = req.file;
+
+        if (!to || !file) {
+            return res.status(400).json({ error: "Phone number and file are required." });
+        }
+
+        const botNumberId = process.env.PHONE_NUMBER_ID || "1049944734868137"; 
+        const TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+
+        // 1. Upload File to Meta's Encrypted Vault
+        const formData = new FormData();
+        formData.append('file', file.buffer, file.originalname);
+        formData.append('type', file.mimetype);
+        formData.append('messaging_product', 'whatsapp');
+
+        const mediaUploadRes = await axios.post(
+            `https://graph.facebook.com/v19.0/${botNumberId}/media`,
+            formData,
+            { headers: { ...formData.getHeaders(), Authorization: `Bearer ${TOKEN}` } }
+        );
+
+        const secureMediaId = mediaUploadRes.data.id;
+
+        // 2. Send the Message using the Secure Media ID
+        const payload = {
+            messaging_product: "whatsapp",
+            to: to,
+            type: mediaType, // 'image' or 'document'
+            [mediaType]: { id: secureMediaId }
+        };
+
+        // Meta only allows captions if we provide one
+        if (messageBody && messageBody.trim()) {
+            payload[mediaType].caption = messageBody; 
+        }
+
+        const response = await axios.post(
+            `https://graph.facebook.com/v19.0/${botNumberId}/messages`,
+            payload,
+            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` } }
+        );
+
+        // 3. Save to CRM Database
+        const savedMessage = await Message.create({
+            wa_id: response.data.messages[0].id,
+            senderName: "Admin (CuTe)",
+            userNumber: to,
+            botNumberId: botNumberId,
+            messageBody: messageBody || `[Sent ${mediaType}]`,
+            messageType: mediaType,
+            mediaUrl: `http://localhost:8080/media/${secureMediaId}`, // Save proxy link so you can view it too!
+            direction: 'outgoing',
+            status: 'sent',
+            timestamp: new Date()
+        });
+
+        // 4. Update Contact Sidebar
+        await Contact.findOneAndUpdate(
+            { phoneNumber: to },
+            { 
+                $set: { 
+                    lastMessage: mediaType === 'image' ? '📷 Image' : '📄 Document', 
+                    lastSeen: new Date(),
+                    unreadCount: 0
+                }
+            },
+            { strict: false }
+        );
+
+        // 5. Emit to UI
+        if (req.app.get("io")) req.app.get("io").emit("whatsapp_message_update", savedMessage);
+
+        res.status(200).json(savedMessage);
+
+    } catch (error) {
+        console.error("Error sending media:", error.response?.data || error.message);
+        res.status(500).json({ error: "Failed to send media." });
     }
 });
 
