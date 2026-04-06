@@ -132,23 +132,41 @@ router.post('/webhook', async (req, res) => {
                 
                 const fromNumber = msg.from; 
                 const senderName = contactInfo?.profile?.name || "New Student";
-                const msgText = msg.text?.body || "Media received";
+                
+                // 🚨 1. Declare variables before using them!
+                let msgText = "";
+                let msgType = msg.type || "text";
+                let mediaUrl = null;
 
-                // 1. Save to Message Collection
+                // 🚨 2. Media Detection Logic
+                if (msgType === "text") {
+                    msgText = msg.text?.body || "";
+                } else if (msgType === "image") {
+                    // Update this URL prefix if your backend uses /api or something different
+                    mediaUrl = `http://localhost:8080/media/${msg.image.id}`;
+                    msgText = msg.image.caption || "📷 Image";
+                } else if (msgType === "document") {
+                    mediaUrl = `http://localhost:8080/media/${msg.document.id}`;
+                    msgText = msg.document.caption || msg.document.filename || "📄 Document";
+                } else {
+                    msgText = `[Unsupported message type: ${msgType}]`;
+                }
+
+                // 3. Save to Message Collection
                 const savedMessage = await Message.create({
                     wa_id: msg.id,
                     senderName: senderName,
                     userNumber: fromNumber,
                     botNumberId: value.metadata.phone_number_id,
                     messageBody: msgText,
-                    messageType: msgType,   // 🚨 Now saves 'image' or 'document'
-                    mediaUrl: mediaUrl,
+                    messageType: msgType,   // Perfectly defined now!
+                    mediaUrl: mediaUrl,     // Image proxy link
                     direction: 'incoming',
                     status: 'received',
                     timestamp: new Date()
                 });
 
-                // 2. Update Contact Sidebar & Unread Count
+                // 4. Update Contact Sidebar & Unread Count
                 await Contact.findOneAndUpdate(
                     { phoneNumber: fromNumber }, 
                     { 
@@ -162,39 +180,30 @@ router.post('/webhook', async (req, res) => {
                     { upsert: true, new: true, setDefaultsOnInsert: true, strict: false }
                 );
 
-                // 3. 📣 BROADCAST TO UI
+                // 5. 📣 BROADCAST TO UI
                 if (req.app.get("io")) {
                     console.log(`[Socket] Broadcasting message from ${fromNumber}`);
                     req.app.get("io").emit("whatsapp_message_update", savedMessage);
                 }
 
-                // =========================================================
-                // 4. SYSTEM NOTIFICATIONS (PUSH + IN-APP)
-                // =========================================================
+                // 6. SYSTEM NOTIFICATIONS
                 try {
-                    // Find all Admins (or you could look up the specific assigned teacher)
                     const admins = await User.find({ isAdmin: true });
-                    
-                    // Format a nice preview of the message
                     const previewText = msgText.length > 30 ? msgText.substring(0, 30) + "..." : msgText;
                     
                     const notifyPromises = admins.map(admin => 
                         sendAutoNotification(
                             req.app, 
                             admin._id, 
-                            `💬 WhatsApp: ${senderName} says "${previewText}"`, 
-                            "whatsapp-crm", // 🚨 Change this to the actual URL path of your WhatsApp Chat page!
-                            "WhatsApp Bot" // Audit trigger
+                            `💬 WhatsApp: ${senderName} sent ${msgType === 'text' ? `"${previewText}"` : `an ${msgType}`}`, 
+                            "whatsapp-crm", 
+                            "WhatsApp Bot" 
                         )
                     );
-                    
                     await Promise.all(notifyPromises);
-                    console.log("✅ System Push Notifications sent to Admins!");
-
                 } catch (notifErr) {
                     console.error("❌ Failed to trigger Admin WhatsApp notifications:", notifErr);
                 }
-                // =========================================================
 
             } catch (e) { 
                 console.error("❌ Webhook Messages Error:", e.message); 
