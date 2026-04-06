@@ -311,7 +311,7 @@ const WhatsAppChat: React.FC = () => {
 
     return (
         <>
-            <<div className="flex h-[calc(100%+2rem)] md:h-[calc(100%+2.5rem)] -mb-8 md:-mb-10 w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
+            <div className="flex h-[calc(100%+2rem)] md:h-[calc(100%+2.5rem)] -mb-8 md:-mb-10 w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
                 
                 {/* LEFT SIDEBAR */}
                 <div className={`
