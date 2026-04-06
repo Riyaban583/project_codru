@@ -388,4 +388,77 @@ router.post('/send-template', async (req, res) => {
     }
 });
 
+const Template = require('../models/Template');
+
+// ==========================================
+// 8. POST: SYNC TEMPLATES FROM META
+// ==========================================
+router.post('/templates/sync', async (req, res) => {
+    try {
+        const WABA_ID = process.env.WABA_ID; // 🚨 Add this to your .env file!
+        const TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+
+        // 1. Fetch all templates from Meta
+        const metaResponse = await axios.get(
+            `https://graph.facebook.com/v19.0/${WABA_ID}/message_templates`,
+            { headers: { Authorization: `Bearer ${TOKEN}` } }
+        );
+
+        const metaTemplates = metaResponse.data.data;
+        let addedCount = 0;
+
+        // 2. Loop through Meta's templates
+        for (const mt of metaTemplates) {
+            // We only care about APPROVED templates
+            if (mt.status !== 'APPROVED') continue;
+
+            // Check if it requires an image by looking at its components
+            const hasImageHeader = mt.components.some(
+                comp => comp.type === 'HEADER' && comp.format === 'IMAGE'
+            );
+
+            // 3. Upsert into our Database
+            // If it exists, we just update the status. If it's new, we insert it with empty URLs!
+            const existing = await Template.findOne({ metaName: mt.name });
+
+            if (!existing) {
+                await Template.create({
+                    metaName: mt.name,
+                    // Give it a readable default name (e.g., "hello_world" -> "Hello World")
+                    displayName: mt.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    language: mt.language,
+                    metaStatus: mt.status,
+                    requiresImage: hasImageHeader,
+                    headerImageUrl: "", // Empty!
+                    // If it requires an image, it is NOT configured yet. If it's just text, it's ready!
+                    isConfigured: !hasImageHeader 
+                });
+                addedCount++;
+            } else {
+                // If it already exists, just update its approval status in case Meta rejected it later
+                existing.metaStatus = mt.status;
+                await existing.save();
+            }
+        }
+
+        res.status(200).json({ message: `Sync complete. Added ${addedCount} new templates.` });
+    } catch (error) {
+        console.error("Meta Sync Error:", error.response?.data || error.message);
+        res.status(500).json({ error: "Failed to sync templates from Meta." });
+    }
+});
+
+// ==========================================
+// 9. GET: FETCH ONLY CONFIGURED TEMPLATES FOR UI
+// ==========================================
+router.get('/templates/ready', async (req, res) => {
+    try {
+        // 🔥 This ensures the Chat UI only gets templates you have set up!
+        const templates = await Template.find({ isConfigured: true, metaStatus: 'APPROVED' }).sort({ createdAt: -1 });
+        res.status(200).json(templates);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to load templates." });
+    }
+});
+
 module.exports = router;
