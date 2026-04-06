@@ -274,6 +274,38 @@ router.post('/contacts/reset-unread/:id', async (req, res) => {
 });
 
 // ==========================================
+// 7. POST: MANUALLY ADD A NEW CONTACT (Paste this right below it!)
+// ==========================================
+router.post('/contacts', async (req, res) => {
+    try {
+        const { name, phoneNumber } = req.body;
+        
+        if (!phoneNumber) {
+            return res.status(400).json({ error: "Phone number is required." });
+        }
+
+        const cleanNum = String(phoneNumber).replace(/\D/g, "");
+
+        const savedContact = await Contact.findOneAndUpdate(
+            { phoneNumber: cleanNum },
+            {
+                $set: { name: name || cleanNum },
+                $setOnInsert: {
+                    lastMessage: "New Contact Added",
+                    unreadCount: 0,
+                    lastSeen: new Date()
+                }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true, strict: false }
+        );
+
+        res.status(200).json(savedContact);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to add contact." });
+    }
+});
+
+// ==========================================
 // 6. POST: SEND TEMPLATE MESSAGE (With Variables!)
 // ==========================================
 router.post('/send-template', async (req, res) => {

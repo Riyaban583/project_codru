@@ -162,11 +162,12 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-brand-blue w-10 h-10" /></div>;
 
   return (
+    <>
     <div className="space-y-8 animate-in fade-in duration-500 relative">
         
         {/* --- 1. THE SUPPORT CIRCLE (The Sacred 3) --- */}
         {userData?.Role === "Parent" && circle.length > 0 && (
-            <div className="bg-gradient-to-br from-rose-50/50 to-blue-50/30 p-8 rounded-[40px] border border-white shadow-inner">
+            <div className="bg-gradient-to-br from-rose-50/50 to-blue-50/30 p-6 rounded-3xl border border-white shadow-inner">
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
                 <Heart className="text-rose-500 w-5 h-5 fill-rose-500" /> My Support Circle
@@ -178,7 +179,7 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {circle.map((expert) => (
-                <div key={expert._id} className="bg-white rounded-[28px] p-5 shadow-sm border border-slate-50 flex items-center gap-4 group transition-all hover:shadow-md">
+                <div key={expert._id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-50 flex items-center gap-4 group transition-all hover:shadow-md">
                     <div className="relative">
                     <img src={expert.photo || "https://via.placeholder.com/150"} className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm" />
                     <div className="absolute -bottom-1 -right-1 bg-green-500 w-3.5 h-3.5 rounded-full border-2 border-white"></div>
@@ -268,7 +269,7 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {admins.map((admin) => (
-            <div key={admin._id} className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col items-center text-center">
+            <div key={admin._id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col items-center text-center">
               <img src={admin.photo || "https://via.placeholder.com/150"} className="w-24 h-24 rounded-full object-cover shadow-md mb-4 border-4 border-blue-50" />
               <h3 className="text-xl font-bold text-slate-800">{admin.name}</h3>
               <p className="text-xs text-brand-blue font-black uppercase tracking-widest mt-1 bg-blue-50 px-3 py-1 rounded-full">Platform Admin</p>
@@ -286,7 +287,7 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
       {/* The Handshake Modal */}
       {selectedUser && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl relative animate-in zoom-in duration-200">
+          <div className="bg-white rounded-[32px] p-5 max-w-md w-full shadow-2xl relative animate-in zoom-in duration-200">
             <button onClick={() => setSelectedUser(null)} className="absolute top-4 right-4 text-slate-400 hover:bg-slate-100 p-2 rounded-full transition"><X size={20} /></button>
             
             <div className="flex items-center gap-4 mb-6">
@@ -334,7 +335,10 @@ const ExpertConnect = ({ userData }: ExpertConnectProps) => {
       )}
 
       {alertInfo.show && <Muialert message={alertInfo.message} severity={alertInfo.severity} onClose={() => setAlertInfo({ ...alertInfo, show: false })} />}
+      
     </div>
+    <div className="h-4 md:h-6 w-full flex-shrink-0 pointer-events-none"></div>
+    </>
   );
 };
 

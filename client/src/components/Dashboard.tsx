@@ -542,15 +542,16 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           </div>
         </div>
         
-        <div className="relative w-full flex justify-center z-[1000]">
-          <Notification 
-            showNotifications={showNotifications} 
-            setShowNotifications={setShowNotifications}
-            closeNotification={() => setShowNotifications(false)}
-            setUnreadCount={setUnreadCount} 
-            ustomClasses="fixed bottom-[76px] left-1/2 -translate-x-1/2 w-[92vw] max-w-sm rounded-2xl shadow-2xl md:absolute md:bottom-auto md:top-4 md:left-1/2 md:-translate-x-1/2 md:w-96" 
-          
-          />
+        <div className="absolute top-0 left-0 w-full flex justify-center z-[1000] pointer-events-none">
+          <div className="pointer-events-auto">
+            <Notification 
+              showNotifications={showNotifications} 
+              setShowNotifications={setShowNotifications}
+              closeNotification={() => setShowNotifications(false)}
+              setUnreadCount={setUnreadCount} 
+              customClasses="fixed bottom-[76px] left-1/2 -translate-x-1/2 w-[92vw] max-w-sm rounded-2xl shadow-2xl md:absolute md:bottom-auto md:top-20 md:left-1/2 md:-translate-x-1/2 md:w-96" 
+            />
+          </div>
         </div>
         
         {/* MAIN CONTENT AREA */}
@@ -588,9 +589,9 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             rounded-t-[32px] md:rounded-[32px] 
             border-t md:border border-gray-100 border-x-0 md:border-x
             shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] md:shadow-xl
-            ${currentView === "report" ? "p-0 overflow-hidden" : "p-4 md:p-6 overflow-y-auto dashboard-content-scroll"}
+            ${currentView === "report" ? "p-0 overflow-hidden" : "pt-4 px-4 md:pt-6 md:px-6 overflow-y-auto dashboard-content-scroll"}
           `}>
-            <div className={`relative w-full ${currentView === "report" ? "h-full" : "min-h-full"} rounded-[8px]`}>
+            <div className={`relative w-full ${currentView === "report" ? "h-full" : "min-h-full pb-8 md:pb-10"} rounded-[8px]`}>
               
               {/* COMPONENT RENDERING ROUTER */}
               {currentView === "profile" && <Profile />}
@@ -638,6 +639,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
                   </div>
                 )
               )}
+              
 
             </div>
           </div>
@@ -778,7 +780,6 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               {/* Header (Logo + Close Button) */}
               <div className="h-16 flex items-center justify-center border-b border-gray-100 relative shrink-0">
                 <img src="/logo.svg" alt="CuTe Learning" className="w-[5.5rem] drop-shadow-md" draggable="false" />
-                
               </div>
 
               {/* Profile Overview (Mimics Desktop exactly) */}

@@ -153,6 +153,7 @@ const Profile = () => {
   const isTeacher = formData.role?.toLowerCase() === "teacher" || formData.Role?.toLowerCase() === "teacher";
 
   return (
+    <>
     <div className="animate-fade-in-up bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
       
       {/* 🚨 UPDATED: Header with Orange branding and Logo */}
@@ -367,6 +368,8 @@ const Profile = () => {
         </Alert>
       </Snackbar>
     </div>
+    <div className="h-4 md:h-6 w-full flex-shrink-0 pointer-events-none"></div>
+    </>
   );
 };
 
