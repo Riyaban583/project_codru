@@ -461,4 +461,29 @@ router.get('/templates/ready', async (req, res) => {
     }
 });
 
+router.get('/templates', async (req, res) => {
+    try {
+        const templates = await Template.find({ isActive: true }).sort({ createdAt: -1 });
+        res.status(200).json(templates);
+    } catch (error) { res.status(500).json({ error: "Failed to load templates." }); }
+});
+
+router.post('/templates', async (req, res) => {
+    try {
+        const { displayName, metaName, language, headerImageUrl, buttonColor, variableCount } = req.body;
+        const savedTemplate = await Template.findOneAndUpdate(
+            { metaName: metaName },
+            {
+                $set: {
+                    displayName, language, headerImageUrl, buttonColor, variableCount,
+                    isConfigured: true, // 🚨 Marks it as ready for the Chat UI!
+                    isActive: true
+                }
+            },
+            { upsert: true, new: true }
+        );
+        res.status(200).json(savedTemplate);
+    } catch (error) { res.status(500).json({ error: "Failed to save template." }); }
+});
+
 module.exports = router;

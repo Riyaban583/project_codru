@@ -311,7 +311,7 @@ const WhatsAppChat: React.FC = () => {
 
     return (
         <>
-            <div className="flex h-[calc(100%+2rem)] md:h-[calc(100%+2.5rem)] -mb-8 md:-mb-10 w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+            <<div className="flex h-[calc(100%+2rem)] md:h-[calc(100%+2.5rem)] -mb-8 md:-mb-10 w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
                 
                 {/* LEFT SIDEBAR */}
                 <div className={`
@@ -599,7 +599,7 @@ const WhatsAppChat: React.FC = () => {
 
             {/* ADD CONTACT MODAL */}
             {showNewContactModal && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-xl font-bold text-slate-800">Start New Chat</h3>
@@ -647,7 +647,7 @@ const WhatsAppChat: React.FC = () => {
 
             {/* TEMPLATE MANAGER MODAL */}
             {showTemplateManager && (
-                <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-10">
+                <div className="absolute inset-0 z-[3000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-10">
                     <div className="bg-white rounded-[32px] w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in duration-200">
                         
                         {/* Header */}
