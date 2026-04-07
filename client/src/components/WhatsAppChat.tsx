@@ -18,6 +18,37 @@ export interface WhatsAppMessage {
     mediaUrl?: string;
 }
 
+// Super basic NLP date parser
+const extractDateFromText = (text: string): Date | null => {
+    const lowerText = text.toLowerCase();
+    const now = new Date();
+    let targetDate = new Date();
+
+    if (lowerText.includes('tomorrow')) {
+        targetDate.setDate(now.getDate() + 1);
+    } else if (lowerText.includes('next week')) {
+        targetDate.setDate(now.getDate() + 7);
+    } else {
+        return null; 
+    }
+
+    const timeMatch = lowerText.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+    if (timeMatch) {
+        let hours = parseInt(timeMatch[1]);
+        const mins = parseInt(timeMatch[2]) || 0;
+        const modifier = timeMatch[3];
+
+        if (modifier === 'pm' && hours < 12) hours += 12;
+        if (modifier === 'am' && hours === 12) hours = 0;
+
+        targetDate.setHours(hours, mins, 0, 0);
+    } else {
+        targetDate.setHours(10, 0, 0, 0); // default to 10am
+    }
+
+    return targetDate;
+};
+
 const cleanNum = (num: any) => String(num || "").replace(/\D/g, "");
 const API_BASE = (import.meta.env.VITE_API || "http://localhost:8080").replace(/\/$/, "");
 
@@ -51,6 +82,60 @@ const WhatsAppChat: React.FC = () => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Lead Management States
+    const [activeLead, setActiveLead] = useState<any>(null);
+    const [isUpdatingLead, setIsUpdatingLead] = useState(false);
+
+    // Task & Calendar States
+    const [showTaskModal, setShowTaskModal] = useState(false);
+    const [isCreatingTask, setIsCreatingTask] = useState(false);
+    const [taskData, setTaskData] = useState({
+        title: "",
+        description: "",
+        dueDate: "",
+        addToCalendar: true,
+        assignedStaff: [] as string[],
+        attendees: [] as string[],
+    });
+
+    const handleOpenTaskModal = (messageText: string) => {
+        const extractedDate = extractDateFromText(messageText);
+        const dateString = extractedDate 
+            ? new Date(extractedDate.getTime() - (extractedDate.getTimezoneOffset() * 60000)).toISOString().slice(0, 16)
+            : "";
+
+        setTaskData({
+            title: `Follow up: ${activeContact?.name || 'Student'}`,
+            description: messageText,
+            dueDate: dateString,
+            addToCalendar: true,
+            assignedStaff: ["Me"], 
+            attendees: [activeContact?.name || "Student"],
+        });
+        setShowTaskModal(true);
+    };
+
+    const handleCreateTask = async () => {
+        if (!activeLead) {
+            alert("Please ensure this contact has a Lead profile first.");
+            return;
+        }
+        setIsCreatingTask(true);
+        try {
+            await axios.post(`${API_BASE}/tasks`, {
+                ...taskData,
+                leadId: activeLead._id,
+            });
+            setShowTaskModal(false);
+            alert("Task & Calendar Event Created successfully!");
+        } catch (error) {
+            console.error("Failed to create task:", error);
+            alert("Failed to create task.");
+        } finally {
+            setIsCreatingTask(false);
+        }
+    };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -115,6 +200,15 @@ const WhatsAppChat: React.FC = () => {
             try {
                 const response = await axios.get<WhatsAppMessage[]>(`${API_BASE}/chats/${activeUserNumber}`);
                 setMessages(response.data);
+
+                try {
+                    const cleanNum = String(activeUserNumber).replace(/\D/g, "");
+                    const leadRes = await axios.get(`${API_BASE}/leads/${cleanNum}`);
+                    setActiveLead(leadRes.data);
+                } catch (leadErr) {
+                    setActiveLead(null); // No lead profile found yet
+                }
+
             } catch (error) {
                 console.error("Failed to fetch chat history:", error);
                 setMessages([]);
@@ -284,6 +378,22 @@ const WhatsAppChat: React.FC = () => {
         }
     };
 
+    const handleUpdateLeadStatus = async (newStatus: string) => {
+        if (!activeLead || !activeContact) return;
+        setIsUpdatingLead(true);
+        try {
+            const res = await axios.put(`${API_BASE}/leads/${activeLead._id}/status`, {
+                status: newStatus
+            });
+            setActiveLead(res.data);
+        } catch (error) {
+            console.error("Failed to update lead status:", error);
+            alert("Failed to update lead status.");
+        } finally {
+            setIsUpdatingLead(false);
+        }
+    };
+
     // 🚨 NEW: The Pre-Flight Interceptor
     const initiateTemplateSend = (template: any) => {
         if (!activeContact) return;
@@ -341,7 +451,9 @@ const WhatsAppChat: React.FC = () => {
                 language: template.language,
                 headerImageUrl: template.headerImageUrl,
                 buttonColor: template.buttonColor,
-                variableCount: Number(template.variableCount) || 0 // 🚨 Save variable count
+                variableCount: Number(template.variableCount) || 0,
+                isVisible: template.isVisible !== false, 
+                sortOrder: Number(template.sortOrder) || 0
             });
             await fetchAllTemplates();
             await fetchReadyTemplates(); 
@@ -478,23 +590,63 @@ const WhatsAppChat: React.FC = () => {
                     ${!selectedContactId ? 'hidden' : 'flex'} 
                     flex-1 flex-col bg-white relative w-full md:flex
                 `}>
-                    <div className="h-16 px-6 border-b border-gray-100 flex items-center justify-between bg-white z-10 shrink-0">
-                        <div className="flex items-center gap-3">
-                            <button 
-                                onClick={() => setSelectedContactId("")}
-                                className="md:hidden p-2 -ml-2 text-slate-400 hover:bg-slate-100 rounded-full"
-                            >
-                                <ArrowLeft size={20} />
-                            </button>
-                            <div className="w-10 h-10 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-md font-bold">
-                                {activeContact?.name?.charAt(0) || "?"}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-slate-800 leading-tight">{activeContact?.name || "Select a Chat"}</h3>
-                                <div className="flex items-center gap-1 text-xs text-brand-orange font-medium">
+                    <div className="h-16 px-4 md:px-6 border-b border-gray-100 flex items-center bg-white z-10 shrink-0 gap-3">
+                        {/* Back Button (Mobile) */}
+                        <button 
+                            onClick={() => setSelectedContactId("")}
+                            className="md:hidden p-2 -ml-2 text-slate-400 hover:bg-slate-100 rounded-full shrink-0"
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
+                        
+                        {/* 🚨 ADDED shrink-0 HERE */}
+                        <div className="w-10 h-10 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-md font-bold shrink-0">
+                            {activeContact?.name?.charAt(0) || "?"}
+                        </div>
+                        
+                        {/* 🚨 CHANGED TO flex-1 min-w-0 */}
+                        <div className="flex items-center justify-between flex-1 min-w-0">
+                            <div className="min-w-0 truncate">
+                                <h3 className="font-bold text-slate-800 leading-tight truncate">
+                                    {activeContact?.name || "Select a Chat"}
+                                </h3>
+                                <div className="flex items-center gap-1 text-xs text-brand-orange font-medium mt-0.5">
                                     <Phone size={10} /> {activeUserNumber ? `+${activeUserNumber}` : "Invalid Contact Info"}
                                 </div>
                             </div>
+                            
+                            {/* LEAD STATUS DROPDOWN */}
+                            {activeLead && (
+                                <div className="ml-2 md:ml-8 relative shrink-0">
+                                    {isUpdatingLead ? (
+                                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 bg-slate-100 rounded-lg flex items-center gap-1">
+                                            <Loader2 size={12} className="animate-spin" /> SAVING...
+                                        </div>
+                                    ) : (
+                                        <select 
+                                            value={activeLead.status || "New"}
+                                            onChange={(e) => handleUpdateLeadStatus(e.target.value)}
+                                            className={`appearance-none cursor-pointer pl-3 pr-8 py-1.5 text-[10px] md:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none shadow-sm transition-all ${
+                                                activeLead.status === 'Converted' ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' :
+                                                activeLead.status === 'Lost' ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' :
+                                                activeLead.status === 'Trial Scheduled' ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20 hover:bg-brand-blue/20' :
+                                                'bg-orange-50 text-brand-orange border-orange-200 hover:bg-orange-100'
+                                            }`}
+                                        >
+                                            <option value="New">New Lead</option>
+                                            <option value="Contacted">Contacted</option>
+                                            <option value="Trial Scheduled">Trial Scheduled</option>
+                                            <option value="Converted">Converted 🎉</option>
+                                            <option value="Lost">Lost</option>
+                                        </select>
+                                    )}
+                                    {!isUpdatingLead && (
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-current opacity-50">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -540,72 +692,100 @@ const WhatsAppChat: React.FC = () => {
                                                 <div className={`flex w-full ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                                                     
                                                     {!isOutgoing && (
-                                                        <div className="max-w-[85%] md:max-w-[70%] p-3.5 shadow-sm text-sm rounded-2xl bg-white text-slate-800 border border-gray-100 rounded-tl-sm overflow-hidden">
-                                                            
-                                                            {/* 🚨 MEDIA RENDERER */}
-                                                            {msg.messageType === 'image' && msg.mediaUrl && (
-                                                                <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-slate-100">
-                                                                    <img src={msg.mediaUrl} alt="Received Media" className="w-full h-auto object-cover max-h-64" />
-                                                                </div>
-                                                            )}
-                                                            
-                                                            {msg.messageType === 'document' && msg.mediaUrl && (
-                                                                <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-blue-50 text-brand-blue rounded-xl font-bold hover:bg-blue-100 transition">
-                                                                    📄 View Document
-                                                                </a>
-                                                            )}
-
-                                                            <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
-                                                            <p className="text-[10px] mt-1 text-slate-400 text-left">{msgTime}</p>
-                                                        </div>
-                                                    )}
-
-                                                    {isOutgoing && (
-                                                        <div className="flex flex-col items-end max-w-[85%] md:max-w-[75%]">
-                                                            <div className="p-3.5 shadow-sm text-sm rounded-2xl bg-brand-blue text-white rounded-tr-sm w-full overflow-hidden">
+                                                        <div className="flex items-center gap-2 group max-w-[85%] md:max-w-[70%]">
+                                                            <div className="p-3.5 shadow-sm text-sm rounded-2xl bg-white text-slate-800 border border-gray-100 rounded-tl-sm overflow-hidden w-full">
                                                                 
-                                                                {/* 🚨 OUTGOING MEDIA RENDERER */}
+                                                                {/* 🚨 MEDIA RENDERER */}
                                                                 {msg.messageType === 'image' && msg.mediaUrl && (
-                                                                    <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-blue-900/30">
-                                                                        <img src={msg.mediaUrl} alt="Sent Media" className="w-full h-auto object-cover max-h-64" />
+                                                                    <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-slate-100">
+                                                                        <img src={msg.mediaUrl} alt="Received Media" className="w-full h-auto object-cover max-h-64" />
                                                                     </div>
                                                                 )}
                                                                 
                                                                 {msg.messageType === 'document' && msg.mediaUrl && (
-                                                                    <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition">
+                                                                    <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-blue-50 text-brand-blue rounded-xl font-bold hover:bg-blue-100 transition">
                                                                         📄 View Document
                                                                     </a>
                                                                 )}
 
-                                                                {/* Only show the paragraph tag if there's actually a text caption */}
-                                                                {msg.messageBody && msg.messageBody.trim() !== "" && msg.messageBody !== "[Sent image]" && (
-                                                                    <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
-                                                                )}
+                                                                <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
+                                                                <p className="text-[10px] mt-1 text-slate-400 text-left">{msgTime}</p>
                                                             </div>
-                                                            
-                                                            <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-medium tracking-wide">
-                                                                <span className="text-slate-400">Sent {msgTime}</span>
-                                                                
-                                                                {dlvTime && (
-                                                                    <>
-                                                                        <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                                                        <span className="text-slate-500">Dlv {dlvTime}</span>
-                                                                    </>
-                                                                )}
-                                                                
-                                                                {readTime && (
-                                                                    <>
-                                                                        <span className="w-1 h-1 bg-brand-orange rounded-full"></span>
-                                                                        <span className="text-brand-orange">Read {readTime}</span>
-                                                                    </>
-                                                                )}
 
-                                                                {msg.status === 'failed' && (
-                                                                    <>
-                                                                        <span className="w-1 h-1 bg-rose-500 rounded-full"></span>
-                                                                        <span className="text-rose-500">Failed</span>
-                                                                    </>
-                                                                )}
+                                                            {/* 🚨 THE TASK TRIGGER BUTTON */}
+                                                            {msg.messageBody && msg.messageBody.trim() !== "" && (
+                                                                <button 
+                                                                    onClick={() => handleOpenTaskModal(msg.messageBody)}
+                                                                    className="opacity-0 group-hover:opacity-100 bg-white border border-slate-200 shadow-sm p-2 rounded-full text-brand-blue hover:bg-brand-blue hover:text-white transition-all shrink-0"
+                                                                    title="Convert to Task"
+                                                                >
+                                                                    <Clock size={16} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {isOutgoing && (
+                                                        <div className="flex items-center gap-2 group max-w-[85%] md:max-w-[75%] justify-end">
+                                                            
+                                                            {/* 🚨 THE TASK TRIGGER BUTTON (Left side for outgoing messages) */}
+                                                            {msg.messageBody && msg.messageBody.trim() !== "" && msg.messageBody !== "[Sent image]" && (
+                                                                <button 
+                                                                    onClick={() => handleOpenTaskModal(msg.messageBody)}
+                                                                    className="opacity-0 group-hover:opacity-100 bg-white border border-slate-200 shadow-sm p-2 rounded-full text-brand-blue hover:bg-brand-blue hover:text-white transition-all shrink-0"
+                                                                    title="Convert to Task"
+                                                                >
+                                                                    <Clock size={16} />
+                                                                </button>
+                                                            )}
+
+                                                            {/* The Blue Message Bubble */}
+                                                            <div className="flex flex-col items-end w-full">
+                                                                <div className="p-3.5 shadow-sm text-sm rounded-2xl bg-brand-blue text-white rounded-tr-sm w-full overflow-hidden">
+                                                                    
+                                                                    {/* 🚨 OUTGOING MEDIA RENDERER */}
+                                                                    {msg.messageType === 'image' && msg.mediaUrl && (
+                                                                        <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-blue-900/30">
+                                                                            <img src={msg.mediaUrl} alt="Sent Media" className="w-full h-auto object-cover max-h-64" />
+                                                                        </div>
+                                                                    )}
+                                                                    
+                                                                    {msg.messageType === 'document' && msg.mediaUrl && (
+                                                                        <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition">
+                                                                            📄 View Document
+                                                                        </a>
+                                                                    )}
+
+                                                                    {/* Only show the paragraph tag if there's actually a text caption */}
+                                                                    {msg.messageBody && msg.messageBody.trim() !== "" && msg.messageBody !== "[Sent image]" && (
+                                                                        <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
+                                                                    )}
+                                                                </div>
+                                                                
+                                                                <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-medium tracking-wide">
+                                                                    <span className="text-slate-400">Sent {msgTime}</span>
+                                                                    
+                                                                    {dlvTime && (
+                                                                        <>
+                                                                            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                                                            <span className="text-slate-500">Dlv {dlvTime}</span>
+                                                                        </>
+                                                                    )}
+                                                                    
+                                                                    {readTime && (
+                                                                        <>
+                                                                            <span className="w-1 h-1 bg-brand-orange rounded-full"></span>
+                                                                            <span className="text-brand-orange">Read {readTime}</span>
+                                                                        </>
+                                                                    )}
+
+                                                                    {msg.status === 'failed' && (
+                                                                        <>
+                                                                            <span className="w-1 h-1 bg-rose-500 rounded-full"></span>
+                                                                            <span className="text-rose-500">Failed</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     )}
@@ -990,6 +1170,105 @@ const WhatsAppChat: React.FC = () => {
                                     </div>
                                 ))
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* 🗓️ ADVANCED TASK & CALENDAR MODAL */}
+            {showTaskModal && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
+                            <div className="flex items-center gap-2">
+                                <Clock size={20} />
+                                <h3 className="text-lg font-bold">Schedule Task</h3>
+                            </div>
+                            <button onClick={() => setShowTaskModal(false)} className="hover:bg-white/20 p-1.5 rounded-full transition">
+                                <X size={20}/>
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {/* Title */}
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Title</label>
+                                <input 
+                                    type="text" 
+                                    value={taskData.title}
+                                    onChange={(e) => setTaskData({...taskData, title: e.target.value})}
+                                    className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" 
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Details</label>
+                                <textarea 
+                                    value={taskData.description}
+                                    onChange={(e) => setTaskData({...taskData, description: e.target.value})}
+                                    rows={3}
+                                    className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue resize-none text-sm text-slate-700" 
+                                />
+                            </div>
+
+                            {/* Date & Time (Parsed from message) */}
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Due Date & Time</label>
+                                <input 
+                                    type="datetime-local" 
+                                    value={taskData.dueDate}
+                                    onChange={(e) => setTaskData({...taskData, dueDate: e.target.value})}
+                                    className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue font-bold text-brand-blue" 
+                                />
+                            </div>
+
+                            {/* Assign Team Member */}
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign Team Members</label>
+                                <div className="flex gap-2 mt-1">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Type name & press Enter..."
+                                        onKeyDown={(e) => {
+                                            if(e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const val = e.currentTarget.value;
+                                                if(val) setTaskData({...taskData, assignedStaff: [...taskData.assignedStaff, val]});
+                                                e.currentTarget.value = "";
+                                            }
+                                        }}
+                                        className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" 
+                                    />
+                                </div>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {taskData.assignedStaff.map(s => (
+                                        <span key={s} className="bg-blue-50 text-brand-blue px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border border-blue-100">
+                                            {s} <X size={10} className="cursor-pointer" onClick={() => setTaskData({...taskData, assignedStaff: taskData.assignedStaff.filter(x => x !== s)})} />
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Guests Toggle */}
+                            <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition border border-slate-200">
+                                <input 
+                                    type="checkbox" 
+                                    checked={taskData.addToCalendar}
+                                    onChange={(e) => setTaskData({...taskData, addToCalendar: e.target.checked})}
+                                    className="w-5 h-5 text-brand-blue rounded-lg"
+                                />
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800">Sync to Calendar</p>
+                                    <p className="text-[10px] text-slate-500">Adds {activeContact?.name} and assigned staff as guests.</p>
+                                </div>
+                            </label>
+
+                            <button 
+                                onClick={handleCreateTask}
+                                disabled={isCreatingTask}
+                                className="w-full py-4 bg-brand-blue text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                            >
+                                {isCreatingTask ? <Loader2 size={18} className="animate-spin" /> : "CREATE & SYNC TASK"}
+                            </button>
                         </div>
                     </div>
                 </div>

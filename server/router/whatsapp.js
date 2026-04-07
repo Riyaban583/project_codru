@@ -7,7 +7,9 @@ const User = require("../models/userSchema");
 const sendAutoNotification = require("../utils/notify");
 const multer = require('multer');
 const FormData = require('form-data');
-// Store files in memory temporarily while we shoot them to Meta
+const Lead = require('../models/lead');
+const Task = require('../models/Task');
+
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
@@ -188,6 +190,18 @@ router.post('/webhook', async (req, res) => {
                     { upsert: true, new: true, setDefaultsOnInsert: true, strict: false }
                 );
 
+                await Lead.findOneAndUpdate(
+                    { phoneNumber: incomingNumber },
+                    {
+                        $setOnInsert: {
+                            contactId: savedContact._id,
+                            name: savedContact.name || incomingNumber,
+                            status: 'New' // Instantly marks them as a New Lead!
+                        }
+                    },
+                    { upsert: true, setDefaultsOnInsert: true }
+                );
+
                 // 📣 BROADCAST TO UI
                 if (req.app.get("io")) {
                     console.log(`[Socket] Broadcasting message from ${fromNumber}`);
@@ -316,6 +330,18 @@ router.post('/contacts', async (req, res) => {
                 }
             },
             { upsert: true, new: true, setDefaultsOnInsert: true, strict: false }
+        );
+
+        await Lead.findOneAndUpdate(
+            { phoneNumber: cleanNum },
+            {
+                $setOnInsert: {
+                    contactId: savedContact._id,
+                    name: savedContact.name,
+                    status: 'New'
+                }
+            },
+            { upsert: true, setDefaultsOnInsert: true }
         );
 
         res.status(200).json(savedContact);
@@ -624,6 +650,74 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error("Error sending media:", error.response?.data || error.message);
         res.status(500).json({ error: "Failed to send media." });
+    }
+});
+
+// ==========================================
+// FETCH LEAD BY PHONE NUMBER (For the Chat Header)
+// ==========================================
+router.get('/leads/:phoneNumber', async (req, res) => {
+    try {
+        const cleanNum = String(req.params.phoneNumber).replace(/\D/g, "");
+        const lead = await Lead.findOne({ phoneNumber: cleanNum });
+        
+        if (!lead) return res.status(404).json({ error: "No lead profile found." });
+        
+        res.status(200).json(lead);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch lead." });
+    }
+});
+
+// ==========================================
+// UPDATE LEAD STATUS (When you change the Dropdown)
+// ==========================================
+router.put('/leads/:id/status', async (req, res) => {
+    try {
+        const { status } = req.body;
+        
+        const updatedLead = await Lead.findByIdAndUpdate(
+            req.params.id,
+            { $set: { status: status } },
+            { new: true }
+        );
+
+        res.status(200).json(updatedLead);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to update lead status." });
+    }
+});
+
+// ==========================================
+// FETCH LEAD BY PHONE NUMBER (With Auto-Heal for old contacts)
+// ==========================================
+router.get('/leads/:phoneNumber', async (req, res) => {
+    try {
+        const cleanNum = String(req.params.phoneNumber).replace(/\D/g, "");
+        
+        let lead = await Lead.findOne({ phoneNumber: cleanNum });
+        
+        // 🚨 AUTO-HEAL: If no lead exists, let's create one using their existing Contact info!
+        if (!lead) {
+            const Contact = require('../models/Contact'); // Import Contact model locally
+            const existingContact = await Contact.findOne({ phoneNumber: cleanNum });
+            
+            if (existingContact) {
+                lead = await Lead.create({
+                    contactId: existingContact._id,
+                    phoneNumber: cleanNum,
+                    name: existingContact.name || cleanNum,
+                    status: 'New' // Drop all old contacts into the 'New' stage
+                });
+            } else {
+                return res.status(404).json({ error: "No contact found to create a lead from." });
+            }
+        }
+        
+        res.status(200).json(lead);
+    } catch (error) {
+        console.error("Lead Fetch Error:", error);
+        res.status(500).json({ error: "Failed to fetch lead." });
     }
 });
 
