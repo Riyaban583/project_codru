@@ -584,6 +584,8 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
         );
 
         // 3. Save to CRM Database
+        const BASE_URL = process.env.VITE_API || "https://api.curiousteamlearning.com";
+        
         const savedMessage = await Message.create({
             wa_id: response.data.messages[0].id,
             senderName: "Admin (CuTe)",
