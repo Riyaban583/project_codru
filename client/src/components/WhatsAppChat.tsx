@@ -19,31 +19,73 @@ export interface WhatsAppMessage {
 }
 
 // Super basic NLP date parser
+// Smarter NLP date & time parser
 const extractDateFromText = (text: string): Date | null => {
     const lowerText = text.toLowerCase();
     const now = new Date();
-    let targetDate = new Date();
+    let targetDate = new Date(now);
+    let dateFound = false;
 
+    // 1. Check for relative days
     if (lowerText.includes('tomorrow')) {
         targetDate.setDate(now.getDate() + 1);
+        dateFound = true;
+    } else if (lowerText.includes('today')) {
+        dateFound = true; // keep it as today
     } else if (lowerText.includes('next week')) {
         targetDate.setDate(now.getDate() + 7);
-    } else {
-        return null; 
+        dateFound = true;
     }
 
-    const timeMatch = lowerText.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+    // 2. Check for days of the week
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    for (let i = 0; i < days.length; i++) {
+        if (lowerText.includes(days[i])) {
+            const todayDay = now.getDay();
+            let daysAhead = i - todayDay;
+            if (daysAhead <= 0) daysAhead += 7; // Jump to the *next* occurrence of this day
+            targetDate.setDate(now.getDate() + daysAhead);
+            dateFound = true;
+            break;
+        }
+    }
+
+    // 3. Check for Time (e.g., 5pm, 5:30 pm, 14:00)
+    // This regex looks for 1-2 digits, an optional colon with 2 minutes, and an optional am/pm
+    const timeMatch = lowerText.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+    let timeFound = false;
+
     if (timeMatch) {
         let hours = parseInt(timeMatch[1]);
         const mins = parseInt(timeMatch[2]) || 0;
-        const modifier = timeMatch[3];
+        const modifier = timeMatch[3]; // 'am' or 'pm'
 
-        if (modifier === 'pm' && hours < 12) hours += 12;
-        if (modifier === 'am' && hours === 12) hours = 0;
+        // Basic sanity check to ensure it's actually a time (ignores random numbers like "let's do 50 pushups")
+        if (hours <= 24) {
+            if (modifier === 'pm' && hours < 12) hours += 12;
+            if (modifier === 'am' && hours === 12) hours = 0;
+            
+            targetDate.setHours(hours, mins, 0, 0);
+            timeFound = true;
+        }
+    }
 
-        targetDate.setHours(hours, mins, 0, 0);
-    } else {
-        targetDate.setHours(10, 0, 0, 0); // default to 10am
+    // If no date AND no time was found, return null (so the user has to pick manually)
+    if (!dateFound && !timeFound) {
+        return null;
+    }
+
+    // If they ONLY gave a time, default to Today. 
+    // But if that time has already passed today, assume they meant Tomorrow!
+    if (timeFound && !dateFound) {
+        if (targetDate.getTime() < now.getTime()) {
+            targetDate.setDate(now.getDate() + 1);
+        }
+    }
+
+    // If they gave a date but NO time, default to 10:00 AM
+    if (dateFound && !timeFound) {
+        targetDate.setHours(10, 0, 0, 0);
     }
 
     return targetDate;
@@ -86,6 +128,11 @@ const WhatsAppChat: React.FC = () => {
     // Lead Management States
     const [activeLead, setActiveLead] = useState<any>(null);
     const [isUpdatingLead, setIsUpdatingLead] = useState(false);
+
+    // 🚨 Updated to include username and photo
+    const [teamMembers, setTeamMembers] = useState<{_id: string, name: string, username: string, photo?: string}[]>([]);
+    const [teamSearch, setTeamSearch] = useState("");
+    const [showTeamDropdown, setShowTeamDropdown] = useState(false);
 
     // Task & Calendar States
     const [showTaskModal, setShowTaskModal] = useState(false);
@@ -180,6 +227,19 @@ const WhatsAppChat: React.FC = () => {
         } catch (err) {
             console.error("Error loading all templates:", err);
         }
+    }, []);
+
+    useEffect(() => {
+        // ... existing fetchContacts() etc ...
+        const fetchTeam = async () => {
+            try {
+                const res = await axios.get(`${API_BASE}/team`);
+                setTeamMembers(res.data);
+            } catch (err) {
+                console.error("Failed to load team members", err);
+            }
+        };
+        fetchTeam();
     }, []);
 
     useEffect(() => {
@@ -1177,8 +1237,12 @@ const WhatsAppChat: React.FC = () => {
             {/* 🗓️ ADVANCED TASK & CALENDAR MODAL */}
             {showTaskModal && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
+                    
+                    {/* 🚨 CHANGED: max-w-md becomes md:max-w-3xl for landscape desktop view */}
+                    <div className="bg-white rounded-2xl md:rounded-[32px] w-full max-w-md md:max-w-3xl overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+                        
+                        {/* Header */}
+                        <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
                             <div className="flex items-center gap-2">
                                 <Clock size={20} />
                                 <h3 className="text-lg font-bold">Schedule Task</h3>
@@ -1188,80 +1252,180 @@ const WhatsAppChat: React.FC = () => {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-4">
-                            {/* Title */}
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Title</label>
-                                <input 
-                                    type="text" 
-                                    value={taskData.title}
-                                    onChange={(e) => setTaskData({...taskData, title: e.target.value})}
-                                    className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" 
-                                />
-                            </div>
+                        <div className="p-4 md:p-6">
+                            
+                            {/* 🚨 NEW: 2-Column Grid on Desktop, 1-Column on Mobile */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
+                                
+                                {/* LEFT COLUMN */}
+                                <div className="space-y-4 flex flex-col">
+                                    {/* Title */}
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Title</label>
+                                        <input 
+                                            type="text" 
+                                            value={taskData.title}
+                                            onChange={(e) => setTaskData({...taskData, title: e.target.value})}
+                                            className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" 
+                                        />
+                                    </div>
 
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Details</label>
-                                <textarea 
-                                    value={taskData.description}
-                                    onChange={(e) => setTaskData({...taskData, description: e.target.value})}
-                                    rows={3}
-                                    className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue resize-none text-sm text-slate-700" 
-                                />
-                            </div>
-
-                            {/* Date & Time (Parsed from message) */}
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Due Date & Time</label>
-                                <input 
-                                    type="datetime-local" 
-                                    value={taskData.dueDate}
-                                    onChange={(e) => setTaskData({...taskData, dueDate: e.target.value})}
-                                    className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue font-bold text-brand-blue" 
-                                />
-                            </div>
-
-                            {/* Assign Team Member */}
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign Team Members</label>
-                                <div className="flex gap-2 mt-1">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Type name & press Enter..."
-                                        onKeyDown={(e) => {
-                                            if(e.key === 'Enter') {
-                                                e.preventDefault();
-                                                const val = e.currentTarget.value;
-                                                if(val) setTaskData({...taskData, assignedStaff: [...taskData.assignedStaff, val]});
-                                                e.currentTarget.value = "";
-                                            }
-                                        }}
-                                        className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" 
-                                    />
+                                    {/* Task Details (The Message) */}
+                                    <div className="flex-1 flex flex-col">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Details</label>
+                                        <textarea 
+                                            value={taskData.description}
+                                            onChange={(e) => setTaskData({...taskData, description: e.target.value})}
+                                            className="w-full mt-1 flex-1 min-h-[120px] md:min-h-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue resize-none text-sm text-slate-700" 
+                                        />
+                                    </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {taskData.assignedStaff.map(s => (
-                                        <span key={s} className="bg-blue-50 text-brand-blue px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border border-blue-100">
-                                            {s} <X size={10} className="cursor-pointer" onClick={() => setTaskData({...taskData, assignedStaff: taskData.assignedStaff.filter(x => x !== s)})} />
-                                        </span>
-                                    ))}
+
+                                {/* RIGHT COLUMN */}
+                                <div className="space-y-4">
+                                    {/* Date & Time (Parsed from message) */}
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Due Date & Time</label>
+                                        <input 
+                                            type="datetime-local" 
+                                            value={taskData.dueDate}
+                                            onChange={(e) => setTaskData({...taskData, dueDate: e.target.value})}
+                                            className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue font-bold text-brand-blue" 
+                                        />
+                                    </div>
+
+                                    {/* Assign Team Member */}
+                                    {/* 🚨 UPGRADED: Instagram-Style Team Assignment Search */}
+                                    <div className="relative">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign Team Members</label>
+                                        
+                                        <div className="relative mt-1">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input 
+                                                type="text" 
+                                                value={teamSearch}
+                                                onChange={(e) => {
+                                                    setTeamSearch(e.target.value);
+                                                    setShowTeamDropdown(true);
+                                                }}
+                                                onFocus={() => setShowTeamDropdown(true)}
+                                                onBlur={() => setTimeout(() => setShowTeamDropdown(false), 200)}
+                                                placeholder="Search name or @username..."
+                                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue transition-all" 
+                                            />
+                                        </div>
+
+                                        {/* Floating Instagram-Style Dropdown */}
+                                        {showTeamDropdown && teamSearch.trim() !== "" && (
+                                            <div className="absolute z-[100] w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1 animate-in fade-in slide-in-from-top-2">
+                                                {teamMembers.filter(m => 
+                                                    !taskData.assignedStaff.includes(m.username) && 
+                                                    (m.name.toLowerCase().includes(teamSearch.toLowerCase()) || 
+                                                     m.username.toLowerCase().includes(teamSearch.toLowerCase()))
+                                                ).length === 0 ? (
+                                                    <div className="p-4 text-center text-xs text-gray-400 font-medium">No team members found.</div>
+                                                ) : (
+                                                    teamMembers.filter(m => 
+                                                        !taskData.assignedStaff.includes(m.username) && 
+                                                        (m.name.toLowerCase().includes(teamSearch.toLowerCase()) || 
+                                                         m.username.toLowerCase().includes(teamSearch.toLowerCase()))
+                                                    ).map(staff => (
+                                                        <div 
+                                                            key={staff._id}
+                                                            // 🚨 CRITICAL FIX: onMouseDown stops the input's onBlur from killing the click!
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault(); 
+                                                                // We save their unique USERNAME, not their display name
+                                                                setTaskData(prev => ({...prev, assignedStaff: [...prev.assignedStaff, staff.username]}));
+                                                                setTeamSearch("");
+                                                                setShowTeamDropdown(false);
+                                                            }}
+                                                            className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                {/* 🚨 Profile Picture or Fallback Initial */}
+                                                                {staff.photo ? (
+                                                                    <img src={staff.photo} alt={staff.name} className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-200 shrink-0" />
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-bold text-xs shrink-0 shadow-inner">
+                                                                        {staff.name.charAt(0).toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-sm font-bold text-gray-800 leading-tight">{staff.name}</span>
+                                                                    <span className="text-[10px] font-medium text-gray-400">@{staff.username}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-brand-blue group-hover:text-white transition-all shrink-0">
+                                                                <Plus size={12} strokeWidth={3} />
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Selected Staff Tags (Premium Pill Design with Avatars) */}
+                                        <div className="flex flex-wrap gap-2 mt-3 min-h-[28px]">
+                                            {taskData.assignedStaff.length === 0 && (
+                                                <span className="text-xs text-slate-400 italic mt-1 ml-1">No one assigned yet</span>
+                                            )}
+                                            {taskData.assignedStaff.map(username => {
+                                                // If it's the default "Me" string
+                                                if (username === "Me") {
+                                                    return (
+                                                        <span key={username} className="bg-brand-blue/10 text-brand-blue pl-3 pr-1.5 py-1 rounded-full text-xs font-bold flex items-center gap-2 border border-brand-blue/20 shadow-sm animate-in zoom-in duration-200">
+                                                            Me (Current User)
+                                                            <button onClick={() => setTaskData({...taskData, assignedStaff: taskData.assignedStaff.filter(x => x !== username)})} className="w-4 h-4 flex items-center justify-center bg-white rounded-full hover:bg-rose-500 hover:text-white text-brand-blue transition-colors shadow-sm"><X size={10} strokeWidth={3} /></button>
+                                                        </span>
+                                                    )
+                                                }
+
+                                                // Find the actual user object to get their name and photo for the pill
+                                                const staff = teamMembers.find(m => m.username === username);
+                                                const displayName = staff ? staff.name : username;
+                                                const photo = staff?.photo;
+
+                                                return (
+                                                    <span key={username} className="bg-white text-slate-700 pl-1 pr-1.5 py-1 rounded-full text-xs font-bold flex items-center gap-2 border border-slate-200 shadow-sm animate-in zoom-in duration-200">
+                                                        {photo ? (
+                                                            <img src={photo} alt={displayName} className="w-5 h-5 rounded-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center text-[8px] shrink-0">
+                                                                {displayName.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        {displayName}
+                                                        <button 
+                                                            onClick={() => setTaskData({...taskData, assignedStaff: taskData.assignedStaff.filter(x => x !== username)})}
+                                                            className="w-4 h-4 flex items-center justify-center bg-slate-100 rounded-full hover:bg-rose-500 hover:text-white text-slate-400 transition-colors"
+                                                        >
+                                                            <X size={10} strokeWidth={3} />
+                                                        </button>
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Guests Toggle */}
+                                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition border border-slate-200 mt-2 h-[72px]">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={taskData.addToCalendar}
+                                            onChange={(e) => setTaskData({...taskData, addToCalendar: e.target.checked})}
+                                            className="w-5 h-5 text-brand-blue rounded-lg"
+                                        />
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800">Sync to Calendar</p>
+                                            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">Adds {activeContact?.name} and assigned staff as guests.</p>
+                                        </div>
+                                    </label>
                                 </div>
+
                             </div>
 
-                            {/* Guests Toggle */}
-                            <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition border border-slate-200">
-                                <input 
-                                    type="checkbox" 
-                                    checked={taskData.addToCalendar}
-                                    onChange={(e) => setTaskData({...taskData, addToCalendar: e.target.checked})}
-                                    className="w-5 h-5 text-brand-blue rounded-lg"
-                                />
-                                <div>
-                                    <p className="text-sm font-bold text-slate-800">Sync to Calendar</p>
-                                    <p className="text-[10px] text-slate-500">Adds {activeContact?.name} and assigned staff as guests.</p>
-                                </div>
-                            </label>
-
+                            {/* Full Width Submit Button */}
                             <button 
                                 onClick={handleCreateTask}
                                 disabled={isCreatingTask}

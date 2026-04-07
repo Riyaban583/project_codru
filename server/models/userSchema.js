@@ -102,7 +102,12 @@ const userSchema = new mongoose.Schema({
   parentVerificationRequested: { 
     type: Boolean, 
     default: false 
-  }
+  }, 
+
+  isCuTeTeam: { 
+    type: Boolean, 
+    default: false 
+  },
 
 }, { timestamps: true });
 

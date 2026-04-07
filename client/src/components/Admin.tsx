@@ -4,6 +4,7 @@ import {
   GridToolbarContainer,
   GridToolbarQuickFilter,
   GridColDef,
+  
 } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,7 +15,8 @@ import {
   Shield as ShieldIcon,
   Block as BlockIcon,
   CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  WorkspacePremium as WorkspacePremiumIcon
 } from "@mui/icons-material";
 import { Dialog, DialogContent, IconButton, TextField, Button, Tooltip, Switch, FormControlLabel } from "@mui/material";
 import { MuiOtpInput } from "mui-one-time-password-input";
@@ -28,37 +30,37 @@ const BroadcastModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
-  if (!data.title || !data.message) return alert("Please fill in the title and message!");
-  
-  const targetURL = `${import.meta.env.VITE_API}api/admin/broadcast`;
-  console.log("🚀 Attempting to broadcast to:", targetURL);
-  console.log("📦 Payload:", data);
+    if (!data.title || !data.message) return alert("Please fill in the title and message!");
+    
+    const targetURL = `${import.meta.env.VITE_API}api/admin/broadcast`;
+    console.log("🚀 Attempting to broadcast to:", targetURL);
+    console.log("📦 Payload:", data);
 
-  setLoading(true);
-  try {
-    const res = await fetch(targetURL, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${localStorage.getItem("jwtoken")}` 
-      },
-      body: JSON.stringify(data)
-    });
+    setLoading(true);
+    try {
+      const res = await fetch(targetURL, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("jwtoken")}` 
+        },
+        body: JSON.stringify(data)
+      });
 
-    if (res.ok) {
-      alert("Broadcast sent successfully!");
-      onClose();
-    } else if (res.status === 404) {
-      console.error("❌ Error 404: The server doesn't recognize this URL. Check your server.js route path.");
-    } else if (res.status === 403) {
-      console.error("❌ Error 403: You aren't an admin, or the token is missing.");
+      if (res.ok) {
+        alert("Broadcast sent successfully!");
+        onClose();
+      } else if (res.status === 404) {
+        console.error("❌ Error 404: The server doesn't recognize this URL. Check your server.js route path.");
+      } else if (res.status === 403) {
+        console.error("❌ Error 403: You aren't an admin, or the token is missing.");
+      }
+    } catch (error) {
+      console.error("🚨 Network Error:", error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("🚨 Network Error:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <Dialog 
@@ -331,6 +333,29 @@ function Admin() {
     }
   };
 
+  const handleToggleTeam = async (username: string) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API}user/toggle-team/${username}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("jwtoken")}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAlertSeverity("success");
+        setAlertMessage(data.message);
+        setShowAlert(true);
+        // Instantly update the UI table
+        setUsers(prev => prev.map(u => u.username === username ? { ...u, isCuTeTeam: data.isCuTeTeam } : u));
+      } else {
+        throw new Error("Failed to toggle team status");
+      }
+    } catch (err) {
+      setAlertSeverity("error");
+      setAlertMessage("Team toggle failed.");
+      setShowAlert(true);
+    }
+  };
+
   const handleToggleBan = async (username: string) => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API}user/toggle-ban/${username}`, {
@@ -536,6 +561,16 @@ function Admin() {
       renderCell: (params) => params.value ? <ShieldIcon sx={{ fontSize: 18, color: '#10b981' }} /> : <span className="text-xs text-gray-300">NO</span>
     },
     { 
+      field: "isCuTeTeam", 
+      headerName: "Team", 
+      width: 80,
+      renderCell: (params) => (
+        <span className={`text-[10px] font-bold ${params.value ? 'text-brand-blue' : 'text-slate-300'}`}>
+          {params.value ? "YES" : "NO"}
+        </span>
+      )
+    },
+    { 
       field: "isBanned", 
       headerName: "Banned", 
       width: 80,
@@ -548,7 +583,7 @@ function Admin() {
     {
       field: "actions",
       headerName: "Actions",
-      width: 160,
+      width: 200, // Slightly widened to fit the new button
       sortable: false,
       renderCell: (params) => (
         <div className="flex items-center gap-1 h-full">
@@ -557,15 +592,35 @@ function Admin() {
               <AssignmentIcon fontSize="small" />
             </IconButton>
           )}
-          <IconButton onClick={() => handleToggleBan(params.row.username)} size="small" sx={{ color: params.row.isBanned ? '#10b981' : '#ef4444' }}>
-            <BlockIcon fontSize="small" />
-          </IconButton>
-          <IconButton onClick={() => handleAdminToggleRequest(params.row.username, params.row.isAdmin)} size="small" color={params.row.isAdmin ? "warning" : "success"}>
-            {params.row.isAdmin ? <RemoveCircleIcon fontSize="small" /> : <AddCircleIcon fontSize="small" />}
-          </IconButton>
-          <IconButton onClick={() => handleDelete(params.row.id, params.row.username)} size="small" color="error">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          
+          <Tooltip title="Toggle Team Status">
+            <IconButton 
+              onClick={() => handleToggleTeam(params.row.username)} 
+              size="small" 
+              sx={{ color: params.row.isCuTeTeam ? '#1765a4' : '#cbd5e1' }}
+            >
+              <WorkspacePremiumIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Toggle Ban">
+            <IconButton onClick={() => handleToggleBan(params.row.username)} size="small" sx={{ color: params.row.isBanned ? '#10b981' : '#ef4444' }}>
+              <BlockIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Toggle Admin">
+            <IconButton onClick={() => handleAdminToggleRequest(params.row.username, params.row.isAdmin)} size="small" color={params.row.isAdmin ? "warning" : "success"}>
+              {params.row.isAdmin ? <RemoveCircleIcon fontSize="small" /> : <AddCircleIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Delete User">
+            <IconButton onClick={() => handleDelete(params.row.id, params.row.username)} size="small" color="error">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
         </div>
       ),
     },

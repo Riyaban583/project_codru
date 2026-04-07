@@ -7,7 +7,7 @@ const User = require("../models/userSchema");
 const sendAutoNotification = require("../utils/notify");
 const multer = require('multer');
 const FormData = require('form-data');
-const Lead = require('../models/lead');
+const Lead = require('../models/Lead');
 const Task = require('../models/Task');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -654,22 +654,6 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
 });
 
 // ==========================================
-// FETCH LEAD BY PHONE NUMBER (For the Chat Header)
-// ==========================================
-router.get('/leads/:phoneNumber', async (req, res) => {
-    try {
-        const cleanNum = String(req.params.phoneNumber).replace(/\D/g, "");
-        const lead = await Lead.findOne({ phoneNumber: cleanNum });
-        
-        if (!lead) return res.status(404).json({ error: "No lead profile found." });
-        
-        res.status(200).json(lead);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch lead." });
-    }
-});
-
-// ==========================================
 // UPDATE LEAD STATUS (When you change the Dropdown)
 // ==========================================
 router.put('/leads/:id/status', async (req, res) => {
@@ -718,6 +702,47 @@ router.get('/leads/:phoneNumber', async (req, res) => {
     } catch (error) {
         console.error("Lead Fetch Error:", error);
         res.status(500).json({ error: "Failed to fetch lead." });
+    }
+});
+
+// ==========================================
+// POST: CREATE TASK FROM WHATSAPP
+// ==========================================
+router.post('/tasks', async (req, res) => {
+    try {
+        const { title, description, leadId, assignedStaff, dueDate, addToCalendar, attendees } = req.body;
+
+        const newTask = await Task.create({
+            title,
+            description,
+            leadId,
+            assignedTo: assignedStaff, // This is your array of @usernames
+            dueDate,
+            isCalendarSynced: addToCalendar
+        });
+
+        // If Calendar Sync is checked, we create the event
+        if (addToCalendar && dueDate) {
+            try {
+                // We use your existing Calendar Event model!
+                const CalendarEvent = require('../models/eventSchema'); // Or whatever your calendar model is
+                await CalendarEvent.create({
+                    title: title,
+                    description: description,
+                    date: new Date(dueDate),
+                    type: 'task',
+                    color: 'bg-brand-orange',
+                    guests: attendees // The array containing [Student Name]
+                });
+            } catch (calError) {
+                console.error("Internal Calendar Sync Failed:", calError);
+            }
+        }
+
+        res.status(201).json(newTask);
+    } catch (error) {
+        console.error("Task Creation Error:", error);
+        res.status(500).json({ error: "Failed to create task." });
     }
 });
 
