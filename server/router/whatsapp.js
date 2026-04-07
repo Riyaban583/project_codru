@@ -489,12 +489,12 @@ router.get('/templates', async (req, res) => {
 
 router.post('/templates', async (req, res) => {
     try {
-        const { displayName, metaName, language, headerImageUrl, buttonColor, variableCount } = req.body;
+        const { displayName, metaName, language, headerImageUrl, buttonColor, variableCount, isVisible, sortOrder } = req.body;
         const savedTemplate = await Template.findOneAndUpdate(
             { metaName: metaName },
             {
                 $set: {
-                    displayName, language, headerImageUrl, buttonColor, variableCount,
+                    displayName, language, headerImageUrl, buttonColor, variableCount, isVisible: isVisible !== false, sortOrder: sortOrder || 0,
                     isConfigured: true, // 🚨 Marks it as ready for the Chat UI!
                     isActive: true
                 }
@@ -577,6 +577,10 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
             payload[mediaType].caption = messageBody; 
         }
 
+        if (mediaType === 'document' && file.originalname) {
+            payload.document.filename = file.originalname;
+        }
+
         const response = await axios.post(
             `https://graph.facebook.com/v19.0/${botNumberId}/messages`,
             payload,
@@ -585,7 +589,7 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
 
         // 3. Save to CRM Database
         const BASE_URL = process.env.VITE_API || "https://api.curiousteamlearning.com";
-        
+
         const savedMessage = await Message.create({
             wa_id: response.data.messages[0].id,
             senderName: "Admin (CuTe)",

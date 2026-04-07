@@ -368,6 +368,18 @@ const WhatsAppChat: React.FC = () => {
         return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
 
+    const formatMessageDate = (dateString: string | Date) => {
+        const date = new Date(dateString);
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        if (date.toDateString() === today.toDateString()) return "Today";
+        if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: today.getFullYear() !== date.getFullYear() ? 'numeric' : undefined });
+    };
+
     return (
         <>
             <div className="flex h-full w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
@@ -486,127 +498,154 @@ const WhatsAppChat: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 bg-slate-50/50 dashboard-content-scroll">
-                        {isLoading ? (
-                            <div className="flex justify-center items-center h-full text-brand-blue animate-pulse font-bold">Connecting to Space...</div>
-                        ) : !activeUserNumber ? (
-                            <div className="flex flex-col items-center justify-center h-full text-slate-400 text-center p-10">
-                                <AlertCircle size={48} className="mb-4 text-rose-300" />
-                                <p className="font-bold text-slate-600">This contact is missing a phone number.</p>
-                                <p className="text-sm">We cannot send or receive messages for this record.</p>
-                            </div>
-                        ) : messages.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                <Sparkles size={48} className="mb-4 text-brand-blue/20" />
-                                <p className="font-medium">No messages yet.</p>
-                                <p className="text-sm opacity-70">Send a template below to get started!</p>
+                    {/* CHAT MESSAGES AREA */}
+                    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 relative">
+                        {messages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
+                                <Sparkles size={40} className="text-slate-200" />
+                                <p className="text-sm font-medium">No messages yet. Send a template to start the conversation!</p>
                             </div>
                         ) : (
-                            messages.map((msg) => {
-                                const isOutgoing = msg.direction === 'outgoing';
-                                const msgTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                const dlvTime = msg.deliveredAt ? new Date(msg.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-                                const readTime = msg.readAt ? new Date(msg.readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+                            /* 1. GROUP MESSAGES BY DATE FIRST */
+                            Object.entries(
+                                messages.reduce((acc: Record<string, typeof messages>, msg) => {
+                                    const dateLabel = formatMessageDate(msg.timestamp);
+                                    if (!acc[dateLabel]) acc[dateLabel] = [];
+                                    acc[dateLabel].push(msg);
+                                    return acc;
+                                }, {})
+                            ).map(([dateLabel, dayMessages]) => (
+                                /* 2. CREATE A WRAPPER FOR EACH DAY */
+                                <div key={dateLabel} className="flex flex-col gap-3 relative">
+                                    
+                                    {/* 3. THE TRUE STICKY DATE BADGE */}
+                                    {/* Using top-0 with padding ensures smooth pushing without jumping */}
+                                    <div className="sticky top-0 z-20 flex justify-center w-full pt-2 pb-1">
+                                        <div className="bg-slate-900/40 backdrop-blur-md shadow-sm border border-white/10 text-white text-[11px] font-bold px-3 py-1 rounded-full tracking-wide">
+                                            {dateLabel}
+                                        </div>
+                                    </div>
 
-                                return (
-                                    <div key={msg._id} className={`flex w-full ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
-                                        
-                                        {!isOutgoing && (
-                                            <div className="max-w-[85%] md:max-w-[70%] p-3.5 shadow-sm text-sm rounded-2xl bg-white text-slate-800 border border-gray-100 rounded-tl-sm overflow-hidden">
+                                    {/* 4. RENDER MESSAGES FOR THIS SPECIFIC DAY */}
+                                    {dayMessages.map((msg, index) => {
+                                        const isOutgoing = msg.direction === 'outgoing';
+                                        const msgTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                        const dlvTime = msg.deliveredAt ? new Date(msg.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+                                        const readTime = msg.readAt ? new Date(msg.readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+
+                                        return (
+                                            <React.Fragment key={msg.wa_id || index}>
+                                                {/* 🚨 REMOVED THE OLD showDateSeparator BLOCK FROM HERE 🚨 */}
                                                 
-                                                {/* 🚨 MEDIA RENDERER */}
-                                                {msg.messageType === 'image' && msg.mediaUrl && (
-                                                    <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-slate-100">
-                                                        <img src={msg.mediaUrl} alt="Received Media" className="w-full h-auto object-cover max-h-64" />
-                                                    </div>
-                                                )}
-                                                
-                                                {msg.messageType === 'document' && msg.mediaUrl && (
-                                                    <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-blue-50 text-brand-blue rounded-xl font-bold hover:bg-blue-100 transition">
-                                                        📄 View Document
-                                                    </a>
-                                                )}
-
-                                                <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
-                                                <p className="text-[10px] mt-1 text-slate-400 text-left">{msgTime}</p>
-                                            </div>
-                                        )}
-
-                                        {isOutgoing && (
-                                            <div className="flex flex-col items-end max-w-[85%] md:max-w-[75%]">
-                                                <div className="p-3.5 shadow-sm text-sm rounded-2xl bg-brand-blue text-white rounded-tr-sm w-full overflow-hidden">
+                                                <div className={`flex w-full ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                                                     
-                                                    {/* 🚨 OUTGOING MEDIA RENDERER */}
-                                                    {msg.messageType === 'image' && msg.mediaUrl && (
-                                                        <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-blue-900/30">
-                                                            <img src={msg.mediaUrl} alt="Sent Media" className="w-full h-auto object-cover max-h-64" />
+                                                    {!isOutgoing && (
+                                                        <div className="max-w-[85%] md:max-w-[70%] p-3.5 shadow-sm text-sm rounded-2xl bg-white text-slate-800 border border-gray-100 rounded-tl-sm overflow-hidden">
+                                                            
+                                                            {/* 🚨 MEDIA RENDERER */}
+                                                            {msg.messageType === 'image' && msg.mediaUrl && (
+                                                                <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-slate-100">
+                                                                    <img src={msg.mediaUrl} alt="Received Media" className="w-full h-auto object-cover max-h-64" />
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {msg.messageType === 'document' && msg.mediaUrl && (
+                                                                <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-blue-50 text-brand-blue rounded-xl font-bold hover:bg-blue-100 transition">
+                                                                    📄 View Document
+                                                                </a>
+                                                            )}
+
+                                                            <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
+                                                            <p className="text-[10px] mt-1 text-slate-400 text-left">{msgTime}</p>
                                                         </div>
                                                     )}
-                                                    
-                                                    {msg.messageType === 'document' && msg.mediaUrl && (
-                                                        <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition">
-                                                            📄 View Document
-                                                        </a>
-                                                    )}
 
-                                                    {/* Only show the paragraph tag if there's actually a text caption */}
-                                                    {msg.messageBody && msg.messageBody.trim() !== "" && msg.messageBody !== "[Sent image]" && (
-                                                        <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
+                                                    {isOutgoing && (
+                                                        <div className="flex flex-col items-end max-w-[85%] md:max-w-[75%]">
+                                                            <div className="p-3.5 shadow-sm text-sm rounded-2xl bg-brand-blue text-white rounded-tr-sm w-full overflow-hidden">
+                                                                
+                                                                {/* 🚨 OUTGOING MEDIA RENDERER */}
+                                                                {msg.messageType === 'image' && msg.mediaUrl && (
+                                                                    <div className="mb-2 -mx-1 -mt-1 rounded-xl overflow-hidden bg-blue-900/30">
+                                                                        <img src={msg.mediaUrl} alt="Sent Media" className="w-full h-auto object-cover max-h-64" />
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                {msg.messageType === 'document' && msg.mediaUrl && (
+                                                                    <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mb-2 p-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition">
+                                                                        📄 View Document
+                                                                    </a>
+                                                                )}
+
+                                                                {/* Only show the paragraph tag if there's actually a text caption */}
+                                                                {msg.messageBody && msg.messageBody.trim() !== "" && msg.messageBody !== "[Sent image]" && (
+                                                                    <p className="leading-relaxed whitespace-pre-wrap">{msg.messageBody}</p>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-medium tracking-wide">
+                                                                <span className="text-slate-400">Sent {msgTime}</span>
+                                                                
+                                                                {dlvTime && (
+                                                                    <>
+                                                                        <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                                                        <span className="text-slate-500">Dlv {dlvTime}</span>
+                                                                    </>
+                                                                )}
+                                                                
+                                                                {readTime && (
+                                                                    <>
+                                                                        <span className="w-1 h-1 bg-brand-orange rounded-full"></span>
+                                                                        <span className="text-brand-orange">Read {readTime}</span>
+                                                                    </>
+                                                                )}
+
+                                                                {msg.status === 'failed' && (
+                                                                    <>
+                                                                        <span className="w-1 h-1 bg-rose-500 rounded-full"></span>
+                                                                        <span className="text-rose-500">Failed</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     )}
                                                 </div>
-                                                
-                                                <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-medium tracking-wide">
-                                                    <span className="text-slate-400">Sent {msgTime}</span>
-                                                    
-                                                    {dlvTime && (
-                                                        <>
-                                                            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                                            <span className="text-slate-500">Dlv {dlvTime}</span>
-                                                        </>
-                                                    )}
-                                                    
-                                                    {readTime && (
-                                                        <>
-                                                            <span className="w-1 h-1 bg-brand-orange rounded-full"></span>
-                                                            <span className="text-brand-orange">Read {readTime}</span>
-                                                        </>
-                                                    )}
-
-                                                    {msg.status === 'failed' && (
-                                                        <>
-                                                            <span className="w-1 h-1 bg-rose-500 rounded-full"></span>
-                                                            <span className="text-rose-500">Failed</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </div>
+                            ))
                         )}
                         <div ref={messagesEndRef} />
                     </div>
 
                     {/* TEMPLATE BUTTONS */}
                     <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex gap-2 overflow-x-auto no-scrollbar whitespace-nowrap shrink-0">
-                        {templates.length === 0 ? (
+                        {templates.filter(t => t.isVisible !== false).length === 0 ? (
                             <p className="text-xs text-slate-400 italic py-2">No active templates. Configure them in Template Manager!</p>
                         ) : (
-                            templates.map((tpl) => (
-                                <button
-                                    key={tpl._id}
-                                    onClick={() => initiateTemplateSend(tpl)} // 🚨 Calls Pre-Flight
-                                    disabled={isSendingTemplate || !activeUserNumber}
-                                    className={`px-4 py-2 text-xs font-bold border rounded-xl transition disabled:opacity-50 shadow-sm ${
-                                        tpl.buttonColor === 'green' ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100' :
-                                        tpl.buttonColor === 'orange' ? 'bg-orange-50 text-brand-orange border-orange-100 hover:bg-orange-100' :
-                                        'bg-blue-50 text-brand-blue border-blue-100 hover:bg-blue-100'
-                                    }`}
-                                >
-                                    {isSendingTemplate && pendingTemplate?._id === tpl._id ? "Sending..." : tpl.displayName}
-                                </button>
-                            ))
+                            templates
+                                // 🚨 1. Filter out hidden templates
+                                .filter((tpl) => tpl.isVisible !== false)
+                                
+                                // 🚨 2. Sort by the custom order number (0, 1, 2, 3...)
+                                .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+                                
+                                // 3. Render the buttons
+                                .map((tpl) => (
+                                    <button
+                                        key={tpl._id}
+                                        onClick={() => initiateTemplateSend(tpl)} 
+                                        disabled={isSendingTemplate || !activeUserNumber}
+                                        className={`px-4 py-2 text-xs font-bold border rounded-xl transition disabled:opacity-50 shadow-sm ${
+                                            tpl.buttonColor === 'green' ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100' :
+                                            tpl.buttonColor === 'orange' ? 'bg-orange-50 text-brand-orange border-orange-100 hover:bg-orange-100' :
+                                            'bg-blue-50 text-brand-blue border-blue-100 hover:bg-blue-100'
+                                        }`}
+                                    >
+                                        {isSendingTemplate && pendingTemplate?._id === tpl._id ? "Sending..." : tpl.displayName}
+                                    </button>
+                                ))
                         )}
                     </div>
 
@@ -789,32 +828,43 @@ const WhatsAppChat: React.FC = () => {
 
             {/* TEMPLATE MANAGER MODAL */}
             {showTemplateManager && (
-                <div className="absolute inset-0 z-[3000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-10">
-                    <div className="bg-white rounded-[32px] w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+                /* 🚨 1. fixed on mobile (to beat nav), absolute on desktop (to center in CRM window) */
+                <div className="fixed md:absolute inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 md:pb-10 md:p-10">
+                    
+                    <div className="bg-white rounded-2xl md:rounded-[32px] w-full max-w-4xl max-h-[78dvh] h-full md:h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in duration-200">
                         
-                        {/* Header */}
-                        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-                            <div>
-                                <h2 className="text-2xl font-display font-bold text-slate-800">Template Manager</h2>
-                                <p className="text-sm text-slate-500 mt-1">Sync from Meta and configure Cloudinary URLs.</p>
+                        {/* 🚨 2. FLEX-WRAP HEADER: Perfect on desktop, automatically stacks Sync on mobile */}
+                        <div className="p-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-wrap items-center gap-y-4 gap-x-4 bg-white shrink-0">
+                            
+                            {/* Title Block */}
+                            <div className="flex-1 min-w-[200px] order-1">
+                                <h2 className="text-xl md:text-2xl font-display font-bold text-slate-800">Template Manager</h2>
+                                <p className="text-xs md:text-sm text-slate-500 mt-1">Sync from Meta and configure Cloudinary URLs.</p>
                             </div>
-                            <div className="flex gap-4">
+
+                            {/* Sync Button (Moves to bottom row on mobile, middle-right on desktop) */}
+                            <div className="w-full md:w-auto order-3 md:order-2 flex">
                                 <button 
                                     onClick={handleSyncTemplates}
                                     disabled={isSyncing}
-                                    className="flex items-center gap-2 bg-brand-orange text-white px-5 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition disabled:opacity-50 shadow-md"
+                                    className="w-full md:w-auto flex items-center justify-center gap-2 bg-brand-orange text-white px-5 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition disabled:opacity-50 shadow-md"
                                 >
                                     <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} />
                                     {isSyncing ? "Syncing..." : "Sync Meta"}
                                 </button>
-                                <button onClick={() => setShowTemplateManager(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition">
-                                    <X size={24}/>
-                                </button>
                             </div>
+                            
+                            {/* Close Button (Stays top-right on both mobile and desktop) */}
+                            <button 
+                                onClick={() => setShowTemplateManager(false)} 
+                                className="order-2 md:order-3 ml-auto md:ml-0 text-slate-400 hover:bg-slate-100 p-2 rounded-full transition shrink-0"
+                            >
+                                <X size={24}/>
+                            </button>
                         </div>
 
                         {/* Body List */}
-                        <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50 space-y-6">
+                        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/50 space-y-4 md:space-y-6">
                             {allTemplates.length === 0 ? (
                                 <div className="text-center py-20">
                                     <Sparkles size={48} className="mx-auto mb-4 text-brand-blue/20" />
@@ -823,7 +873,7 @@ const WhatsAppChat: React.FC = () => {
                                 </div>
                             ) : (
                                 allTemplates.map((tpl) => (
-                                    <div key={tpl._id} className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-6 items-start">
+                                    <div key={tpl._id} className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 md:gap-6 items-start">
                                         
                                         {/* Left Side: Basic Info */}
                                         <div className="w-full md:w-1/3">
@@ -850,9 +900,10 @@ const WhatsAppChat: React.FC = () => {
 
                                         {/* Right Side: Edit Form */}
                                         <div className="flex-1 w-full space-y-4">
-                                            <div className="flex gap-4">
+                                            <div className="flex gap-3">
+                                                {/* Display Name */}
                                                 <div className="flex-1">
-                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Button Display Name</label>
+                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Button Name</label>
                                                     <input 
                                                         type="text" 
                                                         value={tpl.displayName} 
@@ -861,16 +912,25 @@ const WhatsAppChat: React.FC = () => {
                                                     />
                                                 </div>
                                                 
-                                                {/* 🚨 NEW: Variable Count Setup */}
-                                                <div className="w-24">
-                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Variables</label>
+                                                {/* Variables */}
+                                                <div className="w-20 shrink-0">
+                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Vars</label>
                                                     <input 
-                                                        type="number" 
-                                                        min="0"
-                                                        max="5"
+                                                        type="number" min="0" max="5"
                                                         value={tpl.variableCount || 0} 
                                                         onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, variableCount: parseInt(e.target.value) || 0 } : t))}
-                                                        className="w-full mt-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10" 
+                                                        className="w-full mt-1.5 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue text-center" 
+                                                    />
+                                                </div>
+
+                                                {/* 🚨 NEW: Sort Order */}
+                                                <div className="w-20 shrink-0">
+                                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Order</label>
+                                                    <input 
+                                                        type="number" min="0"
+                                                        value={tpl.sortOrder || 0} 
+                                                        onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, sortOrder: parseInt(e.target.value) || 0 } : t))}
+                                                        className="w-full mt-1.5 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue text-center font-bold text-brand-blue" 
                                                     />
                                                 </div>
                                             </div>
@@ -888,24 +948,40 @@ const WhatsAppChat: React.FC = () => {
                                                 </div>
                                             )}
                                             
-                                            <div className="flex items-center justify-between pt-2">
-                                                <div className="flex items-center gap-4">
-                                                    <label className="text-xs font-bold text-slate-500 uppercase">Button Color:</label>
-                                                    <select 
-                                                        value={tpl.buttonColor}
-                                                        onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, buttonColor: e.target.value } : t))}
-                                                        className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none cursor-pointer"
-                                                    >
-                                                        <option value="blue">Blue</option>
-                                                        <option value="green">Green</option>
-                                                        <option value="orange">Orange</option>
-                                                    </select>
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-2 gap-4 border-t border-slate-100 mt-2">
+                                                <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+                                                    
+                                                    {/* Button Color */}
+                                                    <div className="flex items-center gap-2">
+                                                        <label className="text-xs font-bold text-slate-500 uppercase">Color:</label>
+                                                        <select 
+                                                            value={tpl.buttonColor}
+                                                            onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, buttonColor: e.target.value } : t))}
+                                                            className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-sm outline-none cursor-pointer"
+                                                        >
+                                                            <option value="blue">Blue</option>
+                                                            <option value="green">Green</option>
+                                                            <option value="orange">Orange</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {/* 🚨 NEW: Visibility Toggle Checkbox */}
+                                                    <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={tpl.isVisible !== false} // Default to true
+                                                            onChange={(e) => setAllTemplates(prev => prev.map(t => t._id === tpl._id ? { ...t, isVisible: e.target.checked } : t))}
+                                                            className="w-4 h-4 text-brand-blue rounded border-slate-300 focus:ring-brand-blue cursor-pointer"
+                                                        />
+                                                        <span className="text-xs font-bold text-slate-700 uppercase">Show in Chat</span>
+                                                    </label>
+
                                                 </div>
 
                                                 <button 
                                                     onClick={() => handleSaveTemplateConfig(tpl)}
                                                     disabled={updatingTemplateId === tpl._id}
-                                                    className="bg-brand-blue text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-md disabled:opacity-50 flex items-center gap-2"
+                                                    className="w-full sm:w-auto justify-center bg-brand-blue text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-md disabled:opacity-50 flex items-center gap-2"
                                                 >
                                                     {updatingTemplateId === tpl._id ? <Loader2 size={16} className="animate-spin" /> : "Save Config"}
                                                 </button>

@@ -13,7 +13,10 @@ const templateSchema = new mongoose.Schema({
     // UI Control
     isConfigured: { type: Boolean, default: false },  // 🔥 Will hide it from Chat UI until true!
     buttonColor: { type: String, default: "blue" },
-    variableCount: { type: Number, default: 0 }
+    variableCount: { type: Number, default: 0 },
+
+    isVisible: { type: Boolean, default: true }, // For the toggle
+    sortOrder: { type: Number, default: 0 }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Template', templateSchema);
