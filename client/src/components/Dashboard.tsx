@@ -14,10 +14,13 @@ import {
   Menu,
   Rocket,
   MessageSquare,
-  X
+  X,
+  Briefcase,
+  LayoutDashboard
 } from "lucide-react";
 
 // Components
+import CRM from './CRM';
 import Admin from "./Admin";
 import PlanetryPath from "./PlanetryPath";
 import MyPosts from "./MyPosts";
@@ -37,6 +40,7 @@ import HandshakeDrawer from "./HandshakeDrawer";
 import WhatsAppChat from "./WhatsAppChat";
 import { AnimatePresence, motion } from "framer-motion";
 import Navprofile from "./Navprofile";
+import Overview from './Overview';
 
 interface DashboardProps {
   userData: UserData;
@@ -75,18 +79,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const [teacherStudents, setTeacherStudents] = useState<any[]>([]);
   const [selectedStudentUsername, setSelectedStudentUsername] = useState<string | null>(null);
 
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-  const onTouchStart = (e: React.TouchEvent) => { setTouchEnd(null); setTouchStart(e.targetTouches[0].clientY); };
-  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientY);
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    if (touchStart - touchEnd < -50) setIsMobileMenuOpen(false); // If swiped down by 50px, close it!
-  };
-
   const [currentView, setCurrentView] = useState(() => {
-    return location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "schedule";
+    return location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "Overview".toLowerCase();
   });
 
   const todayDate = new Date().toLocaleDateString('en-US', { 
@@ -97,14 +91,34 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   
   const [activeTab, setActiveTab] = useState(() => {
     const viewToTabMap: Record<string, string> = {
-      schedule: "Schedule", syllabus: "Syllabus Tracker", profile: "Profile",
+      Overview: "Overview", schedule: "Schedule", syllabus: "Syllabus Tracker", profile: "Profile",
       settings: "Settings", "my-posts": "My Posts", "saved-posts": "Saved Posts",
       report: "Report", management: "Management", "my-courses": "My Courses",
       "the-village": "The Village (Q&A)", "expert-connect": "Expert Connect",
       "whatsapp-crm": "WhatsApp Support"
     };
-    return viewToTabMap[currentView] || "Schedule";
+    return viewToTabMap[currentView] || "Overview";
   });
+
+  const [overviewStats, setOverviewStats] = useState<any>(null);
+
+  useEffect(() => {
+      const fetchOverviewData = async () => {
+          try {
+              const token = localStorage.getItem("jwtoken");
+              const res = await fetch(`${import.meta.env.VITE_API}dashboard-overview`, {
+                  headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (res.ok) {
+                  const stats = await res.json();
+                  setOverviewStats(stats);
+              }
+          } catch (err) {
+              console.error("Overview fetch failed", err);
+          }
+      };
+      fetchOverviewData();
+  }, [userData.Role]); // Refetch if role changes
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -135,6 +149,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       setCurrentView(target);
       
       const viewToTabMap: Record<string, string> = {
+        Overview: "Overview",
         schedule: "Schedule", 
         syllabus: "Syllabus Tracker", 
         profile: "Profile",
@@ -148,7 +163,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         "expert-connect": "Expert Connect",
         "manage-users": "Manage Users",           
         "admin-audit-log": "Security Audit Log",
-        "whatsapp-crm": "WhatsApp Support"   
+        "whatsapp-crm": "WhatsApp Support",
+        "crm": "Management"   
       };
 
       setActiveTab(viewToTabMap[target] || "Dashboard"); 
@@ -275,6 +291,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const getDrawerContent = () => {
     const basicItems = [
       { text: "Home", icon: <Home size={22} />, path: "/", mobileHidden: true },
+      { text: "Overview", icon: <LayoutDashboard size={22} />, view: "overview" },
       { text: "Schedule", icon: <CalendarClock size={22} />, view: "schedule" },
       { text: "Profile", icon: <User size={22} />, view: "profile" },
       { text: "Settings", icon: <Settings size={22} />, view: "settings" },
@@ -300,6 +317,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
 
     const adminItems = [];
     if (userData.isAdmin) {
+      adminItems.push({ text: "Management", icon: <Briefcase size={22} />, view: "crm" });
       adminItems.push({ text: "WhatsApp CRM", icon: <MessageSquare size={22} />, view: "whatsapp-crm" });
       adminItems.push({ text: "Manage Users", icon: <UserCog size={22} />, view: "manage-users" });
       adminItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
@@ -599,6 +617,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             `}>
               
               {/* COMPONENT RENDERING ROUTER */}
+              {currentView === "overview" && <Overview user={userData} data={overviewStats} />}
               {currentView === "profile" && <Profile />}
               {currentView === "schedule" && <Calendar role={userData.Role || "student"} currentUserId={userData._id} />}
               {currentView === "settings" && <SettingsPanel userData={userData} setUserData={setUserData} />}
@@ -612,6 +631,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               {currentView === "manage-users" && userData?.isAdmin && <Admin userData={userData} setUserData={setUserData} />}
               {currentView === "admin-audit-log" && userData?.isAdmin && <AdminAuditLog />}
               {currentView === "whatsapp-crm" && userData?.isAdmin && <WhatsAppChat />}
+              {currentView === "crm" && userData?.isAdmin && <CRM />}
               
               {currentView === "the-village" && isParent && (
                 <div className="flex flex-col items-center justify-center h-full text-center">

@@ -9,6 +9,7 @@ const multer = require('multer');
 const FormData = require('form-data');
 const Lead = require('../models/Lead');
 const Task = require('../models/Task');
+const authenticate = require("../middleware/authenticate"); // Import it
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -654,7 +655,7 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
 });
 
 // ==========================================
-// UPDATE LEAD STATUS (When you change the Dropdown)
+// UPDATE LEAD STATUS & NOTIFY
 // ==========================================
 router.put('/leads/:id/status', async (req, res) => {
     try {
@@ -665,6 +666,26 @@ router.put('/leads/:id/status', async (req, res) => {
             { $set: { status: status } },
             { new: true }
         );
+
+        // 🚨 CELEBRATION NOTIFICATION
+        if (status === 'Converted') {
+            try {
+                // Find all CuTe Admins/Team to celebrate
+                const admins = await User.find({ isCuTeTeam: true });
+                const notifyPromises = admins.map(admin => 
+                    sendAutoNotification(
+                        req.app, 
+                        admin._id, 
+                        `🎉 Awesome! ${updatedLead.name} just converted!`, 
+                        "/crm", 
+                        "Sales Bot" 
+                    )
+                );
+                await Promise.all(notifyPromises);
+            } catch (notifErr) {
+                console.error("Failed to send conversion notifications:", notifErr);
+            }
+        }
 
         res.status(200).json(updatedLead);
     } catch (error) {
@@ -706,43 +727,60 @@ router.get('/leads/:phoneNumber', async (req, res) => {
 });
 
 // ==========================================
-// POST: CREATE TASK FROM WHATSAPP
+// POST: CREATE NEW TASK
 // ==========================================
-router.post('/tasks', async (req, res) => {
+router.post('/tasks', authenticate, async (req, res) => {
     try {
-        const { title, description, leadId, assignedStaff, dueDate, addToCalendar, attendees } = req.body;
+        // 🚨 Destructure priority from req.body
+        const { title, description, dueDate, leadId, assignedStaff, addToCalendar, priority } = req.body;
+        
+        const cleanLeadId = leadId && leadId.trim() !== "" ? leadId : undefined;
+
+        let assignedUserIds = [];
+        if (assignedStaff && assignedStaff.length > 0) {
+            const users = await User.find({ username: { $in: assignedStaff } });
+            assignedUserIds = users.map(u => u._id);
+        }
 
         const newTask = await Task.create({
             title,
             description,
-            leadId,
-            assignedTo: assignedStaff, // This is your array of @usernames
-            dueDate,
-            isCalendarSynced: addToCalendar
+            dueDate: dueDate ? new Date(dueDate) : undefined,
+            leadId: cleanLeadId,
+            assignedTo: assignedUserIds,
+            isCalendarSynced: addToCalendar || false,
+            priority: priority || 'Medium' // 🚨 Save the priority!
         });
 
-        // If Calendar Sync is checked, we create the event
-        if (addToCalendar && dueDate) {
-            try {
-                // We use your existing Calendar Event model!
-                const CalendarEvent = require('../models/eventSchema'); // Or whatever your calendar model is
-                await CalendarEvent.create({
-                    title: title,
-                    description: description,
-                    date: new Date(dueDate),
-                    type: 'task',
-                    color: 'bg-brand-orange',
-                    guests: attendees // The array containing [Student Name]
-                });
-            } catch (calError) {
-                console.error("Internal Calendar Sync Failed:", calError);
-            }
-        }
-
-        res.status(201).json(newTask);
+        const populatedTask = await Task.findById(newTask._id)
+            .populate('leadId', 'name phoneNumber')
+            .populate('assignedTo', 'name username photo');
+        
+        res.status(201).json(populatedTask);
     } catch (error) {
         console.error("Task Creation Error:", error);
         res.status(500).json({ error: "Failed to create task." });
+    }
+});
+
+// ==========================================
+// PUT: EDIT EXISTING TASK
+// ==========================================
+router.put('/tasks/:id', async (req, res) => {
+    try {
+        // 🚨 Destructure priority
+        const { title, description, dueDate, priority } = req.body;
+        
+        const updatedTask = await Task.findByIdAndUpdate(
+            req.params.id,
+            { $set: { title, description, dueDate, priority } }, // 🚨 Update priority
+            { new: true }
+        ).populate('leadId', 'name phoneNumber').populate('assignedTo', 'name username photo');
+
+        res.status(200).json(updatedTask);
+    } catch (error) {
+        console.error("Task Edit Error:", error);
+        res.status(500).json({ error: "Failed to edit task." });
     }
 });
 

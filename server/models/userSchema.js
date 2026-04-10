@@ -109,6 +109,11 @@ const userSchema = new mongoose.Schema({
     default: false 
   },
 
+  dashboardLayout: {
+    type: Array,
+    default: [] // Stores strings like ['syllabus', 'tasks', 'classes']
+  }
+
 }, { timestamps: true });
 
 // 🚨 PRE-SAVE HOOK FOR PASSWORD HASHING 🚨

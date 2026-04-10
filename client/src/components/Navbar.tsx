@@ -69,8 +69,8 @@ function Navbar({ userData, setUserData }: NavbarProps) {
                     to="/dashboard" 
                     className="text-gray-400 hover:text-brand-blue transition transform hover:scale-110"
                     onClick={() => {
-                      localStorage.setItem("currentView", "schedule");
-                      localStorage.setItem("activeTab", "Schedule");
+                      localStorage.setItem("currentView", "Overview");
+                      localStorage.setItem("activeTab", "Overview");
                     }}
                   >
                     <LayoutDashboard className="w-5 h-5" />
@@ -179,8 +179,8 @@ function Navbar({ userData, setUserData }: NavbarProps) {
           <NavLink 
             to="/dashboard" 
             onClick={() => {
-              localStorage.setItem("currentView", "schedule");
-              localStorage.setItem("activeTab", "Schedule");
+              localStorage.setItem("currentView", "Overview");
+              localStorage.setItem("activeTab", "Overview");
               setShowLinks(false);
               setShowProfile(false);
               setShowNotifications(false);

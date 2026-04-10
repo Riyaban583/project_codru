@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/userSchema");
+const Lead = require('../models/Lead');
+const Task = require('../models/Task');
 
 // Toggle CuTe Team Status
 router.put('/user/toggle-team/:username', async (req, res) => {
@@ -21,7 +23,6 @@ router.put('/user/toggle-team/:username', async (req, res) => {
 });
 
 // Fetch all CuTe Team Members
-// Fetch all CuTe Team Members
 router.get('/team', async (req, res) => {
     try {
         const team = await User.find({ isCuTeTeam: true }).select('name username photo _id');
@@ -29,6 +30,136 @@ router.get('/team', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch team members." });
     }
+});
+
+// ==========================================
+// GET: FETCH ALL LEADS FOR KANBAN (DEBUG VERSION)
+// ==========================================
+router.get('/leads', async (req, res) => {
+    try {
+        const leads = await Lead
+            .find() // 🚨 Wait... this is fetching EVERY lead in the database!
+            .sort({ createdAt: -1 })
+            .populate('assignedTo', 'name username photo');
+        res.status(200).json(leads);
+    } catch (error) {
+        console.error("🚨 KANBAN LEADS CRASH:", error); 
+        res.status(500).json({ error: "Failed to fetch leads." });
+    }
+});
+
+
+// ==========================================
+// PUT: REORDER TASKS
+// ==========================================
+router.put('/tasks/reorder', async (req, res) => {
+    try {
+        const { taskIds } = req.body; // Array of IDs in the new order
+        
+        // Update the sortOrder field for each task concurrently
+        const updatePromises = taskIds.map((id, index) => 
+            Task.findByIdAndUpdate(id, { $set: { sortOrder: index } })
+        );
+        
+        await Promise.all(updatePromises);
+        res.status(200).json({ message: "Tasks reordered" });
+    } catch (error) {
+        console.error("Task Reorder Error:", error);
+        res.status(500).json({ error: "Failed to reorder tasks." });
+    }
+});
+
+// ==========================================
+// GET: FETCH ALL TASKS (DEBUG VERSION)
+// ==========================================
+router.get('/tasks', async (req, res) => {
+    try {
+        // 🚨 FIX: Removed the semicolon after sort() so the chain connects!
+        const tasks = await Task.find()
+            .sort({ sortOrder: 1, dueDate: 1 })
+            .populate('leadId', 'name phoneNumber')
+            .populate('assignedTo', 'name username photo');
+            
+        res.status(200).json(tasks);
+    } catch (error) {
+        console.error("🚨 KANBAN TASKS CRASH:", error); 
+        res.status(500).json({ error: "Failed to fetch tasks." });
+    }
+});
+
+// ==========================================
+// PUT: TOGGLE TASK STATUS
+// ==========================================
+router.put('/tasks/:id/status', async (req, res) => {
+    try {
+        const { status } = req.body;
+        const updatedTask = await Task.findByIdAndUpdate(
+            req.params.id,
+            { $set: { status: status } },
+            { new: true }
+        );
+        res.status(200).json(updatedTask);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to update task." });
+    }
+});
+
+// ==========================================
+// DELETE: REMOVE A TASK
+// ==========================================
+router.delete('/tasks/:id', async (req, res) => {
+    try {
+        await Task.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: "Task deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to delete task." });
+    }
+});
+
+// ==========================================
+// POST: MANUAL LEAD CREATION
+// ==========================================
+router.post('/leads/manual', async (req, res) => {
+    try {
+        const { name, phoneNumber, status, description, assignedStaff } = req.body;
+        const cleanNum = String(phoneNumber).replace(/\D/g, "");
+        
+        // 🚨 NEW: Look up the Users by username to get their IDs
+        let assignedUserIds = [];
+        if (assignedStaff && assignedStaff.length > 0) {
+            const users = await User.find({ username: { $in: assignedStaff } });
+            assignedUserIds = users.map(u => u._id);
+        }
+        
+        const newLead = await Lead.create({
+            name: name || cleanNum,
+            phoneNumber: cleanNum,
+            status: status || 'New',
+            description: description || "",
+            contactId: `manual_${Date.now()}`,
+            assignedTo: assignedUserIds // 🚨 Save it to the database!
+        });
+        
+        res.status(201).json(newLead);
+    } catch (error) {
+        console.error("Manual Lead Error:", error);
+        res.status(500).json({ error: "Failed to create lead." });
+    }
+});
+
+router.delete('/leads/:id', async (req, res) => {
+    try {
+        await Lead.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: "Lead deleted" });
+    } catch (error) { res.status(500).json({ error: "Failed" }); }
+});
+
+router.put('/leads/:id', async (req, res) => {
+    try {
+        const lead = await Lead.findByIdAndUpdate(req.params.id, req.body, { new: true })
+                               .populate('assignedTo', 'name username photo');
+        res.status(200).json(lead);
+    } catch (error) { res.status(500).json({ error: "Failed" }); }
 });
 
 module.exports = router;

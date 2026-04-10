@@ -133,7 +133,12 @@ const WhatsAppChat: React.FC = () => {
     const [teamMembers, setTeamMembers] = useState<{_id: string, name: string, username: string, photo?: string}[]>([]);
     const [teamSearch, setTeamSearch] = useState("");
     const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+    const [toast, setToast] = useState<{show: boolean, message: string, type: 'success' | 'error' | 'info'}>({ show: false, message: '', type: 'success' });
 
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ show: true, message, type });
+        setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
+    };
     // Task & Calendar States
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [isCreatingTask, setIsCreatingTask] = useState(false);
@@ -165,20 +170,51 @@ const WhatsAppChat: React.FC = () => {
 
     const handleCreateTask = async () => {
         if (!activeLead) {
-            alert("Please ensure this contact has a Lead profile first.");
+            showToast("Please ensure this contact has a Lead profile first.", "error"); 
             return;
         }
         setIsCreatingTask(true);
         try {
+            const token = localStorage.getItem("jwtoken");
+            const headers = { Authorization: `Bearer ${token}` };
+
+            // 1. Create the Task in the CRM (Database & Notifications)
             await axios.post(`${API_BASE}/tasks`, {
                 ...taskData,
                 leadId: activeLead._id,
-            });
+            }, { headers });
+
+            // 2. 🚨 CRITICAL GOOGLE CALENDAR SYNC 🚨
+            if (taskData.addToCalendar && taskData.dueDate) {
+                const startDate = new Date(taskData.dueDate);
+                
+                // Automatically add 15 minutes for Google Calendar's required End Time!
+                const endDate = new Date(startDate.getTime() + 15 * 60000); 
+
+                await fetch(`${API_BASE}/calendar-events`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        title: taskData.title,
+                        description: taskData.description,
+                        date: startDate.toISOString(),
+                        endTime: endDate.toISOString(), // 👈 Sent straight to your backend
+                        type: 'task',
+                        color: 'bg-brand-orange',
+                        guests: taskData.assignedStaff.filter(s => s !== "Me"),
+                        addMeet: false 
+                    })
+                });
+            }
+
             setShowTaskModal(false);
-            alert("Task & Calendar Event Created successfully!");
+            showToast("Task & Calendar Event Created successfully!", "success"); 
         } catch (error) {
             console.error("Failed to create task:", error);
-            alert("Failed to create task.");
+            showToast("Failed to create task.", "error"); 
         } finally {
             setIsCreatingTask(false);
         }
@@ -382,7 +418,7 @@ const WhatsAppChat: React.FC = () => {
                 setSelectedFile(tempFile);
                 if (tempFile.type.startsWith('image/')) setFilePreviewUrl(URL.createObjectURL(tempFile));
             }
-            alert("Failed to send message.");
+            showToast("Failed to send message.", "error");
         }
     };
 
@@ -396,7 +432,7 @@ const WhatsAppChat: React.FC = () => {
             const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
             if (file.size > maxSizeBytes) {
-                alert(`File too large! WhatsApp limits ${isImage ? 'images to 5MB' : 'documents to 100MB'}. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB.`);
+                showToast(`File too large! WhatsApp limits ${isImage ? 'images to 5MB' : 'documents to 100MB'}.`, "error"); // 🚨 TOAST
                 e.target.value = ''; // Reset the input
                 return;
             }
@@ -426,10 +462,11 @@ const WhatsAppChat: React.FC = () => {
             await fetchContacts();
             if (res.data && res.data._id) {
                 setSelectedContactId(res.data._id);
+                showToast("Contact added successfully!", "success");
             }
         } catch (error) {
             console.error("Failed to save new contact:", error);
-            alert("Failed to save contact. Please check your connection and try again.");
+            showToast("Failed to save contact. Please check your connection.", "error");
         } finally {
             setShowNewContactModal(false);
             setNewContactName("");
@@ -448,7 +485,7 @@ const WhatsAppChat: React.FC = () => {
             setActiveLead(res.data);
         } catch (error) {
             console.error("Failed to update lead status:", error);
-            alert("Failed to update lead status.");
+            showToast("Failed to update lead status.", "error");
         } finally {
             setIsUpdatingLead(false);
         }
@@ -482,7 +519,7 @@ const WhatsAppChat: React.FC = () => {
             setPendingTemplate(null); // Close modal on success
         } catch (err) {
             console.error("Failed to send template:", err);
-            alert("Failed to send template.");
+            showToast("Failed to send template. Please check your connection and template configuration.", "error");
         } finally {
             setIsSendingTemplate(false);
         }
@@ -493,10 +530,10 @@ const WhatsAppChat: React.FC = () => {
         try {
             const res = await axios.post(`${API_BASE}/templates/sync`);
             await fetchAllTemplates(); 
-            alert(res.data.message || "Templates synced from Meta successfully!");
+            showToast(res.data.message || "Templates synced from Meta successfully!", "success");
         } catch (error) {
             console.error("Sync Error:", error);
-            alert("Failed to sync templates. Make sure your WABA_ID is set in the backend.");
+            showToast("Failed to sync templates. Make sure your WABA_ID is set in the backend.", "error");
         } finally {
             setIsSyncing(false);
         }
@@ -519,7 +556,7 @@ const WhatsAppChat: React.FC = () => {
             await fetchReadyTemplates(); 
         } catch (error) {
             console.error("Save Template Error:", error);
-            alert("Failed to save template configuration.");
+            showToast("Failed to save template configuration. Please check your input and try again.", "error");
         } finally {
             setUpdatingTemplateId(null);
         }
@@ -1434,6 +1471,21 @@ const WhatsAppChat: React.FC = () => {
                                 {isCreatingTask ? <Loader2 size={18} className="animate-spin" /> : "CREATE & SYNC TASK"}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* 🍞 FLOATING TOAST NOTIFICATION */}
+            {toast.show && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[11000] animate-in fade-in slide-in-from-bottom-8 duration-300 pointer-events-none">
+                    <div className={`flex items-center gap-2.5 px-5 py-3.5 rounded-full shadow-2xl border font-bold text-sm tracking-wide ${
+                        toast.type === 'success' ? 'bg-green-50 text-green-700 border-green-200 shadow-green-900/10' : 
+                        toast.type === 'error' ? 'bg-rose-50 text-rose-700 border-rose-200 shadow-rose-900/10' :
+                        'bg-blue-50 text-brand-blue border-blue-200 shadow-blue-900/10'
+                    }`}>
+                        {toast.type === 'success' && <CheckCircle2 size={20} className="text-green-500" />}
+                        {toast.type === 'error' && <AlertCircle size={20} className="text-rose-500" />}
+                        {toast.type === 'info' && <Sparkles size={20} className="text-brand-blue" />}
+                        {toast.message}
                     </div>
                 </div>
             )}

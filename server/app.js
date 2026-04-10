@@ -86,6 +86,7 @@ app.use(require("./router/seedroute.js"));
 app.use(require("./router/notification.js"));
 app.use(require('./router/whatsapp'));
 app.use(require('./router/crm')); 
+app.use(require('./router/overview'));
 
 let notifications = {};
 
