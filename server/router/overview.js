@@ -103,7 +103,7 @@ router.get('/dashboard-overview', authenticate, async (req, res) => {
                             platformLogs.push({
                                 user: notif.triggeredBy || "System", 
                                 action: notif.message,               
-                                timeObj: safeDate                     
+                                timeObj: safeDate                    
                             });
                         }
                     });
@@ -262,6 +262,31 @@ router.get('/dashboard-overview', authenticate, async (req, res) => {
     } catch (error) {
         console.error("Dashboard Overview Error:", error);
         res.status(500).json({ error: "Failed to assemble dashboard data." });
+    }
+});
+
+
+// ==========================================
+// 🚨 NEW: SAVE DASHBOARD LAYOUT SIZE & ORDER
+// ==========================================
+router.put('/user/dashboard-layout', authenticate, async (req, res) => {
+    try {
+        const { layout } = req.body;
+        
+        // Use the ID from the authenticate middleware
+        const userId = req.user._id; 
+
+        // Update the user document
+        const updatedUser = await User.findByIdAndUpdate(
+            userId, 
+            { $set: { dashboardLayout: layout } },
+            { new: true } // Returns the updated document
+        );
+
+        res.status(200).json({ message: "Layout persistent!", layout: updatedUser.dashboardLayout });
+    } catch (error) {
+        console.error("Persistence Error:", error);
+        res.status(500).json({ error: "Failed to save to database." });
     }
 });
 

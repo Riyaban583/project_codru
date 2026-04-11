@@ -80,7 +80,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const [selectedStudentUsername, setSelectedStudentUsername] = useState<string | null>(null);
 
   const [currentView, setCurrentView] = useState(() => {
-    return location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "Overview".toLowerCase();
+    return location.state?.targetView?.toLowerCase() || localStorage.getItem("currentView") || "Overview";
   });
 
   const todayDate = new Date().toLocaleDateString('en-US', { 
@@ -291,7 +291,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
   const getDrawerContent = () => {
     const basicItems = [
       { text: "Home", icon: <Home size={22} />, path: "/", mobileHidden: true },
-      { text: "Overview", icon: <LayoutDashboard size={22} />, view: "overview" },
+      { text: "Overview", icon: <LayoutDashboard size={22} />, view: "Overview" },
       { text: "Schedule", icon: <CalendarClock size={22} />, view: "schedule" },
       { text: "Profile", icon: <User size={22} />, view: "profile" },
       { text: "Settings", icon: <Settings size={22} />, view: "settings" },
@@ -617,7 +617,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
             `}>
               
               {/* COMPONENT RENDERING ROUTER */}
-              {currentView === "overview" && <Overview user={userData} data={overviewStats} />}
+              {currentView === "Overview" && <Overview user={userData} data={overviewStats} />}
               {currentView === "profile" && <Profile />}
               {currentView === "schedule" && <Calendar role={userData.Role || "student"} currentUserId={userData._id} />}
               {currentView === "settings" && <SettingsPanel userData={userData} setUserData={setUserData} />}

@@ -16,6 +16,7 @@ export interface UserData {
   staffApprovalRequested: boolean;
   isVerifiedParent: boolean;
   parentVerificationRequested: boolean;  
+  dashboardLayout?: any[];
 }
 
 // --- IMPORTS ---
@@ -49,6 +50,7 @@ function App() {
     staffApprovalRequested: false,
     isVerifiedParent: false,
     parentVerificationRequested: false,
+    dashboardLayout: [],
   });
   
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -182,6 +184,7 @@ function App() {
             staffApprovalRequested: data.user.staffApprovalRequested || false,
             isVerifiedParent: data.user.isVerifiedParent || false,
             parentVerificationRequested: data.user.parentVerificationRequested || false,
+            dashboardLayout: data.user.dashboardLayout || [],
           });
           setIsServerVerified(true);
         }

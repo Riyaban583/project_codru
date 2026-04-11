@@ -109,10 +109,14 @@ const userSchema = new mongoose.Schema({
     default: false 
   },
 
-  dashboardLayout: {
-    type: Array,
-    default: [] // Stores strings like ['syllabus', 'tasks', 'classes']
-  }
+  dashboardLayout: [
+    {
+      id: { type: String, required: true }, // e.g., 'tasks', 'syllabus'
+      w: { type: Number, default: 1 },      // Width: 1 (33%), 2 (66%), or 3 (100%)
+      h: { type: String, default: 'md' }    // Height: 'sm', 'md', or 'lg'
+    }
+  ]
+
 
 }, { timestamps: true });
 

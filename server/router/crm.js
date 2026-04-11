@@ -70,6 +70,27 @@ router.put('/tasks/reorder', async (req, res) => {
 });
 
 // ==========================================
+// PUT: EDIT EXISTING TASK
+// ==========================================
+router.put('/tasks/:id', async (req, res) => {
+    try {
+        // 🚨 Destructure priority
+        const { title, description, dueDate, priority } = req.body;
+        
+        const updatedTask = await Task.findByIdAndUpdate(
+            req.params.id,
+            { $set: { title, description, dueDate, priority } }, // 🚨 Update priority
+            { new: true }
+        ).populate('leadId', 'name phoneNumber').populate('assignedTo', 'name username photo');
+
+        res.status(200).json(updatedTask);
+    } catch (error) {
+        console.error("Task Edit Error:", error);
+        res.status(500).json({ error: "Failed to edit task." });
+    }
+});
+
+// ==========================================
 // GET: FETCH ALL TASKS (DEBUG VERSION)
 // ==========================================
 router.get('/tasks', async (req, res) => {

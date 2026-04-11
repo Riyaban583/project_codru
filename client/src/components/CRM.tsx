@@ -432,8 +432,8 @@ const CRM = () => {
     return (
         <div className="w-full h-full flex flex-col min-h-0 relative">
             {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
-                <div>
+            <div className="flex flex-col md:flex-row justify-between items-center md:items-start mb-6 gap-4 shrink-0 w-full">
+                <div className="text-center md:text-left w-full md:w-auto">
                     <h2 className="text-3xl font-display font-bold text-brand-blue">Management</h2>
                     <p className="text-gray-500 font-medium text-sm mt-1">Track leads and manage team tasks.</p>
                 </div>
@@ -981,12 +981,12 @@ const CRM = () => {
             {/* =========================================
                 🚨 UPGRADED 2-COLUMN NEW LEAD MODAL
             ========================================= */}
+            {/* 🚨 ADD NEW LEAD MODAL */}
             {showLeadModal && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl md:rounded-[32px] w-full max-w-md md:max-w-3xl overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+                    <div className="bg-white rounded-2xl md:rounded-[32px] w-full max-w-md md:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in duration-200">
                         
-                        {/* Header */}
-                        <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
+                        <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white shrink-0">
                             <div className="flex items-center gap-2">
                                 <UserIcon size={20} />
                                 <h3 className="text-lg font-bold">Add Manual Lead</h3>
@@ -996,10 +996,8 @@ const CRM = () => {
                             </button>
                         </div>
 
-                        <div className="p-4 md:p-6">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
-                                
-                                {/* LEFT COLUMN */}
                                 <div className="space-y-4 flex flex-col">
                                     <div className="flex gap-4 flex-col sm:flex-row">
                                         <div className="flex-1">
@@ -1008,17 +1006,15 @@ const CRM = () => {
                                         </div>
                                         <div className="flex-1">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number *</label>
-                                            <input type="text" placeholder="e.g. 919876543210" value={newLeadData.phoneNumber} onChange={e => setNewLeadData({...newLeadData, phoneNumber: e.target.value})} className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" />
+                                            <input type="text" placeholder="e.g. 9198..." value={newLeadData.phoneNumber} onChange={e => setNewLeadData({...newLeadData, phoneNumber: e.target.value})} className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" />
                                         </div>
                                     </div>
-                                    
                                     <div className="flex-1 flex flex-col">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Notes / Description</label>
-                                        <textarea placeholder="Context about this lead..." value={newLeadData.description} onChange={e => setNewLeadData({...newLeadData, description: e.target.value})} className="w-full mt-1 flex-1 min-h-[120px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue resize-none text-sm text-slate-700" />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Notes</label>
+                                        <textarea placeholder="Context..." value={newLeadData.description} onChange={e => setNewLeadData({...newLeadData, description: e.target.value})} className="w-full mt-1 flex-1 min-h-[120px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue resize-none text-sm text-slate-700" />
                                     </div>
                                 </div>
 
-                                {/* RIGHT COLUMN */}
                                 <div className="space-y-4">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Stage</label>
@@ -1026,79 +1022,29 @@ const CRM = () => {
                                             <option value="New">New</option><option value="Contacted">Contacted</option><option value="Trial Scheduled">Trial Scheduled</option><option value="Converted">Converted</option><option value="Lost">Lost</option>
                                         </select>
                                     </div>
-
-                                    {/* Searchable Staff Dropdown for Leads */}
                                     <div className="relative">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign Sales Team</label>
                                         <div className="relative mt-1">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                            <input 
-                                                type="text" 
-                                                value={leadTeamSearch}
-                                                onChange={(e) => { setLeadTeamSearch(e.target.value); setShowLeadTeamDropdown(true); }}
-                                                onFocus={() => setShowLeadTeamDropdown(true)}
-                                                onBlur={() => setTimeout(() => setShowLeadTeamDropdown(false), 200)}
-                                                placeholder="Search name or @username..."
-                                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue transition-all text-sm" 
-                                            />
-                                            {/* Dropdown */}
+                                            <input type="text" value={leadTeamSearch} onChange={(e) => { setLeadTeamSearch(e.target.value); setShowLeadTeamDropdown(true); }} placeholder="Search team..." className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm" />
                                             {showLeadTeamDropdown && leadTeamSearch.trim() !== "" && (
-                                                <div className="absolute z-[100] w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1 animate-in fade-in slide-in-from-top-2">
-                                                    {teamMembers.filter(m => 
-                                                        !newLeadData.assignedStaff.includes(m.username) && 
-                                                        (m.name.toLowerCase().includes(leadTeamSearch.toLowerCase()) || m.username.toLowerCase().includes(leadTeamSearch.toLowerCase()))
-                                                    ).length === 0 ? (
-                                                        <div className="p-4 text-center text-xs text-gray-400 font-medium">No members found.</div>
-                                                    ) : (
-                                                        teamMembers.filter(m => 
-                                                            !newLeadData.assignedStaff.includes(m.username) && 
-                                                            (m.name.toLowerCase().includes(leadTeamSearch.toLowerCase()) || m.username.toLowerCase().includes(leadTeamSearch.toLowerCase()))
-                                                        ).map(staff => (
-                                                            <div 
-                                                                key={staff._id}
-                                                                onMouseDown={(e) => {
-                                                                    e.preventDefault(); 
-                                                                    setNewLeadData(prev => ({...prev, assignedStaff: [...prev.assignedStaff, staff.username]}));
-                                                                    setLeadTeamSearch("");
-                                                                    setShowLeadTeamDropdown(false);
-                                                                }}
-                                                                className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group"
-                                                            >
-                                                                {staff.photo ? <img src={staff.photo} className="w-6 h-6 rounded-full object-cover shadow-sm border border-slate-200 shrink-0" /> : <div className="w-6 h-6 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-bold text-[10px] shrink-0 shadow-inner">{staff.name.charAt(0).toUpperCase()}</div>}
-                                                                <div className="flex flex-col"><span className="text-xs font-bold text-gray-800 leading-tight">{staff.name}</span><span className="text-[10px] font-medium text-gray-400">@{staff.username}</span></div>
-                                                                <div className="ml-auto w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-brand-blue group-hover:text-white transition-all shrink-0"><Plus size={10} strokeWidth={3} /></div>
-                                                            </div>
-                                                        ))
-                                                    )}
+                                                <div className="absolute z-[100] w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl max-h-40 overflow-y-auto p-1">
+                                                    {teamMembers.filter(m => !newLeadData.assignedStaff.includes(m.username) && (m.name.toLowerCase().includes(leadTeamSearch.toLowerCase()) || m.username.toLowerCase().includes(leadTeamSearch.toLowerCase()))).map(staff => (
+                                                        <div key={staff._id} onMouseDown={() => { setNewLeadData(prev => ({...prev, assignedStaff: [...prev.assignedStaff, staff.username]})); setLeadTeamSearch(""); }} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors">
+                                                            <div className="w-6 h-6 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-bold text-[10px]">{staff.name.charAt(0)}</div>
+                                                            <span className="text-xs font-bold text-gray-800">{staff.name}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )}
-                                        </div>
-                                        
-                                        {/* Selected Staff Tags */}
-                                        <div className="flex flex-wrap gap-2 mt-3 min-h-[28px]">
-                                            {newLeadData.assignedStaff.length === 0 && <span className="text-xs text-slate-400 italic mt-1 ml-1">Unassigned</span>}
-                                            {newLeadData.assignedStaff.map(username => {
-                                                const staff = teamMembers.find(m => m.username === username);
-                                                const displayName = staff ? staff.name : username;
-                                                return (
-                                                    <span key={username} className="bg-white text-slate-700 pl-1 pr-1.5 py-1 rounded-full text-xs font-bold flex items-center gap-2 border border-slate-200 shadow-sm animate-in zoom-in duration-200">
-                                                        {staff?.photo ? <img src={staff.photo} className="w-5 h-5 rounded-full object-cover" /> : <div className="w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center text-[8px] shrink-0">{displayName.charAt(0).toUpperCase()}</div>}
-                                                        {displayName.split(' ')[0]}
-                                                        <button type="button" onClick={() => setNewLeadData({...newLeadData, assignedStaff: newLeadData.assignedStaff.filter(x => x !== username)})} className="w-4 h-4 flex items-center justify-center bg-slate-100 rounded-full hover:bg-rose-500 hover:text-white text-slate-400 transition-colors"><X size={10} strokeWidth={3} /></button>
-                                                    </span>
-                                                );
-                                            })}
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* Submit Button */}
-                            <button 
-                                onClick={handleCreateLead} 
-                                disabled={isSaving || !newLeadData.phoneNumber} 
-                                className="w-full py-4 bg-brand-blue text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
-                            >
+                        </div>
+
+                        <div className="p-4 md:p-6 border-t bg-gray-50 shrink-0">
+                            <button onClick={handleCreateLead} disabled={isSaving || !newLeadData.phoneNumber} className="w-full py-4 bg-brand-blue text-white font-black rounded-xl shadow-xl flex items-center justify-center gap-2">
                                 {isSaving ? <Loader2 size={18} className="animate-spin" /> : "CREATE LEAD"}
                             </button>
                         </div>
@@ -1109,10 +1055,12 @@ const CRM = () => {
             {/* =========================================
                 🚨 2. ADD TASK MODAL (MATCHES NEW DESIGN)
             ========================================= */}
+            {/* 🚨 ADD NEW TASK MODAL */}
             {showTaskModal && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl md:rounded-[32px] w-full max-w-md md:max-w-3xl overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-                        <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
+                    <div className="bg-white rounded-2xl md:rounded-[32px] w-full max-w-md md:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+                        
+                        <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white shrink-0">
                             <div className="flex items-center gap-2">
                                 <Clock size={20} />
                                 <h3 className="text-lg font-bold">Schedule Task</h3>
@@ -1122,160 +1070,40 @@ const CRM = () => {
                             </button>
                         </div>
 
-                        <div className="p-4 md:p-6">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
-                                {/* LEFT COLUMN */}
                                 <div className="space-y-4 flex flex-col">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Title *</label>
-                                        <input 
-                                            type="text" value={newTaskData.title} 
-                                            onChange={e => setNewTaskData({...newTaskData, title: e.target.value})} 
-                                            className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" 
-                                        />
+                                        <input type="text" value={newTaskData.title} onChange={e => setNewTaskData({...newTaskData, title: e.target.value})} className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue" />
                                     </div>
                                     <div className="flex-1 flex flex-col">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Details</label>
-                                        <textarea 
-                                            value={newTaskData.description} 
-                                            onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} 
-                                            className="w-full mt-1 flex-1 min-h-[120px] md:min-h-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue resize-none text-sm text-slate-700" 
-                                        />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Details</label>
+                                        <textarea value={newTaskData.description} onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} className="w-full mt-1 flex-1 min-h-[120px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue resize-none text-sm text-slate-700" />
                                     </div>
                                 </div>
 
-                                {/* RIGHT COLUMN */}
                                 <div className="space-y-4">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Priority</label>
-                                        <select 
-                                            value={newTaskData.priority} 
-                                            onChange={e => setNewTaskData({...newTaskData, priority: e.target.value})} 
-                                            className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue font-bold text-slate-700 appearance-none"
-                                        >
-                                            <option value="High">🔴 High Priority</option>
-                                            <option value="Medium">🟠 Medium Priority</option>
-                                            <option value="Low">⚪ Low Priority</option>
+                                        <select value={newTaskData.priority} onChange={e => setNewTaskData({...newTaskData, priority: e.target.value})} className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold">
+                                            <option value="High">🔴 High</option><option value="Medium">🟠 Medium</option><option value="Low">⚪ Low</option>
                                         </select>
                                     </div>
-                                    <div className="flex gap-4 flex-col xl:flex-row">
-                                        <div className="flex-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Due Date & Time</label>
-                                            <input 
-                                                type="datetime-local" value={newTaskData.dueDate} 
-                                                onChange={e => setNewTaskData({...newTaskData, dueDate: e.target.value})} 
-                                                className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue font-bold text-brand-blue" 
-                                            />
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Link to Lead</label>
-                                            <select value={newTaskData.leadId} onChange={e => setNewTaskData({...newTaskData, leadId: e.target.value})} className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue">
-                                                <option value="">No Lead</option>
-                                                {leads.map(l => <option key={l._id} value={l._id}>{l.name} ({l.status})</option>)}
-                                            </select>
-                                        </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Due Date</label>
+                                        <input type="datetime-local" value={newTaskData.dueDate} onChange={e => setNewTaskData({...newTaskData, dueDate: e.target.value})} className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-brand-blue" />
                                     </div>
-                                    
-                                    {/* THE NEW SEARCHABLE TEAM DROPDOWN */}
-                                    <div className="relative">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign Team Members</label>
-                                        <div className="relative mt-1">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                            <input 
-                                                type="text" 
-                                                value={taskTeamSearch}
-                                                onChange={(e) => { setTaskTeamSearch(e.target.value); setShowTaskTeamDropdown(true); }}
-                                                onFocus={() => setShowTaskTeamDropdown(true)}
-                                                onBlur={() => setTimeout(() => setShowTaskTeamDropdown(false), 200)}
-                                                placeholder="Search name or @username..."
-                                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue transition-all text-sm" 
-                                            />
-                                            {/* Dropdown */}
-                                            {showTaskTeamDropdown && taskTeamSearch.trim() !== "" && (
-                                                <div className="absolute z-[100] w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1 animate-in fade-in slide-in-from-top-2">
-                                                    {teamMembers.filter(m => 
-                                                        !newTaskData.assignedStaff.includes(m.username) && 
-                                                        (m.name.toLowerCase().includes(taskTeamSearch.toLowerCase()) || 
-                                                         m.username.toLowerCase().includes(taskTeamSearch.toLowerCase()))
-                                                    ).length === 0 ? (
-                                                        <div className="p-4 text-center text-xs text-gray-400 font-medium">No members found.</div>
-                                                    ) : (
-                                                        teamMembers.filter(m => 
-                                                            !newTaskData.assignedStaff.includes(m.username) && 
-                                                            (m.name.toLowerCase().includes(taskTeamSearch.toLowerCase()) || 
-                                                             m.username.toLowerCase().includes(taskTeamSearch.toLowerCase()))
-                                                        ).map(staff => (
-                                                            <div 
-                                                                key={staff._id}
-                                                                onMouseDown={(e) => {
-                                                                    e.preventDefault(); 
-                                                                    setNewTaskData(prev => ({...prev, assignedStaff: [...prev.assignedStaff, staff.username]}));
-                                                                    setTaskTeamSearch("");
-                                                                    setShowTaskTeamDropdown(false);
-                                                                }}
-                                                                className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group"
-                                                            >
-                                                                {staff.photo ? (
-                                                                    <img src={staff.photo} alt={staff.name} className="w-6 h-6 rounded-full object-cover shadow-sm border border-slate-200 shrink-0" />
-                                                                ) : (
-                                                                    <div className="w-6 h-6 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-bold text-[10px] shrink-0 shadow-inner">
-                                                                        {staff.name.charAt(0).toUpperCase()}
-                                                                    </div>
-                                                                )}
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-xs font-bold text-gray-800 leading-tight">{staff.name}</span>
-                                                                    <span className="text-[10px] font-medium text-gray-400">@{staff.username}</span>
-                                                                </div>
-                                                                <div className="ml-auto w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-brand-blue group-hover:text-white transition-all shrink-0">
-                                                                    <Plus size={10} strokeWidth={3} />
-                                                                </div>
-                                                            </div>
-                                                        ))
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                        
-                                        {/* Selected Staff Tags */}
-                                        <div className="flex flex-wrap gap-2 mt-3 min-h-[28px]">
-                                            {newTaskData.assignedStaff.length === 0 && (
-                                                <span className="text-xs text-slate-400 italic mt-1 ml-1">No one assigned yet</span>
-                                            )}
-                                            {newTaskData.assignedStaff.map(username => {
-                                                const staff = teamMembers.find(m => m.username === username);
-                                                const displayName = staff ? staff.name : username;
-                                                const photo = staff?.photo;
-
-                                                return (
-                                                    <span key={username} className="bg-white text-slate-700 pl-1 pr-1.5 py-1 rounded-full text-xs font-bold flex items-center gap-2 border border-slate-200 shadow-sm animate-in zoom-in duration-200">
-                                                        {photo ? (
-                                                            <img src={photo} alt={displayName} className="w-5 h-5 rounded-full object-cover" />
-                                                        ) : (
-                                                            <div className="w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center text-[8px] shrink-0">
-                                                                {displayName.charAt(0).toUpperCase()}
-                                                            </div>
-                                                        )}
-                                                        {displayName.split(' ')[0]}
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => setNewTaskData({...newTaskData, assignedStaff: newTaskData.assignedStaff.filter(x => x !== username)})}
-                                                            className="w-4 h-4 flex items-center justify-center bg-slate-100 rounded-full hover:bg-rose-500 hover:text-white text-slate-400 transition-colors"
-                                                        >
-                                                            <X size={10} strokeWidth={3} />
-                                                        </button>
-                                                    </span>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition border border-slate-200 mt-2 h-[72px]">
-                                        <input type="checkbox" checked={newTaskData.addToCalendar} onChange={e => setNewTaskData({...newTaskData, addToCalendar: e.target.checked})} className="w-5 h-5 text-brand-blue rounded-lg shrink-0" />
-                                        <div><p className="text-sm font-bold text-slate-800">Sync to Calendar</p><p className="text-[10px] text-slate-500 leading-tight mt-0.5">Adds assigned staff and linked lead as guests.</p></div>
+                                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition border border-slate-200 mt-2">
+                                        <input type="checkbox" checked={newTaskData.addToCalendar} onChange={e => setNewTaskData({...newTaskData, addToCalendar: e.target.checked})} className="w-5 h-5 text-brand-blue rounded-lg" />
+                                        <div className="flex-1"><p className="text-sm font-bold">Sync to Calendar</p></div>
                                     </label>
                                 </div>
                             </div>
-                            <button onClick={handleCreateTask} disabled={isSaving || !newTaskData.title} className="w-full py-4 bg-brand-blue text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:hover:scale-100">
+                        </div>
+
+                        <div className="p-4 md:p-6 border-t bg-gray-50 shrink-0">
+                            <button onClick={handleCreateTask} disabled={isSaving || !newTaskData.title} className="w-full py-4 bg-brand-blue text-white font-black rounded-xl shadow-xl flex items-center justify-center gap-2">
                                 {isSaving ? <Loader2 size={18} className="animate-spin" /> : "CREATE & SYNC TASK"}
                             </button>
                         </div>

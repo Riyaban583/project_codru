@@ -33,14 +33,15 @@ const TasksWidget = ({ data }: { data: any }) => {
   // Form State
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState('Medium'); // 🚨 Added Priority to inline form
+  const [newTaskPriority, setNewTaskPriority] = useState('Medium'); 
+  const [newTaskDueDate, setNewTaskDueDate] = useState(''); // 🚨 NEW: Due Date State
   const [assignees, setAssignees] = useState('');
 
-  // 🚨 Sorting State
+  // Sorting State
   const [sortBy, setSortBy] = useState<'priority' | 'date'>('priority');
   const [sortDesc, setSortDesc] = useState(true); // true = High->Low or Newest->Oldest
   
-  // 🚨 Expanded Task State (Popup)
+  // Expanded Task State (Popup)
   const [expandedTask, setExpandedTask] = useState<{title: string, description: string} | null>(null);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ const TasksWidget = ({ data }: { data: any }) => {
     }
   }, [data]);
 
-  // 🚨 THE SORTING ENGINE
+  // THE SORTING ENGINE
   const priorityWeight: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
   
   const pendingTasks = tasks.filter(t => t.status !== 'Completed').sort((a, b) => {
@@ -69,7 +70,7 @@ const TasksWidget = ({ data }: { data: any }) => {
           // Sort by Date
           const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
           const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-          if (dateA !== dateB) return sortDesc ? dateB - dateA : dateA - dateB; // Descending usually means newest first
+          if (dateA !== dateB) return sortDesc ? dateB - dateA : dateA - dateB; 
           
           // Tie-breaker: Highest priority
           const valA = priorityWeight[a.priority || 'Medium'];
@@ -93,13 +94,17 @@ const TasksWidget = ({ data }: { data: any }) => {
         assignedStaff.push(currentUsername);
       }
 
+      // 🚨 Format the date if it exists
+      const finalDueDate = newTaskDueDate ? new Date(newTaskDueDate).toISOString() : undefined;
+
       const res = await fetch(`${import.meta.env.VITE_API}tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           title: newTaskTitle,
           description: newTaskDescription,
-          priority: newTaskPriority, // 🚨 Sending Priority
+          priority: newTaskPriority,
+          dueDate: finalDueDate, // 🚨 Sending Due Date
           assignedStaff: assignedStaff
         })
       });
@@ -110,6 +115,7 @@ const TasksWidget = ({ data }: { data: any }) => {
         setNewTaskTitle('');
         setNewTaskDescription('');
         setNewTaskPriority('Medium');
+        setNewTaskDueDate(''); // 🚨 Reset state
         setAssignees('');
         setIsAdding(false);
       }
@@ -121,7 +127,7 @@ const TasksWidget = ({ data }: { data: any }) => {
   };
 
   const toggleTask = async (taskId: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation(); // Stop the row click from triggering the modal
+    if (e) e.stopPropagation(); 
     const taskToToggle = tasks.find(t => t._id === taskId);
     const newStatus = taskToToggle?.status === 'Completed' ? 'Pending' : 'Completed';
 
@@ -149,7 +155,6 @@ const TasksWidget = ({ data }: { data: any }) => {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* 🚨 SORTING ENGINE UI */}
           <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200/50 shadow-sm">
             <select 
                 value={sortBy} 
@@ -169,7 +174,6 @@ const TasksWidget = ({ data }: { data: any }) => {
             </button>
           </div>
 
-          {/* ADD BUTTON */}
           <button 
             onClick={() => setIsAdding(!isAdding)} 
             className="w-6 h-6 flex items-center justify-center bg-brand-blue/10 text-brand-blue rounded-full hover:bg-brand-blue hover:text-white transition-colors"
@@ -181,7 +185,7 @@ const TasksWidget = ({ data }: { data: any }) => {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 relative z-10 flex flex-col">
         
-        {/* INLINE ADD FORM WITH PRIORITY */}
+        {/* 🚨 INLINE ADD FORM */}
         {isAdding && (
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 mb-4 animate-in fade-in slide-in-from-top-2">
             <input 
@@ -194,15 +198,23 @@ const TasksWidget = ({ data }: { data: any }) => {
               onChange={e => setNewTaskDescription(e.target.value)} rows={2}
               className="w-full bg-white px-3 py-2 rounded-xl text-[10px] font-medium text-slate-600 outline-none border border-slate-200 mb-2 focus:border-brand-blue/50 transition-colors resize-none custom-scrollbar"
             />
-            <div className="flex gap-2 mb-3">
+            
+            {/* 🚨 Added Flex-Wrap to handle the extra Date input gracefully on mobile */}
+            <div className="flex flex-wrap gap-2 mb-3">
                 <input 
                     type="text" placeholder="@username (Assign others)" value={assignees}
                     onChange={e => setAssignees(e.target.value)}
-                    className="flex-1 bg-white px-3 py-2 rounded-xl text-[10px] font-medium text-slate-600 outline-none border border-slate-200 focus:border-brand-blue/50 transition-colors"
+                    className="flex-1 min-w-[120px] bg-white px-3 py-2 rounded-xl text-[10px] font-medium text-slate-600 outline-none border border-slate-200 focus:border-brand-blue/50 transition-colors"
+                />
+                <input 
+                    type="datetime-local" 
+                    value={newTaskDueDate}
+                    onChange={e => setNewTaskDueDate(e.target.value)}
+                    className="bg-white px-2 py-2 rounded-xl text-[10px] font-bold text-slate-600 outline-none border border-slate-200 focus:border-brand-blue/50 transition-colors shrink-0"
                 />
                 <select 
                     value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)} 
-                    className="bg-white px-2 py-2 rounded-xl text-[10px] font-bold text-slate-600 outline-none border border-slate-200 focus:border-brand-blue/50 transition-colors"
+                    className="bg-white px-2 py-2 rounded-xl text-[10px] font-bold text-slate-600 outline-none border border-slate-200 focus:border-brand-blue/50 transition-colors shrink-0"
                 >
                     <option value="High">High</option>
                     <option value="Medium">Med</option>
@@ -238,7 +250,6 @@ const TasksWidget = ({ data }: { data: any }) => {
                         <span className="text-[11px] font-bold text-slate-700 block leading-snug truncate">{t.title}</span>
                         <PriorityBadge priority={t.priority} />
                     </div>
-                    {/* Render a snippet of the description */}
                     {t.description && (
                         <div className="flex items-start gap-1.5 mt-1.5 text-slate-500">
                             <AlignLeft size={10} className="mt-0.5 shrink-0 opacity-50 group-hover/task:text-brand-blue" />
@@ -247,7 +258,7 @@ const TasksWidget = ({ data }: { data: any }) => {
                     )}
                     {t.dueDate && (
                         <div className="flex items-center gap-1 mt-1.5 text-[9px] font-bold text-slate-400">
-                            <Clock size={10} /> {new Date(t.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric'})}
+                            <Clock size={10} /> {new Date(t.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </div>
                     )}
                 </div>
@@ -277,14 +288,14 @@ const TasksWidget = ({ data }: { data: any }) => {
         )}
       </div>
 
-      {/* 🚨 DESCRIPTION MODAL / POPUP */}
+      {/* DESCRIPTION MODAL / POPUP */}
       {expandedTask && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setExpandedTask(null)}>
               <div 
-                  className="bg-white rounded-[24px] md:rounded-[32px] w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden"
-                  onClick={e => e.stopPropagation()} // Prevent clicking inside modal from closing it
+                  className="bg-white rounded-[24px] md:rounded-[32px] w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden border border-white/20"
+                  onClick={e => e.stopPropagation()}
               >
-                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
+                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white shrink-0">
                       <h3 className="text-sm font-bold pr-4 leading-tight">{expandedTask.title}</h3>
                       <button onClick={() => setExpandedTask(null)} className="hover:bg-white/20 p-1.5 rounded-full transition shrink-0"><X size={16}/></button>
                   </div>

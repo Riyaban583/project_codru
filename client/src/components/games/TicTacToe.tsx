@@ -7,7 +7,9 @@ const TicTacToe: React.FC = () => {
   const [winner, setWinner] = useState<string | null>(null);
 
   const lines = [
-    [0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6]
   ];
 
   const checkWinner = (squares: (string | null)[]) => {
@@ -17,22 +19,53 @@ const TicTacToe: React.FC = () => {
     return squares.includes(null) ? null : 'Draw';
   };
 
-  const getSmartComputerMove = (squares: (string | null)[]) => {
-    // 1. Can I win?
-    for (let [a, b, c] of lines) {
-      if (squares[a] === 'O' && squares[b] === 'O' && !squares[c]) return c;
-      if (squares[a] === 'O' && squares[c] === 'O' && !squares[b]) return b;
-      if (squares[b] === 'O' && squares[c] === 'O' && !squares[a]) return a;
+  // 🧠 Unbeatable Minimax Algorithm (Kept from the upgrade)
+  const minimax = (squares: (string | null)[], depth: number, isMaximizing: boolean): number => {
+    const result = checkWinner(squares);
+    if (result === 'O') return 10 - depth;
+    if (result === 'X') return depth - 10;
+    if (result === 'Draw') return 0;
+
+    if (isMaximizing) {
+      let bestScore = -Infinity;
+      for (let i = 0; i < 9; i++) {
+        if (!squares[i]) {
+          squares[i] = 'O';
+          let score = minimax(squares, depth + 1, false);
+          squares[i] = null;
+          bestScore = Math.max(score, bestScore);
+        }
+      }
+      return bestScore;
+    } else {
+      let bestScore = Infinity;
+      for (let i = 0; i < 9; i++) {
+        if (!squares[i]) {
+          squares[i] = 'X';
+          let score = minimax(squares, depth + 1, true);
+          squares[i] = null;
+          bestScore = Math.min(score, bestScore);
+        }
+      }
+      return bestScore;
     }
-    // 2. Do I need to block the player?
-    for (let [a, b, c] of lines) {
-      if (squares[a] === 'X' && squares[b] === 'X' && !squares[c]) return c;
-      if (squares[a] === 'X' && squares[c] === 'X' && !squares[b]) return b;
-      if (squares[b] === 'X' && squares[c] === 'X' && !squares[a]) return a;
+  };
+
+  const getBestMove = (currentBoard: (string | null)[]) => {
+    let bestScore = -Infinity;
+    let move;
+    for (let i = 0; i < 9; i++) {
+      if (!currentBoard[i]) {
+        currentBoard[i] = 'O';
+        let score = minimax(currentBoard, 0, false);
+        currentBoard[i] = null;
+        if (score > bestScore) {
+          bestScore = score;
+          move = i;
+        }
+      }
     }
-    // 3. Otherwise, pick randomly
-    const emptyIndices = squares.map((v, i) => (v === null ? i : null)).filter(v => v !== null) as number[];
-    return emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+    return move;
   };
 
   const handleClick = (index: number) => {
@@ -49,10 +82,10 @@ const TicTacToe: React.FC = () => {
 
     if (!isPlayerTurn && !winner) {
       const timer = setTimeout(() => {
-        const compMove = getSmartComputerMove(board);
-        if (compMove !== undefined) {
+        const move = getBestMove([...board]);
+        if (move !== undefined) {
           const newBoard = [...board];
-          newBoard[compMove] = 'O';
+          newBoard[move] = 'O';
           setBoard(newBoard);
           setIsPlayerTurn(true);
         }
@@ -61,34 +94,41 @@ const TicTacToe: React.FC = () => {
     }
   }, [isPlayerTurn, board, winner]);
 
+  // 🎨 Restored Original UI
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center w-full max-w-sm mx-auto">
-      <h3 className="font-display font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center w-full h-full max-w-sm mx-auto">
+      <h3 className="font-display font-bold text-lg text-gray-800 mb-4 flex items-center gap-2 w-full">
         <Gamepad2 className="text-brand-blue" /> Tic-Tac-Toe
       </h3>
-      <div className="grid grid-cols-3 gap-2 mb-4 bg-gray-100 p-2 rounded-2xl w-full">
+      
+      <div className="grid grid-cols-3 gap-2 mb-4 bg-gray-100 p-2 rounded-2xl w-full flex-1">
         {board.map((cell, idx) => (
           <button
             key={idx}
             onClick={() => handleClick(idx)}
             disabled={cell !== null || !isPlayerTurn || !!winner}
-            className={`h-16 sm:h-20 bg-white rounded-xl text-3xl font-black transition-all ${
-              !cell && isPlayerTurn && !winner ? 'hover:bg-blue-50 cursor-pointer' : 'cursor-default'
+            className={`w-full h-full min-h-[4rem] sm:min-h-[5rem] bg-white rounded-xl text-3xl font-black transition-all ${
+              !cell && isPlayerTurn && !winner ? 'hover:bg-blue-50 cursor-pointer active:scale-95' : 'cursor-default'
             } ${cell === 'X' ? 'text-brand-blue' : 'text-brand-orange'}`}
           >
             {cell}
           </button>
         ))}
       </div>
-      <div className="flex items-center justify-between w-full mt-2">
+
+      <div className="flex items-center justify-between w-full mt-auto pt-2">
         <span className="text-sm font-bold text-gray-500">
           {winner === 'Draw' ? "Draw!" : winner === 'X' ? '🎉 You Won!' : winner === 'O' ? '🤖 AI Won!' : isPlayerTurn ? 'Your Turn' : 'Thinking...'}
         </span>
-        <button onClick={() => { setBoard(Array(9).fill(null)); setIsPlayerTurn(true); setWinner(null); }} className="p-2 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-200 transition">
+        <button 
+          onClick={() => { setBoard(Array(9).fill(null)); setIsPlayerTurn(true); setWinner(null); }} 
+          className="p-2 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-200 transition"
+        >
           <RotateCcw size={16} />
         </button>
       </div>
     </div>
   );
 };
+
 export default TicTacToe;
