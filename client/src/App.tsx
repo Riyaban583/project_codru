@@ -17,6 +17,7 @@ export interface UserData {
   isVerifiedParent: boolean;
   parentVerificationRequested: boolean;  
   dashboardLayout?: any[];
+  isCuTeTeam?: boolean;
 }
 
 // --- IMPORTS ---
@@ -51,6 +52,7 @@ function App() {
     isVerifiedParent: false,
     parentVerificationRequested: false,
     dashboardLayout: [],
+    isCuTeTeam: false
   });
   
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -185,6 +187,7 @@ function App() {
             isVerifiedParent: data.user.isVerifiedParent || false,
             parentVerificationRequested: data.user.parentVerificationRequested || false,
             dashboardLayout: data.user.dashboardLayout || [],
+            isCuTeTeam: data.user.isCuTeTeam || false,
           });
           setIsServerVerified(true);
         }
