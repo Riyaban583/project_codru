@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require("../models/userSchema");
 const Lead = require('../models/Lead');
 const Task = require('../models/Task');
+const authenticate = require('../middleware/authenticate');
 
 // Toggle CuTe Team Status
 router.put('/user/toggle-team/:username', async (req, res) => {
@@ -72,14 +73,23 @@ router.put('/tasks/reorder', async (req, res) => {
 // ==========================================
 // PUT: EDIT EXISTING TASK
 // ==========================================
-router.put('/tasks/:id', async (req, res) => {
+router.put('/tasks/:id', authenticate, async (req, res) => { // 🚨 Added authenticate middleware
     try {
-        // 🚨 Destructure priority
-        const { title, description, dueDate, priority } = req.body;
+        // 🚨 Added assignedTo and leadId to the destructuring
+        const { title, description, dueDate, priority, assignedTo, leadId } = req.body;
         
         const updatedTask = await Task.findByIdAndUpdate(
             req.params.id,
-            { $set: { title, description, dueDate, priority } }, // 🚨 Update priority
+            { 
+                $set: { 
+                    title, 
+                    description, 
+                    dueDate, 
+                    priority,
+                    assignedTo, // 🚨 Now team members will actually save!
+                    leadId      // 🚨 Now linked leads will actually save!
+                } 
+            }, 
             { new: true }
         ).populate('leadId', 'name phoneNumber').populate('assignedTo', 'name username photo');
 

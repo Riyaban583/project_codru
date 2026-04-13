@@ -231,9 +231,10 @@ const CRM = () => {
             const token = localStorage.getItem("jwtoken");
             const payload = { 
                 ...editTaskData, 
-                assignedTo: editTaskData.assignedTo?.map((u: any) => u._id) || [] 
+                assignedTo: editTaskData.assignedTo?.map((u: any) => u._id) || [],
+                leadId: editTaskData.leadId?._id || editTaskData.leadId || null
             };
-            
+
             await axios.put(`${API_BASE}/tasks/${editTaskData._id}`, payload, { 
                 headers: { Authorization: `Bearer ${token}` } 
             });
