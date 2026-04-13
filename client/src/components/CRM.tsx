@@ -229,12 +229,25 @@ const CRM = () => {
         setIsSaving(true);
         try {
             const token = localStorage.getItem("jwtoken");
-            await axios.put(`${API_BASE}/tasks/${editTaskData._id}`, editTaskData, { headers: { Authorization: `Bearer ${token}` } });
+            const payload = { 
+                ...editTaskData, 
+                assignedTo: editTaskData.assignedTo?.map((u: any) => u._id) || [] 
+            };
+            
+            await axios.put(`${API_BASE}/tasks/${editTaskData._id}`, payload, { 
+                headers: { Authorization: `Bearer ${token}` } 
+            });
+            
+            // Update local state so the UI reflects the change immediately
             setTasks(prev => prev.map(t => t._id === editTaskData._id ? editTaskData : t));
             setEditTaskData(null);
             showToast("Task updated successfully!", "success");
-        } catch (error) { showToast("Failed to save edits.", "error"); }
-        finally { setIsSaving(false); }
+        } catch (error) { 
+            console.error("Task Edit Error:", error); // 🚨 Added this so you can see exact backend errors in your console!
+            showToast("Failed to save edits.", "error"); 
+        } finally { 
+            setIsSaving(false); 
+        }
     };
 
     const handleCreateLead = async () => {
