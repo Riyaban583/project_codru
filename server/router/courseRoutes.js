@@ -11,7 +11,7 @@ router.get("/my-courses", authenticate, async (req, res) => {
   try {
     let targetUserId = req.user._id;
     
-    // 🚨 FIXED: Capital 'Teacher' to match your database
+
     if (req.query.username && req.user.role === 'Teacher') {
       const student = await User.findOne({ username: req.query.username });
       if (!student) return res.status(404).json({ error: "Student not found" });

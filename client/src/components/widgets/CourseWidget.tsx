@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Code, Bot, Cpu, PenTool, Edit3, Palette, ScrollText, 
-  Sparkles, Hammer, CheckCircle2, Quote, Loader2, User, Search, ExternalLink
+  Sparkles, Hammer, CheckCircle2, Quote, Loader2, User, ExternalLink, GraduationCap, AlertTriangle
 } from 'lucide-react';
 
 const MILESTONES = ['Ideation', 'Prototyping', 'Building', 'Polishing', 'Completed'];
@@ -20,19 +20,57 @@ const getCourseTheme = (name: string) => {
 };
 
 interface CourseWidgetProps {
-  role: string;
-  selectedStudentUsername?: string | null; // Passed from global dashboard if available
+  data?: any;
+  rawData?: any;
+  user?: any;
 }
 
-const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUsername }) => {
+const CourseWidget: React.FC<CourseWidgetProps> = ({ user }) => {
   const navigate = useNavigate();
+  
+  const role = user?.Role || user?.role || 'user';
+  
   const [courses, setCourses] = useState<any[]>([]);
+  const [completedCount, setCompletedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  // 🚨 TEACHER FILTER STATE
-  const [teacherSearchQuery, setTeacherSearchQuery] = useState(selectedStudentUsername || "");
-  const [activeSearch, setActiveSearch] = useState(selectedStudentUsername || "");
+  // 🚨 NEW: State for Teacher's Students
+  const [assignedStudents, setAssignedStudents] = useState<any[]>([]);
+  const [activeSearch, setActiveSearch] = useState("");
 
+  // 1. FETCH TEACHER'S STUDENTS
+  useEffect(() => {
+    if (role?.toLowerCase() === 'teacher') {
+      const fetchStudents = async () => {
+        try {
+          const token = localStorage.getItem("jwtoken");
+          
+          // 🚨 Grab the teacher's username just like you do in StudentManagement
+          const teacherUsername = user?.username || localStorage.getItem("Username");
+          
+          // 🚨 Use your actual working backend route!
+          const res = await fetch(`${import.meta.env.VITE_API}my-students/${teacherUsername}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            setAssignedStudents(data);
+            
+            // Auto-select the first student to instantly populate the widget!
+            if (data.length > 0 && !activeSearch) {
+              setActiveSearch(data[0].username);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch students:", error);
+        }
+      };
+      fetchStudents();
+    }
+  }, [role, user, activeSearch]);
+
+  // 2. FETCH COURSES
   const fetchCourses = async (targetUsername?: string) => {
     setIsLoading(true);
     try {
@@ -46,11 +84,15 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
       const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        // Only show Active or Paused courses on the dashboard to save space
-        const activeCourses = data.filter((c: any) => c.status !== 'graduated');
+        
+        const activeCourses = data.filter((c: any) => c.status !== 'graduated' || !c.studentAcceptedGraduation);
+        const graduatedCourses = data.filter((c: any) => c.status === 'graduated' && c.studentAcceptedGraduation);
+        
         setCourses(activeCourses);
+        setCompletedCount(graduatedCourses.length);
       } else {
         setCourses([]);
+        setCompletedCount(0);
       }
     } catch (error) {
       console.error("Failed to fetch courses:", error);
@@ -59,7 +101,6 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
     }
   };
 
-  // Initial Fetch
   useEffect(() => {
     if (role?.toLowerCase() === 'student') {
       fetchCourses();
@@ -68,50 +109,59 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
     }
   }, [role, activeSearch]);
 
-  // Handle Teacher Search Submit
-  const handleTeacherSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (teacherSearchQuery.trim()) {
-      setActiveSearch(teacherSearchQuery.trim());
-    }
-  };
-
   return (
     <>
       {/* WIDGET HEADER */}
-      <div className="flex items-center justify-between mb-4 relative z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Active Projects</h3>
+      <div className="flex items-center justify-between mb-4 relative z-10 gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
+              Active Projects
+            </h3>
+          </div>
+          
+          {completedCount > 0 && (
+            <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-md text-[9px] font-bold tracking-widest shadow-sm shrink-0 whitespace-nowrap">
+              {completedCount} DONE
+            </span>
+          )}
         </div>
         
         {courses.length > 0 && (
-          <button onClick={() => navigate('/my-courses')} className="text-[10px] font-bold text-brand-blue hover:underline flex items-center gap-1">
-              Full Portfolio <ExternalLink size={10} />
+          <button 
+            onClick={() => navigate('/my-courses')} 
+            className="text-[10px] font-bold text-brand-blue hover:text-blue-700 transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap"
+          >
+              Full Portfolio <ExternalLink size={10} className="mb-0.5" />
           </button>
         )}
       </div>
 
-      {/* 🚨 TEACHER FILTER BAR */}
-      {role?.toLowerCase() === 'teacher' && (
-        <form onSubmit={handleTeacherSearch} className="mb-4 relative z-10">
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-blue transition-colors" size={14} />
-            <input 
-              type="text" 
-              placeholder="Enter student @username..."
-              value={teacherSearchQuery}
-              onChange={(e) => setTeacherSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-24 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all shadow-sm"
-            />
-            <button 
-              type="submit"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-slate-100 hover:bg-brand-blue hover:text-white text-slate-600 text-[10px] font-bold px-3 py-1 rounded-lg transition-colors"
+      {/* 🚨 NEW: STUDENT PILLS FOR TEACHERS */}
+      {role?.toLowerCase() === 'teacher' && assignedStudents.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2 mb-2 relative z-10">
+          {assignedStudents.map((student) => (
+            <button
+              key={student._id}
+              onClick={() => setActiveSearch(student.username)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all shrink-0 border ${
+                activeSearch === student.username 
+                  ? 'bg-brand-blue text-white border-brand-blue shadow-md shadow-blue-500/20' 
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-brand-blue/50 hover:bg-blue-50 hover:text-brand-blue'
+              }`}
             >
-              Filter
+              {student.photo ? (
+                <img src={student.photo} alt={student.name} className="w-4 h-4 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] shrink-0 ${activeSearch === student.username ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  {student.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              {student.name.split(' ')[0]}
             </button>
-          </div>
-        </form>
+          ))}
+        </div>
       )}
 
       {/* WIDGET CONTENT */}
@@ -121,25 +171,26 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
                 <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
             </div>
         ) : role?.toLowerCase() === 'teacher' && !activeSearch ? (
-            // TEACHER EMPTY STATE (No Student Selected)
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 py-8 px-4 min-h-[200px]">
                 <User size={32} className="opacity-20 mb-3" />
                 <h4 className="text-xs font-bold text-slate-700 mb-1 text-center">Student Lookup</h4>
-                <p className="text-[10px] text-slate-500 text-center">Enter a student's username above to view their active projects.</p>
+                {/* 🚨 Text updated for pills */}
+                <p className="text-[10px] text-slate-500 text-center">Select a student above to view their active projects.</p>
             </div>
         ) : courses.length > 0 ? (
-            // ACTIVE COURSES LIST
             courses.map((course) => {
               const theme = getCourseTheme(course.courseName);
               const Icon = theme.icon;
+              
+              const isPendingGraduation = course.status === 'graduated' && !course.studentAcceptedGraduation;
               const currentMilestoneIndex = MILESTONES.indexOf(course.currentMilestone);
-              const progressPercentage = (currentMilestoneIndex / (MILESTONES.length - 1)) * 100;
+              const progressPercentage = isPendingGraduation ? 100 : (currentMilestoneIndex / (MILESTONES.length - 1)) * 100;
 
               return (
                 <div 
                   key={course._id} 
                   onClick={() => navigate('/my-courses')}
-                  className={`bg-white rounded-2xl border ${theme.border} p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group`}
+                  className={`bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group ${isPendingGraduation ? 'border-amber-200 bg-gradient-to-br from-white to-amber-50/30' : theme.border}`}
                 >
                   {/* Header Row */}
                   <div className="flex items-start justify-between mb-3">
@@ -156,7 +207,13 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
                         </span>
                       </div>
                     </div>
-                    {course.status === 'paused' && (
+                    
+                    {/* STATUS BADGES */}
+                    {isPendingGraduation ? (
+                      <span className="flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                        <AlertTriangle size={10} /> Pending
+                      </span>
+                    ) : course.status === 'paused' && (
                       <span className="text-[9px] font-bold bg-yellow-50 text-yellow-600 border border-yellow-200 px-2 py-0.5 rounded-md uppercase tracking-wider">
                         Paused
                       </span>
@@ -173,11 +230,11 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
                     </p>
                   </div>
 
-                  {/* 🚨 MINI PROGRESS BAR */}
+                  {/* MINI PROGRESS BAR */}
                   <div className="mb-4">
                     <div className="flex justify-between items-end mb-1.5">
-                      <span className="text-[10px] font-bold text-brand-blue">
-                        {course.currentMilestone}
+                      <span className={`text-[10px] font-bold ${isPendingGraduation ? 'text-amber-600' : 'text-brand-blue'}`}>
+                        {isPendingGraduation ? 'Awaiting Your Approval' : course.currentMilestone}
                       </span>
                       <span className="text-[9px] font-bold text-slate-400">
                         {Math.round(progressPercentage)}%
@@ -185,7 +242,7 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
                     </div>
                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div 
-                        className={`h-full rounded-full transition-all duration-1000 ease-out ${theme.bg.replace('bg-', 'bg-').replace('50', '500')} bg-brand-blue`}
+                        className={`h-full rounded-full transition-all duration-1000 ease-out ${isPendingGraduation ? 'bg-amber-400' : 'bg-brand-blue'}`}
                         style={{ width: `${progressPercentage}%` }}
                       />
                     </div>
@@ -204,7 +261,6 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ role, selectedStudentUserna
               );
             })
         ) : (
-            // EMPTY STATE: No active courses
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 py-8 px-4 min-h-[200px]">
                 <Sparkles size={32} className="opacity-20 mb-3" />
                 <h4 className="text-xs font-bold text-slate-700 mb-1 text-center">No Active Projects</h4>

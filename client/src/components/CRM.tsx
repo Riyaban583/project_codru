@@ -322,7 +322,7 @@ const CRM = () => {
             }
             fetchDashboardData();
             setShowTaskModal(false);
-            setNewTaskData({ title: '', description: '', dueDate: '', leadId: '', assignedStaff: [], addToCalendar: false });
+            setNewTaskData({ title: '', description: '', dueDate: '', leadId: '', assignedStaff: [], addToCalendar: false, priority: 'Medium' });
             showToast("Task created successfully!", "success");
         } catch (error) { showToast("Failed to create task.", "error"); }
         finally { setIsSaving(false); }

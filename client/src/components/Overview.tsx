@@ -20,7 +20,7 @@ const WIDGET_CONFIG: any = {
   feed: { roles: ['student', 'user', 'teacher', 'admin', 'parent', 'verified_teacher', 'verified_parent', 'cute_team'], component: PostWidget },
   support_circle: { roles: ['parent', 'verified_parent'], component: SupportCircleWidget },
   courses: { roles: ['student', 'teacher'], component: CourseWidget },
-  syllabus: { roles: ['student'], component: SyllabusWidget },
+  syllabus: { roles: ['student', 'teacher'], component: SyllabusWidget },
   skill_track: { roles: ['student'], component: ProjectWidget },
 };
 

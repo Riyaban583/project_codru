@@ -121,11 +121,10 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // 🚨 PRE-SAVE HOOK FOR PASSWORD HASHING 🚨
-userSchema.pre("save", async function (next) {
+userSchema.pre("save", async function () {
   if (this.isModified("password") && this.password) {
     this.password = await bcrypt.hash(this.password, 12);
   }
-  next();
 });
 
 const User = mongoose.model("User", userSchema);
