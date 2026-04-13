@@ -1094,8 +1094,102 @@ const CRM = () => {
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Due Date</label>
                                         <input type="datetime-local" value={newTaskData.dueDate} onChange={e => setNewTaskData({...newTaskData, dueDate: e.target.value})} className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-brand-blue" />
                                     </div>
+
+                                    {/* 🚨 RESTORED: THE INSTA-LIKE SEARCH DROPDOWN */}
+                                    <div className="relative">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign Team Members</label>
+                                        <div className="relative mt-1">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input 
+                                                type="text" 
+                                                value={taskTeamSearch}
+                                                onChange={(e) => { setTaskTeamSearch(e.target.value); setShowTaskTeamDropdown(true); }}
+                                                onFocus={() => setShowTaskTeamDropdown(true)}
+                                                onBlur={() => setTimeout(() => setShowTaskTeamDropdown(false), 200)}
+                                                placeholder="Search name or @username..."
+                                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-blue transition-all text-sm" 
+                                            />
+                                            
+                                            {showTaskTeamDropdown && taskTeamSearch.trim() !== "" && (
+                                                <div className="absolute z-[100] w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1 animate-in fade-in slide-in-from-top-2">
+                                                    {teamMembers.filter(m => 
+                                                        !newTaskData.assignedStaff.includes(m.username) && 
+                                                        (m.name.toLowerCase().includes(taskTeamSearch.toLowerCase()) || 
+                                                         m.username.toLowerCase().includes(taskTeamSearch.toLowerCase()))
+                                                    ).length === 0 ? (
+                                                        <div className="p-4 text-center text-xs text-gray-400 font-medium">No members found.</div>
+                                                    ) : (
+                                                        teamMembers.filter(m => 
+                                                            !newTaskData.assignedStaff.includes(m.username) && 
+                                                            (m.name.toLowerCase().includes(taskTeamSearch.toLowerCase()) || 
+                                                             m.username.toLowerCase().includes(taskTeamSearch.toLowerCase()))
+                                                        ).map(staff => (
+                                                            <div 
+                                                                key={staff._id}
+                                                                onMouseDown={(e) => {
+                                                                    e.preventDefault(); 
+                                                                    setNewTaskData(prev => ({...prev, assignedStaff: [...prev.assignedStaff, staff.username]}));
+                                                                    setTaskTeamSearch("");
+                                                                    setShowTaskTeamDropdown(false);
+                                                                }}
+                                                                className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group"
+                                                            >
+                                                                {staff.photo ? (
+                                                                    <img src={staff.photo} alt={staff.name} className="w-6 h-6 rounded-full object-cover shadow-sm border border-slate-200 shrink-0" />
+                                                                ) : (
+                                                                    <div className="w-6 h-6 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-bold text-[10px] shrink-0 shadow-inner">
+                                                                        {staff.name.charAt(0).toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-xs font-bold text-gray-800 leading-tight">{staff.name}</span>
+                                                                    <span className="text-[10px] font-medium text-gray-400">@{staff.username}</span>
+                                                                </div>
+                                                                <div className="ml-auto w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-brand-blue group-hover:text-white transition-all shrink-0">
+                                                                    <Plus size={10} strokeWidth={3} />
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Selected Staff Tags */}
+                                        <div className="flex flex-wrap gap-2 mt-3 min-h-[28px]">
+                                            {newTaskData.assignedStaff.length === 0 && (
+                                                <span className="text-xs text-slate-400 italic mt-1 ml-1">No one assigned yet</span>
+                                            )}
+                                            {newTaskData.assignedStaff.map(username => {
+                                                const staff = teamMembers.find(m => m.username === username);
+                                                const displayName = staff ? staff.name : username;
+                                                const photo = staff?.photo;
+
+                                                return (
+                                                    <span key={username} className="bg-white text-slate-700 pl-1 pr-1.5 py-1 rounded-full text-xs font-bold flex items-center gap-2 border border-slate-200 shadow-sm animate-in zoom-in duration-200">
+                                                        {photo ? (
+                                                            <img src={photo} alt={displayName} className="w-5 h-5 rounded-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center text-[8px] shrink-0">
+                                                                {displayName.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        {displayName.split(' ')[0]}
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setNewTaskData({...newTaskData, assignedStaff: newTaskData.assignedStaff.filter(x => x !== username)})}
+                                                            className="w-4 h-4 flex items-center justify-center bg-slate-100 rounded-full hover:bg-rose-500 hover:text-white text-slate-400 transition-colors"
+                                                        >
+                                                            <X size={10} strokeWidth={3} />
+                                                        </button>
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
                                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition border border-slate-200 mt-2">
-                                        <input type="checkbox" checked={newTaskData.addToCalendar} onChange={e => setNewTaskData({...newTaskData, addToCalendar: e.target.checked})} className="w-5 h-5 text-brand-blue rounded-lg" />
+                                        <input type="checkbox" checked={newTaskData.addToCalendar} onChange={e => setNewTaskData({...newTaskData, addToCalendar: e.target.checked})} className="w-5 h-5 text-brand-blue rounded-lg shrink-0" />
                                         <div className="flex-1"><p className="text-sm font-bold">Sync to Calendar</p></div>
                                     </label>
                                 </div>
