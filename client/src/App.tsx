@@ -209,7 +209,6 @@ function App() {
     location.pathname.startsWith("/admin") || 
     location.pathname.startsWith("/assign-task");
 
-  // 🚨 NEW: Public Route Component to block authenticated users from login/signup pages
   const PublicRoute = ({ children }: { children: JSX.Element }) => {
     // Show spinner while checking auth state
     if (isAuthLoading) {
