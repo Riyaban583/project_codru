@@ -6,9 +6,8 @@ interface BackgroundProps {
 }
 
 const PlanetryAnimatedBackground = ({ taskCount = 0 }: BackgroundProps) => {
-  // 1. Generate Nebula Clouds
+  
   const nebulaClouds = useMemo(() => {
-    // One cloud for every 3 tasks, plus 2 base clouds
     const count = 2 + Math.floor(taskCount / 3);
     const colors = [
       "rgba(237, 127, 35, 0.15)", // Brand Orange (faded)
@@ -20,7 +19,7 @@ const PlanetryAnimatedBackground = ({ taskCount = 0 }: BackgroundProps) => {
     return Array.from({ length: count }).map(() => ({
       top: `${Math.random() * 80}%`,
       left: `${Math.random() * 100}%`,
-      size: `${Math.random() * 400 + 300}px`, // Huge soft blobs
+      size: `${Math.random() * 400 + 300}px`,
       color: colors[Math.floor(Math.random() * colors.length)],
       delay: `${Math.random() * 10}s`,
     }));
@@ -51,7 +50,6 @@ const PlanetryAnimatedBackground = ({ taskCount = 0 }: BackgroundProps) => {
 
   return (
     <div className="planetry-animated-background">
-      {/* 2. Render Nebulas First (so they are behind stars) */}
       {nebulaClouds.map((nebula, index) => (
         <div
           key={`nebula-${index}`}
@@ -86,14 +84,17 @@ const PlanetryAnimatedBackground = ({ taskCount = 0 }: BackgroundProps) => {
         <div
           key={`shooting-${index}`}
           className="shooting-star"
-          style={{
-            top: star.top,
-            left: star.left,
-            animationDelay: star.animationDelay,
-            animationDuration: star.animationDuration,
-            "--angle": star.angle,
-            "--distance": star.distance,
-          } as React.CSSProperties}
+          // 🚨 THE FIX: Strict typing for modern React Custom CSS properties
+          style={
+            {
+              top: star.top,
+              left: star.left,
+              animationDelay: star.animationDelay,
+              animationDuration: star.animationDuration,
+              "--angle": star.angle,
+              "--distance": star.distance,
+            } as React.CSSProperties
+          }
         />
       ))}
     </div>

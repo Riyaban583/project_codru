@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import Xarrow, { Xwrapper } from "react-xarrows";
+// We import them normally first...
+import _Xarrow, { Xwrapper as _Xwrapper } from "react-xarrows";
 import { motion } from "framer-motion"; 
 import { Rocket } from "lucide-react";
 
@@ -7,6 +8,12 @@ import { Rocket } from "lucide-react";
 import DraggableBox from "./DraggableBox";
 import PlanetryAnimatedBackground from "./PlanetryAnimatedBackground";
 import TaskModal from "./TaskModal";
+
+// 🚨 THE CRASH FIX: Vite ESM Interop
+// We manually unwrap the default exports so React doesn't crash on an object!
+const Xarrow = (_Xarrow as any).default || _Xarrow;
+const Xwrapper = (_Xwrapper as any)?.default || _Xwrapper || React.Fragment;
+const MemoizedBackground = React.memo(PlanetryAnimatedBackground);
 
 interface Task {
   week: number;
@@ -22,13 +29,14 @@ interface Position {
 
 const PlanetryPath = () => {
   const xIncrement = 220;
-  const containerHeight = window.innerHeight - 200;
+  const containerHeight = typeof window !== 'undefined' ? window.innerHeight - 200 : 800;
 
-  // --- STATE RESTORED ---
   const [positions, setPositions] = useState<Record<string, Position>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [modalTaskId, setModalTaskId] = useState<number | null>(null);
+
+  const [domReady, setDomReady] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [modalQuestion, setModalQuestion] = useState("");
@@ -36,7 +44,7 @@ const PlanetryPath = () => {
   const [modalLink, setModalLink] = useState("");
   const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
 
-  const containerWidth = Math.max(window.innerWidth, tasks.length * xIncrement + 400);
+  const containerWidth = Math.max(typeof window !== 'undefined' ? window.innerWidth : 1200, tasks.length * xIncrement + 400);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const token = localStorage.getItem("jwtoken");
 
@@ -81,6 +89,13 @@ const PlanetryPath = () => {
   }, [token]);
 
   useEffect(() => {
+    if (tasks.length > 0 && Object.keys(positions).length > 0) {
+      const timer = setTimeout(() => setDomReady(true), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [tasks, positions]);
+
+  useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
     const handleWheel = (event: WheelEvent) => {
       if (scrollContainer) {
@@ -99,10 +114,36 @@ const PlanetryPath = () => {
     setPositions((prev) => ({ ...prev, [id]: { x, y: newY } }));
   };
 
-  const handleElementClick = (id: string, event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.currentTarget as HTMLElement;
+  // 🚨 THE MOBILE TOUCH FIX 🚨
+  const touchStartPos = useRef({ x: 0, y: 0 });
+
+  const handleTouchStart = (e: React.TouchEvent | React.PointerEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.PointerEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.PointerEvent).clientY;
+    touchStartPos.current = { x: clientX, y: clientY };
+  };
+
+  const handleTouchEnd = (taskId: string, e: React.TouchEvent | React.PointerEvent) => {
+    const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : (e as React.PointerEvent).clientX;
+    const clientY = 'changedTouches' in e ? e.changedTouches[0].clientY : (e as React.PointerEvent).clientY;
+    
+    const dx = Math.abs(clientX - touchStartPos.current.x);
+    const dy = Math.abs(clientY - touchStartPos.current.y);
+    
+    // If the finger barely moved (less than 10 pixels), treat it as a tap/click!
+    if (dx < 10 && dy < 10) {
+      handleElementClick(taskId, e);
+    }
+  };
+
+  const handleElementClick = (id: string, event: any) => {
+    if (event.preventDefault) event.preventDefault();
+    if (event.stopPropagation) event.stopPropagation();
+    
+    // Fallback to getElementById if currentTarget is swallowed by mobile touches
+    const target = (event.currentTarget as HTMLElement) || document.getElementById(id);
+    if (!target) return;
+
     const { x, y, width, height } = target.getBoundingClientRect();
     const modalX = x + window.scrollX + width / 2;
     const modalY = y + window.scrollY + height / 2;
@@ -123,7 +164,7 @@ const PlanetryPath = () => {
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#090a0f]">
       
-      {/* 1. STICKY "i" BUTTON (Centering Fix & Original Text) */}
+      {/* STICKY "i" BUTTON */}
       <div className="absolute top-6 right-6 z-[100]">
         <div className="group relative flex flex-col items-end">
           <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-display font-bold text-xl italic flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-lg cursor-help">
@@ -143,10 +184,10 @@ const PlanetryPath = () => {
 
       <div className="planetry-scroll-container w-full h-full overflow-x-auto overflow-y-hidden absolute inset-0 custom-scrollbar" ref={scrollContainerRef}>
         <div className="planetry-scroll-content relative z-10 h-full" style={{ width: `${containerWidth}px` }}>
-          <PlanetryAnimatedBackground taskCount={tasks.length} />
+          <MemoizedBackground taskCount={tasks.length} />
           
           <Xwrapper>
-            {/* 1. THE PLANETS (Your existing DraggableBox loop) */}
+            {/* THE PLANETS */}
             {tasks.map((task) => {
               const taskId = `task${task.week}`;
               return (
@@ -155,6 +196,9 @@ const PlanetryPath = () => {
                   id={taskId}
                   onDrag={(x, y) => handlePositionChange(taskId, x, y)}
                   onClick={(e) => handleElementClick(taskId, e)}
+                  // 🚨 Attaching the Mobile Handlers here
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={(e) => handleTouchEnd(taskId, e)}
                   style={{
                     left: positions[taskId]?.x || 0,
                     top: positions[taskId]?.y || 0,
@@ -165,8 +209,8 @@ const PlanetryPath = () => {
               );
             })}
 
-            {/* 2. THE STAR TRAIL (Replacing Xarrow for the path) */}
-            {tasks.slice(1).map((task, index) => {
+            {/* THE STAR TRAIL */}
+            {domReady && tasks.slice(1).map((task, index) => {
               const startPos = positions[`task${tasks[index].week}`];
               const endPos = positions[`task${task.week}`];
               
@@ -174,7 +218,6 @@ const PlanetryPath = () => {
 
               return (
                 <React.Fragment key={`trail-${task.week}`}>
-                  {/* THE NEBULA GLOW (Keep this faint for depth) */}
                   <Xarrow
                     start={`task${tasks[index].week}`}
                     end={`task${task.week}`}
@@ -185,7 +228,6 @@ const PlanetryPath = () => {
                     zIndex={20}
                   />
 
-                  {/* THE DENSE STAR RIVER */}
                   <Xarrow
                     start={`task${tasks[index].week}`}
                     end={`task${task.week}`}
@@ -194,9 +236,9 @@ const PlanetryPath = () => {
                     strokeWidth={1.8}
                     showHead={false}
                     dashness={{
-                      animation: 0.4,     // Slightly slower for a "grand" feel
-                      strokeLen: 1.2,     // The size of each star
-                      nonStrokeLen: 8     // 🚨 DECREASED from 25 to 8 for high density!
+                      animation: 0.4,
+                      strokeLen: 1.2,
+                      nonStrokeLen: 8
                     }}
                     zIndex={21}
                     passProps={{
@@ -210,7 +252,7 @@ const PlanetryPath = () => {
               );
             })}
 
-            {/* 3. THE VOYAGER SHIP (Your existing motion.div ship) */}
+            {/* THE VOYAGER SHIP */}
             {shipPosition && (
               <motion.div
                 initial={false}

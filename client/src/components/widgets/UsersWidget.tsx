@@ -17,7 +17,6 @@ import {
   Shield as ShieldIcon
 } from "@mui/icons-material";
 import { Dialog, DialogContent, IconButton, Tooltip, Snackbar, Alert } from "@mui/material";
-import { MuiOtpInput } from "mui-one-time-password-input";
 
 interface UsersWidgetProps {
   user?: any;
@@ -309,7 +308,60 @@ const UsersWidget: React.FC<UsersWidgetProps> = ({ user }) => {
           <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto mb-4" />
           <h3 className="text-xl font-display font-bold text-brand-blue mb-2">Security Verification</h3>
           <p className="text-xs text-gray-500 mb-6 px-4">Enter the code from your Admin Security Email to proceed with modifying clearance levels.</p>
-          <MuiOtpInput length={4} autoFocus onComplete={handleOtpVerification} value={otpValue} onChange={setOtpValue} gap={1} />
+          
+          {/* 🚨 CUSTOM TAILWIND OTP GRID */}
+          <div className="flex justify-center gap-3">
+            {[0, 1, 2, 3].map((index) => (
+              <input
+                key={index}
+                id={`otp-input-${index}`}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={otpValue[index] || ""}
+                autoFocus={index === 0}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  // Handle pasting a 4-digit code
+                  const pasteData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 4);
+                  if (pasteData) {
+                    setOtpValue(pasteData);
+                    if (pasteData.length === 4) handleOtpVerification(pasteData);
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, ""); // Allow numbers only
+                  if (!val && e.target.value !== "") return; // Reject letters
+                  
+                  // Update state securely
+                  const otpArray = otpValue.split("");
+                  otpArray[index] = val;
+                  const newOtp = otpArray.join("");
+                  setOtpValue(newOtp);
+
+                  // Auto-advance focus
+                  if (val && index < 3) {
+                    const nextInput = document.getElementById(`otp-input-${index + 1}`);
+                    if (nextInput) nextInput.focus();
+                  }
+
+                  // Auto-submit when exactly 4 digits are typed
+                  if (newOtp.length === 4) {
+                    handleOtpVerification(newOtp);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  // Smooth backspacing to previous input
+                  if (e.key === "Backspace" && !otpValue[index] && index > 0) {
+                    const prevInput = document.getElementById(`otp-input-${index - 1}`);
+                    if (prevInput) prevInput.focus();
+                  }
+                }}
+                className="w-14 h-14 text-center text-2xl font-black text-brand-blue bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:bg-blue-50 transition-all shadow-sm"
+              />
+            ))}
+          </div>
+
           <button onClick={() => setOtpOpen(false)} className="mt-6 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">Cancel Request</button>
         </DialogContent>
       </Dialog>

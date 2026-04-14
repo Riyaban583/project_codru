@@ -6,7 +6,6 @@ import {
 import {
   TextField, Button, InputAdornment, Checkbox, Dialog, DialogContent, Select, MenuItem
 } from "@mui/material";
-import { MuiOtpInput } from "mui-one-time-password-input";
 
 // Components & Assets
 import SignUpAnim from "./SignUpAnim";
@@ -342,7 +341,7 @@ function Signup() {
         </div>
       </div>
 
-      {/* OTP Dialog remains same */}
+      {/* 🚨 BULLETPROOF CUSTOM OTP DIALOG */}
       <Dialog 
         open={open} 
         onClose={(event, reason) => { if (reason !== 'backdropClick' && reason !== 'escapeKeyDown') setOpen(false); }}
@@ -353,11 +352,59 @@ function Signup() {
           <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4"><Email className="text-brand-blue" fontSize="large" /></div>
           <h3 className="text-2xl font-display font-bold text-brand-blue mb-2">Verify Your Email</h3>
           <p className="text-gray-500 mb-8 text-sm max-w-[250px]">We've sent a 4-digit code to <br/><span className="font-bold text-gray-700">{value.email}</span></p>
-          <MuiOtpInput
-            length={4} autoFocus onComplete={handleOtpComplete} value={value.otp} onChange={(otp) => setValue({...value, otp})} gap={2}
-            TextFieldsProps={{ inputProps: { inputMode: 'numeric', pattern: '[0-9]*' } }}
-            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', fontSize: '24px', fontWeight: 'bold' } }}
-          />
+          
+          <div className="flex justify-center gap-3">
+            {[0, 1, 2, 3].map((index) => (
+              <input
+                key={index}
+                id={`otp-input-${index}`}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={value.otp[index] || ""}
+                autoFocus={index === 0}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  // Handle pasting a 4-digit code
+                  const pasteData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 4);
+                  if (pasteData) {
+                    setValue(prev => ({ ...prev, otp: pasteData }));
+                    if (pasteData.length === 4) handleOtpComplete(pasteData);
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, ""); // Allow numbers only
+                  if (!val && e.target.value !== "") return; // Reject letters
+                  
+                  // Update state securely
+                  const otpArray = value.otp.split("");
+                  otpArray[index] = val;
+                  const newOtp = otpArray.join("");
+                  setValue(prev => ({ ...prev, otp: newOtp }));
+
+                  // Auto-advance focus
+                  if (val && index < 3) {
+                    const nextInput = document.getElementById(`otp-input-${index + 1}`);
+                    if (nextInput) nextInput.focus();
+                  }
+
+                  // Auto-submit when exactly 4 digits are typed
+                  if (newOtp.length === 4) {
+                    handleOtpComplete(newOtp);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  // Smooth backspacing to previous input
+                  if (e.key === "Backspace" && !value.otp[index] && index > 0) {
+                    const prevInput = document.getElementById(`otp-input-${index - 1}`);
+                    if (prevInput) prevInput.focus();
+                  }
+                }}
+                className="w-14 h-14 text-center text-2xl font-black text-brand-blue bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:bg-blue-50 transition-all shadow-sm"
+              />
+            ))}
+          </div>
+
           <div className="mt-10 pt-6 border-t border-gray-100 w-full">
             {timer && timer > 0 ? (
               <p className="text-gray-400 text-sm font-body">Resend code in <span className="text-brand-blue font-bold">{timer}s</span></p>

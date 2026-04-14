@@ -1,10 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { ShieldAlert, Loader2 } from "lucide-react";
 import { DataGrid, GridColDef, GridToolbar } from "@mui/x-data-grid";
+
+// 🚨 Added our MUI v6 theme survival kit!
+import { ThemeProvider, useTheme, alpha, lighten, darken } from "@mui/material/styles";
 
 export default function AdminAuditLog() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 🚨 THE V9 FIX: Polyfill directly on your real theme to prevent Context crashes!
+  const baseTheme = useTheme();
+  const patchedTheme = useMemo(() => {
+    const clone = { ...baseTheme };
+    // @ts-ignore
+    clone.alpha = alpha || ((c: any) => c);
+    // @ts-ignore
+    clone.lighten = lighten || ((c: any) => c);
+    // @ts-ignore
+    clone.darken = darken || ((c: any) => c);
+    return clone;
+  }, [baseTheme]);
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -114,46 +130,49 @@ export default function AdminAuditLog() {
 
       {/* MUI DataGrid */}
       <div className="flex-1 w-full bg-white rounded-xl overflow-hidden border border-gray-100">
-        <DataGrid
-          rows={logs}
-          columns={columns}
-          initialState={{
-            pagination: {
-              paginationModel: { page: 0, pageSize: 25 },
-            },
-            sorting: {
-              sortModel: [{ field: 'timestamp', sort: 'desc' }],
-            },
-          }}
-          pageSizeOptions={[10, 25, 50, 100]}
-          disableRowSelectionOnClick
-          slots={{ toolbar: GridToolbar }} // 🚨 This adds the built-in Export/Filter/Density menu!
-          slotProps={{
-            toolbar: {
-              showQuickFilter: true, // 🚨 Adds a fast universal search bar!
-              quickFilterProps: { debounceMs: 500 },
-            },
-          }}
-          sx={{
-            border: 'none',
-            '& .MuiDataGrid-cell': {
-              borderColor: '#f1f5f9', // Light gray borders
-              display: 'flex',
-              alignItems: 'center', // Vertically center content
-            },
-            '& .MuiDataGrid-columnHeaders': {
-              backgroundColor: '#f8fafc', // match your slate-50 background
-              color: '#64748b',
-              fontWeight: 'bold',
-              borderBottom: '1px solid #e2e8f0',
-            },
-            '& .MuiDataGrid-toolbarContainer': {
-              padding: '16px',
-              backgroundColor: '#f8fafc',
-              borderBottom: '1px solid #f1f5f9',
-            }
-          }}
-        />
+        {/* 🚨 Wraps perfectly with the safeTheme preserving MUI v6 architecture */}
+        <ThemeProvider theme={patchedTheme}>
+          <DataGrid
+            rows={logs}
+            columns={columns}
+            initialState={{
+              pagination: {
+                paginationModel: { page: 0, pageSize: 25 },
+              },
+              sorting: {
+                sortModel: [{ field: 'timestamp', sort: 'desc' }],
+              },
+            }}
+            pageSizeOptions={[10, 25, 50, 100]}
+            disableRowSelectionOnClick
+            slots={{ toolbar: GridToolbar }} // 🚨 This adds the built-in Export/Filter/Density menu!
+            slotProps={{
+              toolbar: {
+                showQuickFilter: true, // 🚨 Adds a fast universal search bar!
+                quickFilterProps: { debounceMs: 500 },
+              },
+            }}
+            sx={{
+              border: 'none',
+              '& .MuiDataGrid-cell': {
+                borderColor: '#f1f5f9', // Light gray borders
+                display: 'flex',
+                alignItems: 'center', // Vertically center content
+              },
+              '& .MuiDataGrid-columnHeaders': {
+                backgroundColor: '#f8fafc', // match your slate-50 background
+                color: '#64748b',
+                fontWeight: 'bold',
+                borderBottom: '1px solid #e2e8f0',
+              },
+              '& .MuiDataGrid-toolbarContainer': {
+                padding: '16px',
+                backgroundColor: '#f8fafc',
+                borderBottom: '1px solid #f1f5f9',
+              }
+            }}
+          />
+        </ThemeProvider>
       </div>
     </div>
   );
