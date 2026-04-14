@@ -1,24 +1,18 @@
-import Lottie from 'react-lottie';
+// Import the package as a generic object
+import LottiePackage from 'lottie-react';
 import signInAnimData from '../assets/jsonFiles/signInAnim3.json';
 
-function SignInAnim() {
-  const defaultOptions = {
-    loop: true,
-    autoplay: true,
-    animationData: signInAnimData,
-    rendererSettings: {
-      preserveAspectRatio: 'xMidYMid slice'
-    }
-  };
+// 🚨 BULLETPROOF FIX: Rips the function out of the object if Vite wrapped it!
+const Lottie = LottiePackage.default || LottiePackage;
 
+function SignInAnim() {
   return (
-    // 'pointer-events-none' ensures the animation doesn't block the login form
-    <div className="pointer-events-none flex justify-center items-center w-full">
+    <div className="pointer-events-none flex justify-center items-center w-full h-full">
       <Lottie 
-        options={defaultOptions} 
-        height="100%" 
-        width="100%" 
-        isClickToPauseDisabled={true}
+        animationData={signInAnimData} 
+        loop={true} 
+        autoplay={true}
+        style={{ width: '100%', height: '100%' }}
       />
     </div>
   );

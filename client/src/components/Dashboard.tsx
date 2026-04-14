@@ -102,6 +102,25 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
 
   const [overviewStats, setOverviewStats] = useState<any>(null);
 
+  // Inside Dashboard.tsx
+  useEffect(() => {
+    const syncViewWithStorage = () => {
+      const savedView = localStorage.getItem("currentView");
+      const savedTab = localStorage.getItem("activeTab");
+
+      // Map 'Overview' to the correct case if necessary
+      const normalizedView = savedView === "Overview" ? "Overview" : savedView?.toLowerCase();
+
+      if (normalizedView && normalizedView !== currentView) {
+        setCurrentView(normalizedView);
+        if (savedTab) setActiveTab(savedTab);
+      }
+    };
+
+    // Run whenever the URL changes (triggered by navigate('/dashboard') in the widget)
+    syncViewWithStorage();
+  }, [location]); 
+
   useEffect(() => {
       const fetchOverviewData = async () => {
           try {

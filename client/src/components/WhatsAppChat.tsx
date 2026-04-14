@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { socket } from '../socket';
 import { Search, Send, Phone, User, Clock, AlertCircle, Loader2, Sparkles, ArrowLeft, Plus, X, Settings, RefreshCw, CheckCircle2, UserPlus, Paperclip, FileText } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
 export interface WhatsAppMessage {
     _id: string;
@@ -151,6 +152,29 @@ const WhatsAppChat: React.FC = () => {
         attendees: [] as string[],
     });
 
+    const [searchParams] = useSearchParams();
+
+    useEffect(() => {
+        // We only try to select a contact once the list is actually loaded
+        if (contacts.length === 0) return;
+
+        const idFromUrl = searchParams.get('id');
+        const pendingIdFromStorage = localStorage.getItem("pendingChatId");
+        const isMobile = window.innerWidth < 768;
+
+        if (idFromUrl) {
+            // Priority 1: URL Query (?id=...)
+            setSelectedContactId(idFromUrl);
+        } else if (pendingIdFromStorage) {
+            // Priority 2: Dashboard Widget Redirect (pendingChatId)
+            setSelectedContactId(pendingIdFromStorage);
+            localStorage.removeItem("pendingChatId"); // Clear it so it doesn't haunt future loads
+        } else if (!selectedContactId && !isMobile) {
+            // Priority 3: Default to first contact (Desktop only)
+            setSelectedContactId(contacts[0]._id);
+        }
+    }, [contacts, searchParams]); 
+
     const handleOpenTaskModal = (messageText: string) => {
         const extractedDate = extractDateFromText(messageText);
         const dateString = extractedDate 
@@ -238,10 +262,7 @@ const WhatsAppChat: React.FC = () => {
         try {
             const res = await axios.get(`${API_BASE}/contacts`);
             setContacts(res.data);
-            const isMobile = window.innerWidth < 768;
-            if (res.data.length > 0 && !selectedContactId && !isMobile) {
-                setSelectedContactId(res.data[0]._id);
-            }
+            
         } catch (err) {
             console.error("Error loading contacts:", err);
         }

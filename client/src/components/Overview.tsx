@@ -10,7 +10,10 @@ import PostWidget from './widgets/PostWidget';
 import SupportCircleWidget from './widgets/SupportCircleWidget';
 import CourseWidget from './widgets/CourseWidget';
 import SyllabusWidget from './widgets/SyllabusWidget';
-import ProjectWidget from './widgets/ProjectWidget';
+import AuditWidget from './widgets/AuditWidget';
+import UsersWidget from './widgets/UsersWidget';
+import WhatsAppWidget from './widgets/WhatsAppWidget';
+import StudentWidget from './widgets/StudentWidget';
 
 const WIDGET_CONFIG: any = {
   tasks: { roles: ['cute_team', 'admin', 'verified_teacher'], component: TasksWidget },
@@ -21,7 +24,10 @@ const WIDGET_CONFIG: any = {
   support_circle: { roles: ['parent', 'verified_parent'], component: SupportCircleWidget },
   courses: { roles: ['student', 'teacher'], component: CourseWidget },
   syllabus: { roles: ['student', 'teacher'], component: SyllabusWidget },
-  skill_track: { roles: ['student'], component: ProjectWidget },
+  audit: { roles: ['admin'], component: AuditWidget },
+  users: { roles: ['admin'], component: UsersWidget },
+  whatsapp: { roles: ['admin'], component: WhatsAppWidget },
+  student_roster: { roles: ['teacher', 'verified_teacher'], component: StudentWidget },
 };
 
 const getWidthClass = (w: number) => {
