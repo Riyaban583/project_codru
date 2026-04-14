@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Menu, X, Bell, LayoutDashboard, User } from "lucide-react";
+// 🚨 Swapped 'Menu' for 'AlignRight'
+import { X, Bell, LayoutDashboard, User, AlignRight } from "lucide-react";
 import GlobalSearch from "./GlobalSearch";
 import { UserData } from "../App"; 
 
@@ -34,7 +35,6 @@ function Navbar({ userData, setUserData }: NavbarProps) {
   const MAIN_SITE = "https://www.curiousteamlearning.com"; 
 
   const staticLinkStyle = "text-gray-600 hover:text-brand-orange font-medium transition-colors";
-  // 🚨 NEW: Mobile-specific link styling with 'block' so they stack vertically
   const mobileLinkStyle = "block px-3 py-3 rounded-xl text-base font-medium text-gray-700 hover:text-brand-orange hover:bg-gray-50 transition-colors";
 
   return (
@@ -43,14 +43,14 @@ function Navbar({ userData, setUserData }: NavbarProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             
-            {/* Logo (Points back to Main Site Home) */}
+            {/* 🚨 LOGO (Restored to just being a Home Link) */}
             <a href={`${MAIN_SITE}/index.html`} className="flex-shrink-0 flex items-center gap-2 cursor-pointer">
               <img className="w-[5rem] md:w-[6.5rem] h-auto block drop-shadow-[0_4px_6px_rgba(0,0,0,0.3)] transition-all" src="/logo.svg" alt="CuTe Learning" draggable="false" />
             </a>
 
             <GlobalSearch />
 
-            {/* 🚨 Desktop Nav */}
+            {/* Desktop Nav */}
             <nav className="hidden md:flex space-x-8">
               <a href={`${MAIN_SITE}/about.html`} target="_blank" rel="noopener noreferrer" className={staticLinkStyle}>About Us</a>
               <a href={`${MAIN_SITE}/index.html#skills`} target="_blank" rel="noopener noreferrer" className={staticLinkStyle}>Learn</a>
@@ -59,7 +59,7 @@ function Navbar({ userData, setUserData }: NavbarProps) {
               <a href={`${MAIN_SITE}/contact.html`} target="_blank" rel="noopener noreferrer" className={staticLinkStyle}>Contact Us</a>
             </nav>
 
-            {/* Desktop Login Button / Profile Actions */}
+            {/* Desktop Login Button / Profile Actions & Mobile Menu Button */}
             <div className="flex items-center gap-4">
               {isLoggedIn ? (
                 <div className="hidden md:flex items-center space-x-6">
@@ -117,24 +117,24 @@ function Navbar({ userData, setUserData }: NavbarProps) {
                 </NavLink>
               )}
 
-              {/* Mobile Menu Toggle Button */}
+              {/* 🚨 Mobile Menu Toggle Button (Restored to the right side with new icon!) */}
               <button id="mobile-menu-btn" onClick={toggleLinks} className="md:hidden text-gray-600 hover:text-brand-orange p-2 focus:outline-none transition-colors">
-                {showLinks ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                {showLinks ? <X className="w-6 h-6" /> : <AlignRight className="w-6 h-6" />}
               </button>
             </div>
 
           </div>
         </div>
         
-        {/* 🚨 Mobile Nav Dropdown (Now with fixed stacking CSS) */}
+        {/* Mobile Nav Dropdown */}
         {showLinks && (
           <div className="md:hidden bg-white border-t border-gray-100 shadow-xl absolute w-full left-0">
             <div className="px-4 pt-2 pb-4 space-y-1">
-              <a href={`${MAIN_SITE}/about.html`} target="_blank" rel="noopener noreferrer" className={mobileLinkStyle}>About Us</a>
-              <a href={`${MAIN_SITE}/index.html#skills`} target="_blank" rel="noopener noreferrer" className={mobileLinkStyle}>Learn</a>
-              <a href={`${MAIN_SITE}/index.html#pricing`} target="_blank" rel="noopener noreferrer" className={mobileLinkStyle}>Pricing</a>
-              <a href={`${MAIN_SITE}/blog/index.html`} target="_blank" rel="noopener noreferrer" className={mobileLinkStyle}>Blog</a>
-              <a href={`${MAIN_SITE}/contact.html`} target="_blank" rel="noopener noreferrer" className={mobileLinkStyle}>Contact Us</a>
+              <a href={`${MAIN_SITE}/about.html`} target="_blank" rel="noopener noreferrer" onClick={toggleLinks} className={mobileLinkStyle}>About Us</a>
+              <a href={`${MAIN_SITE}/index.html#skills`} target="_blank" rel="noopener noreferrer" onClick={toggleLinks} className={mobileLinkStyle}>Learn</a>
+              <a href={`${MAIN_SITE}/index.html#pricing`} target="_blank" rel="noopener noreferrer" onClick={toggleLinks} className={mobileLinkStyle}>Pricing</a>
+              <a href={`${MAIN_SITE}/blog/index.html`} target="_blank" rel="noopener noreferrer" onClick={toggleLinks} className={mobileLinkStyle}>Blog</a>
+              <a href={`${MAIN_SITE}/contact.html`} target="_blank" rel="noopener noreferrer" onClick={toggleLinks} className={mobileLinkStyle}>Contact Us</a>
 
               {/* If NOT logged in, show the login button here */}
               {!isLoggedIn && (
@@ -175,7 +175,7 @@ function Navbar({ userData, setUserData }: NavbarProps) {
       {isLoggedIn && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white flex items-center z-[1000] pb-safe shadow-[0_-15px_30px_-5px_rgba(0,0,0,0.15)] border-t border-gray-100">
           
-          {/* Dashboard Bottom Button (Escape Hatch to Workspace) */}
+          {/* Dashboard Bottom Button */}
           <NavLink 
             to="/dashboard" 
             onClick={() => {
@@ -185,7 +185,6 @@ function Navbar({ userData, setUserData }: NavbarProps) {
               setShowProfile(false);
               setShowNotifications(false);
             }} 
-        
             className="flex flex-col items-center justify-center flex-1 h-full text-gray-400 hover:text-brand-blue transition-colors"
           >
             <LayoutDashboard size={24} strokeWidth={2} />
@@ -222,7 +221,6 @@ function Navbar({ userData, setUserData }: NavbarProps) {
             }}
             className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${showProfile ? 'text-brand-orange' : 'text-gray-400 hover:text-brand-orange'}`}
           >
-            {/* 🚨 THE FIX: Reduced to w-6 h-6 to perfectly match the size={24} of Dashboard and Bell */}
             <div className={`w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border-[1.5px] ${showProfile ? "border-brand-orange" : "border-transparent"}`}>
               {userData?.Photo ? (
                 <img src={userData.Photo} alt="Profile" className="w-full h-full object-cover" />
