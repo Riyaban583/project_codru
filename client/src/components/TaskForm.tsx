@@ -1,8 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { DataGrid, GridColDef, GridToolbarContainer, GridToolbarQuickFilter } from "@mui/x-data-grid";
 import { RocketLaunch, ArrowBack, Edit, Delete } from "@mui/icons-material";
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from "@mui/material";
+
+// Theme survival kit
+import { ThemeProvider, useTheme, alpha, lighten, darken } from "@mui/material/styles";
+
+import { Loader2 } from "lucide-react";
+
+// Components
+import Muialert from "./Muialert";
 
 interface ProblemRecord {
   _id: string;
@@ -20,19 +28,35 @@ const UpdateReport = () => {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [link, setLink] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Table & Auto-calculate State
   const [history, setHistory] = useState<ProblemRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [nextProblemNo, setNextProblemNo] = useState(1);
   
-  // UI Feedback State
-  const [status, setStatus] = useState<{ type: string; message: string }>({ type: "", message: "" });
+  // 🚨 NEW: Sleek Toast Alert State
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("info");
+  const [showAlert, setShowAlert] = useState(false);
 
-  // --- NEW: Modal States ---
+  // Modal States
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<ProblemRecord | null>(null);
+
+  // MUI v9 Theme Polyfill
+  const baseTheme = useTheme();
+  const patchedTheme = useMemo(() => {
+    const clone = { ...baseTheme };
+    // @ts-ignore
+    clone.alpha = alpha || ((c: any) => c);
+    // @ts-ignore
+    clone.lighten = lighten || ((c: any) => c);
+    // @ts-ignore
+    clone.darken = darken || ((c: any) => c);
+    return clone;
+  }, [baseTheme]);
 
   const fetchHistory = async () => {
     try {
@@ -74,7 +98,7 @@ const UpdateReport = () => {
   // Handle Main Form Submission
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setStatus({ type: "loading", message: "Updating Planetary Path..." });
+    setIsSubmitting(true);
 
     try {
       const response = await fetch(`${import.meta.env.VITE_API}update-report/${username}`, {
@@ -88,20 +112,29 @@ const UpdateReport = () => {
 
       if (!response.ok) throw new Error("Failed to update report");
 
-      setStatus({ type: "success", message: "Report updated successfully! 🚀" });
+      setAlertSeverity("success");
+      setAlertMessage("Planet successfully added to path! 🚀");
+      setShowAlert(true);
+      
       setQuestion(""); setAnswer(""); setLink("");
       fetchHistory();
-      setTimeout(() => setStatus({ type: "", message: "" }), 3000);
     } catch (error: any) {
-      setStatus({ type: "error", message: error.message || "An error occurred" });
+      setAlertSeverity("error");
+      setAlertMessage(error.message || "An error occurred");
+      setShowAlert(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // --- NEW: Handle Edit ---
+  // Handle Edit
   const handleEditSubmit = async () => {
     if (!selectedRecord) return;
-    setStatus({ type: "loading", message: "Saving changes..." });
     setEditModalOpen(false);
+    
+    setAlertSeverity("info");
+    setAlertMessage("Saving changes...");
+    setShowAlert(true);
 
     try {
       const response = await fetch(`${import.meta.env.VITE_API}edit-report-task/${username}/${selectedRecord._id}`, {
@@ -114,18 +147,26 @@ const UpdateReport = () => {
       });
 
       if (!response.ok) throw new Error("Failed to edit problem");
-      setStatus({ type: "success", message: "Problem edited successfully!" });
+      
+      setAlertSeverity("success");
+      setAlertMessage("Problem edited successfully!");
+      setShowAlert(true);
       fetchHistory();
-      setTimeout(() => setStatus({ type: "", message: "" }), 3000);
     } catch (error: any) {
-      setStatus({ type: "error", message: error.message || "Failed to edit" });
+      setAlertSeverity("error");
+      setAlertMessage(error.message || "Failed to edit");
+      setShowAlert(true);
     }
   };
 
-  // --- UPDATED: Handle Delete (Triggers Re-indexing on Backend) ---
+  // Handle Delete (Triggers Re-indexing on Backend)
   const handleDeleteConfirm = async () => {
     if (!selectedRecord) return;
-    setStatus({ type: "loading", message: "Deleting and re-indexing universe..." });
+    setDeleteModalOpen(false);
+
+    setAlertSeverity("info");
+    setAlertMessage("Deleting and re-indexing universe...");
+    setShowAlert(true);
 
     try {
       const response = await fetch(`${import.meta.env.VITE_API}delete-report-task/${username}/${selectedRecord.week}`, {
@@ -135,18 +176,15 @@ const UpdateReport = () => {
 
       if (!response.ok) throw new Error("Failed to delete problem");
       
-      setStatus({ type: "success", message: "Problem deleted and path re-indexed! 🌌" });
+      setAlertSeverity("success");
+      setAlertMessage("Problem deleted and path re-indexed! 🌌");
+      setShowAlert(true);
       
-      // 🚨 WAIT for the fresh data to be pulled from the database BEFORE closing the modal
       await fetchHistory(); 
-      
-      // Now close the modal, and the table will instantly update without a refresh!
-      setDeleteModalOpen(false); 
-
-      setTimeout(() => setStatus({ type: "", message: "" }), 3000);
     } catch (error: any) {
-      setStatus({ type: "error", message: error.message || "Failed to delete" });
-      setDeleteModalOpen(false);
+      setAlertSeverity("error");
+      setAlertMessage(error.message || "Failed to delete");
+      setShowAlert(true);
     }
   };
 
@@ -175,7 +213,6 @@ const UpdateReport = () => {
         ) : <span className="text-gray-400 text-xs">None</span>
       )
     },
-    // --- NEW: Actions Column ---
     {
       field: "actions",
       headerName: "Actions",
@@ -201,9 +238,9 @@ const UpdateReport = () => {
     }
   ];
 
-  function CustomToolbar() {
+  const CustomToolbar = useCallback((props: any) => {
     return (
-      <GridToolbarContainer className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50/50">
+      <GridToolbarContainer {...props} className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50/50">
         <h2 className="px-4 text-lg font-bold text-gray-700">Evolution History</h2>
         <GridToolbarQuickFilter 
           placeholder="Search problems..." 
@@ -212,11 +249,11 @@ const UpdateReport = () => {
         />
       </GridToolbarContainer>
     );
-  }
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 animate-fade-in-up">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8 animate-fade-in-up">
+      <div className="max-w-7xl mx-auto space-y-6 flex flex-col h-full">
         
         {/* Header */}
         <div className="flex items-center gap-4 mb-2">
@@ -224,21 +261,15 @@ const UpdateReport = () => {
             <ArrowBack sx={{ color: '#4b5563' }} />
           </button>
           <div>
-            <h1 className="text-3xl font-display font-bold text-brand-blue">Update Report</h1>
-            <p className="text-gray-500 text-sm mt-1">Charting the planetary path for <span className="font-bold text-brand-orange">@{username}</span></p>
+            {/* 🚨 Shrunk heading for mobile */}
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-brand-blue">Update Report</h1>
+            <p className="text-gray-500 text-xs md:text-sm mt-1">Charting the planetary path for <span className="font-bold text-brand-orange">@{username}</span></p>
           </div>
         </div>
 
         {/* TOP SECTION: The Compact Form */}
-        <div className="bg-white rounded-[24px] shadow-sm border border-gray-200 p-6 sm:p-8">
-          {status.message && (
-            <div className={`p-4 mb-6 rounded-xl font-bold text-sm ${status.type === "error" ? "bg-red-50 text-red-700" : status.type === "success" ? "bg-green-50 text-green-700" : "bg-blue-50 text-blue-700"}`}>
-              {status.message}
-            </div>
-          )}
-
+        <div className="bg-white rounded-[24px] shadow-sm border border-gray-200 p-6 md:p-8 relative">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {/* ... Existing Form Fields exactly as you had them ... */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Problem No.</label>
@@ -253,38 +284,57 @@ const UpdateReport = () => {
                 <input type="url" className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-blue outline-none transition" value={link} onChange={(e) => setLink(e.target.value)} />
               </div>
             </div>
+            {/* RESTORED: Classic Wide Button Design */}
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Solution Figured</label>
-              <textarea className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-blue outline-none transition resize-none h-24" value={answer} onChange={(e) => setAnswer(e.target.value)} required ></textarea>
+              <textarea 
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-blue outline-none transition resize-none h-24" 
+                value={answer} 
+                onChange={(e) => setAnswer(e.target.value)} 
+                required 
+              />
             </div>
             <div className="flex justify-end mt-2">
-              <button type="submit" disabled={status.type === "loading"} className="bg-brand-blue text-white font-bold py-3 px-8 rounded-xl hover:bg-blue-800 transition flex items-center gap-2 disabled:opacity-50" style={{ backgroundColor: '#1765a4' }}>
-                <RocketLaunch fontSize="small" />
-                {status.type === "loading" ? "Initializing..." : "Add to Path"}
+              <button 
+                type="submit" 
+                disabled={isSubmitting} 
+                className="bg-brand-blue text-white font-bold py-3 px-8 rounded-xl hover:bg-blue-800 transition flex items-center gap-2 disabled:opacity-50" 
+                style={{ backgroundColor: '#1765a4' }}
+              >
+                {isSubmitting ? <Loader2 className="animate-spin w-5 h-5" /> : <RocketLaunch fontSize="small" />}
+                {isSubmitting ? "Initializing..." : "Add to Path"}
               </button>
             </div>
           </form>
         </div>
 
         {/* BOTTOM SECTION: The DataGrid */}
-        <div className="bg-white rounded-[24px] shadow-sm border border-gray-200 overflow-hidden h-[500px] flex flex-col">
-          <DataGrid
-            rows={history}
-            columns={columns}
-            getRowId={(row) => row._id || row.week} 
-            loading={loadingHistory}
-            disableRowSelectionOnClick
-            slots={{ toolbar: CustomToolbar }}
-            sx={{
-              border: 'none',
-              '& .MuiDataGrid-columnHeaders': { bgcolor: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' },
-              '& .MuiDataGrid-cell': { borderBottom: '1px solid #f1f5f9' },
-            }}
-          />
+        <div className="bg-white rounded-[24px] shadow-sm border border-gray-200 overflow-hidden h-[500px] flex flex-col flex-shrink-0">
+          <ThemeProvider theme={patchedTheme}>
+            <DataGrid
+              rows={history}
+              columns={columns}
+              getRowId={(row) => row._id || row.week} 
+              loading={loadingHistory}
+              disableRowSelectionOnClick
+              
+              slots={{ toolbar: CustomToolbar }}
+              showToolbar
+
+              sx={{
+                border: 'none',
+                '& .MuiDataGrid-columnHeaders': { bgcolor: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' },
+                '& .MuiDataGrid-cell': { borderBottom: '1px solid #f1f5f9' },
+              }}
+            />
+          </ThemeProvider>
         </div>
+        
+        {/* 🚨 BOTTOM SPACER TO PREVENT MOBILE NAV CLIPPING */}
+        <div className="h-24 md:h-8 w-full flex-shrink-0"></div>
       </div>
 
-      {/* --- NEW: EDIT MODAL --- */}
+      {/* EDIT MODAL */}
       <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold', color: '#1765a4' }}>Edit Problem #{selectedRecord?.week}</DialogTitle>
         <DialogContent dividers className="flex flex-col gap-4">
@@ -315,7 +365,7 @@ const UpdateReport = () => {
         </DialogActions>
       </Dialog>
 
-      {/* --- NEW: DELETE CONFIRMATION MODAL --- */}
+      {/* DELETE CONFIRMATION MODAL */}
       <Dialog open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
         <DialogTitle sx={{ fontWeight: 'bold', color: '#dc2626' }}>Delete Problem #{selectedRecord?.week}?</DialogTitle>
         <DialogContent>
@@ -329,6 +379,15 @@ const UpdateReport = () => {
           <Button onClick={handleDeleteConfirm} variant="contained" color="error" sx={{ fontWeight: 'bold' }}>Delete & Re-index</Button>
         </DialogActions>
       </Dialog>
+
+      {/* 🚨 THE NEW TOAST SYSTEM */}
+      {showAlert && (
+        <Muialert 
+          message={alertMessage} 
+          severity={alertSeverity} 
+          onClose={() => setShowAlert(false)} 
+        />
+      )}
 
     </div>
   );

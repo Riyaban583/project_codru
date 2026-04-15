@@ -10,11 +10,13 @@ import {
   Email, 
   Badge 
 } from "@mui/icons-material";
-import { 
-  CircularProgress 
-} from "@mui/material";
-// 🚨 Import the Lucide icons we need for the new popup
-import { Search, X, UserPlus, CheckCircle2, Loader2 } from 'lucide-react';
+import { CircularProgress } from "@mui/material";
+
+// Lucide icons
+import { Search, X, UserPlus, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
+
+// The sleek Toast Component
+import Muialert from "./Muialert";
 
 interface StudentManagementProps {
   userData: any;
@@ -33,9 +35,19 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
   
   // Roster Management State
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [status, setStatus] = useState({ loading: false, message: "", type: "" });
   
-  // 🚨 New Search-Specific State
+  // Unassign Modal State
+  const [unassignModalOpen, setUnassignModalOpen] = useState(false);
+  const [studentToUnassign, setStudentToUnassign] = useState<string | null>(null);
+  const [isUnassigning, setIsUnassigning] = useState(false);
+
+  // Toast Alert State
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("info");
+  const [showAlert, setShowAlert] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  
+  // Search-Specific State
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<StudentResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -44,28 +56,27 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
   const teacherUsername = userData?.username || userData?.Username || localStorage.getItem("Username");
 
   const fetchMyStudents = async (forceRefresh = false) => {
-  if (!teacherUsername) return;
-  if (forceRefresh || students.length === 0) setLoading(true);
-  
-  try {
-    const token = localStorage.getItem("jwtoken");
-    const url = `${import.meta.env.VITE_API}my-students/${teacherUsername}`;
+    if (!teacherUsername) return;
+    if (forceRefresh || students.length === 0) setLoading(true);
     
-    // 2. Use the imported function!
-    const data = await fetchWithCache(url, { "Authorization": `Bearer ${token}` }, forceRefresh);
-    setStudents(data);
-  } catch (error) {
-    console.error("Failed to fetch roster:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const token = localStorage.getItem("jwtoken");
+      const url = `${import.meta.env.VITE_API}my-students/${teacherUsername}`;
+      
+      const data = await fetchWithCache(url, { "Authorization": `Bearer ${token}` }, forceRefresh);
+      setStudents(data);
+    } catch (error) {
+      console.error("Failed to fetch roster:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchMyStudents();
   }, [teacherUsername]);
 
-  // 🚨 The Debounced Search Effect for the Popup
+  // Debounced Search Effect for the Popup
   useEffect(() => {
     if (searchQuery.trim() === '' || selectedStudent) {
       setSearchResults([]);
@@ -101,72 +112,106 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
     setSearchQuery("");
     setSearchResults([]);
     setSelectedStudent(null);
-    setStatus({ loading: false, message: "", type: "" });
   };
 
   const handleClaimStudent = async () => {
     if (students.length >= 5) {
-      setStatus({ loading: false, message: "Limit Reached: You can only manage up to 5 students.", type: "error" });
+      setAlertSeverity("error");
+      setAlertMessage("Limit Reached: You can only manage up to 5 students.");
+      setShowAlert(true);
       return;
     }
 
     if (!selectedStudent) return;
 
-    setStatus({ loading: true, message: "Assigning...", type: "info" });
+    setIsAssigning(true);
     try {
       const token = localStorage.getItem("jwtoken");
       const res = await fetch(`${import.meta.env.VITE_API}assign-teacher`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        // 🚨 Note: Changed from `studentUsername` state to `selectedStudent.username`
         body: JSON.stringify({ studentUsername: selectedStudent.username, teacherUsername })
       });
       if (res.ok) {
-        setStatus({ loading: false, message: "Student added!", type: "success" });
+        setAlertSeverity("success");
+        setAlertMessage("Student successfully added to roster! 🚀");
+        setShowAlert(true);
         fetchMyStudents();
         setTimeout(() => handleCloseModal(), 1500);
       } else {
         const data = await res.json();
-        setStatus({ loading: false, message: data.error, type: "error" });
+        setAlertSeverity("error");
+        setAlertMessage(data.error || "Failed to assign student.");
+        setShowAlert(true);
       }
     } catch (error) {
-      setStatus({ loading: false, message: "Error assigning student.", type: "error" });
+      setAlertSeverity("error");
+      setAlertMessage("Network error assigning student.");
+      setShowAlert(true);
+    } finally {
+      setIsAssigning(false);
     }
   };
 
-  const handleUnassign = async (username: string) => {
-    if (!window.confirm("Remove student from your roster?")) return;
+  const handleUnassignClick = (username: string) => {
+    setStudentToUnassign(username);
+    setUnassignModalOpen(true);
+  };
+
+  const confirmUnassign = async () => {
+    if (!studentToUnassign) return;
+    setIsUnassigning(true);
+
     try {
       const token = localStorage.getItem("jwtoken");
-      await fetch(`${import.meta.env.VITE_API}unassign-student`, {
+      const res = await fetch(`${import.meta.env.VITE_API}unassign-student`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ studentUsername: username })
+        body: JSON.stringify({ studentUsername: studentToUnassign })
       });
-      setStudents(prev => prev.filter(s => s.username !== username));
+      
+      if (res.ok) {
+        setStudents(prev => prev.filter(s => s.username !== studentToUnassign));
+        setAlertSeverity("info");
+        setAlertMessage(`Student @${studentToUnassign} removed from roster.`);
+        setShowAlert(true);
+        setUnassignModalOpen(false);
+      } else {
+        throw new Error("Failed to unassign");
+      }
     } catch (error) {
-      console.error("Unassign failed:", error);
+      setAlertSeverity("error");
+      setAlertMessage("Network error while unassigning.");
+      setShowAlert(true);
+    } finally {
+      setIsUnassigning(false);
+      setStudentToUnassign(null);
     }
   };
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="relative w-full pb-12 md:pb-6">
       <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
         <div>
-          <h2 className="text-2xl font-display font-bold text-brand-blue">My Elite Roster</h2>
+          <h2 className="text-2xl font-display font-bold text-brand-blue">My Students</h2>
           <p className="text-sm text-gray-400">{students.length} of 5 slots filled</p>
         </div>
+        
+        {/* Mobile Round Button vs Desktop Full Button */}
         <button 
           onClick={() => setAddModalOpen(true)}
           disabled={students.length >= 5}
-          className={`px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition shadow-md ${students.length >= 5 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-orange text-white hover:bg-orange-600 active:scale-95'}`}
+          className={`w-12 h-12 md:w-auto md:h-auto md:px-6 md:py-3 rounded-full md:rounded-2xl font-bold flex items-center justify-center gap-2 transition shadow-md ${students.length >= 5 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-orange text-white hover:bg-orange-600 active:scale-95'}`}
         >
-          <PersonAdd /> Claim Student
+          <PersonAdd />
+          <span className="hidden md:inline">Claim Student</span>
         </button>
       </div>
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center"><CircularProgress color="inherit" /></div>
+        <div className="flex w-full items-center justify-center py-20">
+          <CircularProgress color="inherit" />
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
          
@@ -179,7 +224,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
             : 0;
 
           return (
-            <div key={student._id} className="bg-white rounded-[32px] p-6 shadow-lg border border-gray-50 relative group transition-all hover:shadow-xl hover:-translate-y-1">
+            <div key={student._id} className="bg-white rounded-[32px] p-6 shadow-lg border border-gray-50 relative group transition-all hover:shadow-xl hover:-translate-y-1 flex flex-col h-full min-h-[300px]">
               
               {activeDoubtCount > 0 && (
                 <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-red-500 text-white px-3 py-1 rounded-full shadow-lg shadow-red-100 animate-pulse z-10">
@@ -191,13 +236,13 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
               )}
 
                 <button 
-                  onClick={() => handleUnassign(student.username)}
+                  onClick={() => handleUnassignClick(student.username)}
                   className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full"
                 >
                   <DeleteOutline fontSize="small" />
                 </button>
 
-                <div className="flex flex-col items-center text-center">
+                <div className="flex flex-col items-center text-center flex-1">
                   <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl font-bold mb-4 overflow-hidden border-4 shadow-sm transition-all ${activeDoubtCount > 0 ? 'border-red-100 bg-red-50 text-red-500' : 'border-white bg-brand-blue/10 text-brand-blue'}`}>
                     {student.photo ? (
                       <img src={student.photo} className="w-full h-full object-cover" alt={student.name} />
@@ -209,7 +254,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
                   <h3 className="text-xl font-bold text-gray-800">{student.name}</h3>
                   <span className="text-xs font-bold text-gray-400 mb-4">@{student.username}</span>
                   
-                  <div className="w-full space-y-2 mb-6 border-t border-gray-50 pt-4">
+                  <div className="w-full space-y-2 mb-6 border-t border-gray-50 pt-4 flex-1">
                     <div className="flex items-center gap-2 text-gray-500 text-sm">
                       <Email fontSize="inherit" className="text-gray-300" /> 
                       <span className="truncate">{student.email}</span>
@@ -222,7 +267,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
 
                   <button 
                     onClick={() => navigate(`/update-report/${student.username}`)}
-                    className={`w-full py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition shadow-md ${activeDoubtCount > 0 ? 'bg-red-600 hover:bg-red-700 shadow-red-100' : 'bg-slate-900 hover:bg-brand-blue shadow-slate-200'} text-white`}
+                    className={`w-full py-3 mt-auto rounded-2xl font-bold flex items-center justify-center gap-2 transition shadow-md ${activeDoubtCount > 0 ? 'bg-red-600 hover:bg-red-700 shadow-red-100' : 'bg-slate-900 hover:bg-brand-blue shadow-slate-200'} text-white`}
                   >
                     <RocketLaunch fontSize="small" /> 
                     {activeDoubtCount > 0 ? 'Solve Doubts' : 'Update Report'}
@@ -233,17 +278,17 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
           })}
 
           {Array.from({ length: 5 - students.length }).map((_, i) => (
-            <div key={i} className="border-2 border-dashed border-gray-100 rounded-[32px] flex flex-col items-center justify-center p-8 opacity-50 grayscale">
+            <div key={`empty-${i}`} className="border-2 border-dashed border-gray-200 rounded-[32px] flex flex-col items-center justify-center p-8 opacity-60 min-h-[300px]">
               <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 mb-2">
                 <Person fontSize="large" />
               </div>
-              <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Available Slot</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Available Slot</p>
             </div>
           ))}
         </div>
       )}
 
-      {/* 🚨 THE NEW SEARCH-ENABLED CLAIM MODAL */}
+      {/* THE NEW SEARCH-ENABLED CLAIM MODAL */}
       {addModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -300,7 +345,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
 
               {/* Dropdown Results */}
               {searchResults.length > 0 && (
-                <div className="absolute top-[100px] left-6 right-6 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden z-30 max-h-48 overflow-y-auto">
+                <div className="absolute top-[100px] left-6 right-6 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden z-30 max-h-48 overflow-y-auto custom-scrollbar">
                   {searchResults.map((student) => (
                     <button
                       key={student._id}
@@ -324,13 +369,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
                    <p className="text-sm text-gray-500 font-medium">No students found matching "{searchQuery}"</p>
                  </div>
               )}
-
-              {/* Status Message */}
-              {status.message && (
-                <div className={`mt-6 p-3 rounded-xl text-xs font-bold text-center ${status.type === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-blue-50 text-brand-blue border border-blue-100'}`}>
-                  {status.message}
-                </div>
-              )}
             </div>
 
             {/* Footer */}
@@ -342,21 +380,63 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ userData }) => {
                 Cancel
               </button>
               <button
-                disabled={!selectedStudent || status.loading}
+                disabled={!selectedStudent || isAssigning}
                 onClick={handleClaimStudent}
                 className={`px-5 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2 ${
-                  selectedStudent && !status.loading
+                  selectedStudent && !isAssigning
                     ? 'bg-brand-orange text-white hover:bg-orange-600 shadow-md shadow-orange-500/20' 
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                {status.loading ? <Loader2 className="animate-spin" size={16} /> : 'Assign Student'}
+                {isAssigning ? <Loader2 className="animate-spin" size={16} /> : 'Assign Student'}
               </button>
             </div>
 
           </div>
         </div>
       )}
+
+      {/* THE NEW UNASSIGN CONFIRMATION MODAL */}
+      {unassignModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-sm p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="text-xl font-display font-bold text-gray-800">Remove Student?</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-8 pl-1">
+              Are you sure you want to remove <span className="font-bold text-gray-700">@{studentToUnassign}</span> from your roster? You can always add them back later if needed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setUnassignModalOpen(false)} 
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-200 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmUnassign} 
+                disabled={isUnassigning}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition shadow-md shadow-red-500/20 flex items-center gap-2"
+              >
+                {isUnassigning ? <Loader2 className="animate-spin" size={16} /> : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* THE TOAST SYSTEM */}
+      {showAlert && (
+        <Muialert 
+          message={alertMessage} 
+          severity={alertSeverity} 
+          onClose={() => setShowAlert(false)} 
+        />
+      )}
+
     </div>
   );
 };

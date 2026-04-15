@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Bell, BellOff, ArrowRight, CheckCheck, Loader2 } from "lucide-react";
+import { Bell, BellOff, ArrowRight, CheckCheck, Loader2, AlertTriangle } from "lucide-react";
 import {
   TextField,
   Button,
@@ -9,6 +9,10 @@ import {
   InputAdornment,
   Checkbox,
   FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 
@@ -62,6 +66,9 @@ const AccountSettings = ({ userData, setUserData }: SettingsPanelProps) => {
   const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("info");
   const [isChangingRole, setIsChangingRole] = useState(false);
   
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const navigate = useNavigate();
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -91,8 +98,8 @@ const AccountSettings = ({ userData, setUserData }: SettingsPanelProps) => {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!window.confirm("🚨 Delete account permanently?")) return;
+  const confirmDeleteAccount = async () => {
+    setIsDeleting(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API}user/${username}`, {
         method: "DELETE",
@@ -102,11 +109,19 @@ const AccountSettings = ({ userData, setUserData }: SettingsPanelProps) => {
       if (response.ok) {
         localStorage.clear();
         navigate("/");
+      } else {
+        setAlertSeverity("error");
+        setAlertMessage("Failed to delete account.");
+        setShowAlert(true);
+        setDeleteModalOpen(false);
       }
     } catch (error) {
       setAlertSeverity("error");
-      setAlertMessage("Failed to delete account.");
+      setAlertMessage("Network error.");
       setShowAlert(true);
+      setDeleteModalOpen(false);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -140,11 +155,41 @@ const AccountSettings = ({ userData, setUserData }: SettingsPanelProps) => {
           <h4 className="font-bold text-red-800">Delete Account</h4>
           <p className="text-sm text-red-600">All data will be wiped permanently.</p>
         </div>
-        <button onClick={handleDeleteAccount} className="bg-red-500 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-red-700">Delete Account</button>
+        <button onClick={() => setDeleteModalOpen(true)} className="bg-red-500 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-red-700 transition">Delete Account</button>
       </div>
 
       <Popup isOpen={isChangingRole} onClose={() => setIsChangingRole(false)} onRoleSelected={(newRole) => { setUserData((prev: any) => ({ ...prev, Role: newRole })); setIsChangingRole(false); setAlertSeverity("success"); setAlertMessage(`Switched to ${newRole}!`); setShowAlert(true); }} />
       {showAlert && <Muialert message={alertMessage} severity={alertSeverity} onClose={() => setShowAlert(false)} />}
+
+      {/* SLEEK DANGER MODAL */}
+      <Dialog open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
+        <div className="p-6 bg-white rounded-3xl max-w-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <h3 className="text-xl font-display font-bold text-gray-800">Delete Account?</h3>
+          </div>
+          <p className="text-sm text-gray-500 mb-8 pl-1">
+            This action is permanent and cannot be undone. All your data, progress, and settings will be wiped instantly.
+          </p>
+          <div className="flex justify-end gap-3">
+            <button 
+              onClick={() => setDeleteModalOpen(false)} 
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-200 transition"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={confirmDeleteAccount} 
+              disabled={isDeleting}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition shadow-md shadow-red-500/20 flex items-center gap-2"
+            >
+              {isDeleting ? <Loader2 className="animate-spin" size={16} /> : 'Yes, Delete'}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 };
@@ -155,10 +200,10 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
   const [loading, setLoading] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
+  const [alertSeverity, setAlertSeverity] = useState<"success" | "warning">("success");
   const [history, setHistory] = useState<any[]>([]);
   const navigate = useNavigate();
 
-  // 🚨 Fetch the fresh notifications specifically for this panel!
   useEffect(() => {
     const fetchHistory = async () => {
       try {
@@ -171,11 +216,9 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
         if (res.ok) {
           const data = await res.json();
           
-          // Calculate exactly 7 days ago
           const sevenDaysAgo = new Date();
           sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
           
-          // Filter so the user ONLY sees the last 7 days in the UI
           const recentNotifications = data.filter((notif: any) => {
             return new Date(notif.date) >= sevenDaysAgo;
           });
@@ -189,12 +232,9 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
     fetchHistory();
   }, []);
 
-  // 🚨 The Skeleton Click Handler
   const handleHistoryClick = async (notifId: string, link?: string) => {
-  // 1. UI update
   setHistory(prev => prev.map(n => n._id === notifId ? { ...n, isRead: true } : n));
 
-  // 2. DB update
   try {
     fetch(`${import.meta.env.VITE_API}notifications/mark-read`, {
       method: "PUT",
@@ -206,12 +246,8 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
     });
   } catch (error) { console.error(error); }
 
-  // 3. Navigation
   if (link) {
-    // Ensure it's absolute for the navigate call
     const absoluteLink = link.startsWith('/') ? link : `/${link}`;
-    
-    // For the check, we just look at the word after the slash
     const pathWord = absoluteLink.replace('/', '').toLowerCase();
     
     const dashboardViews = [
@@ -222,19 +258,16 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
         const parts = pathWord.split(":");
         const chatId = parts.length > 1 ? parts[1] : null;
 
-        // Fire the event
         window.dispatchEvent(new CustomEvent('open-communication-portal', {
           detail: { connectionId: chatId } 
         }));
 
-        return; // EJECT!
+        return; 
       }
     
     if (dashboardViews.includes(pathWord)) {
-      // Teleport to dashboard
       navigate("/dashboard", { state: { targetView: pathWord } }); 
     } else {
-      // Go to the absolute link (like /posts/single/123)
       navigate(absoluteLink); 
     }
   }
@@ -250,8 +283,6 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
   };
 
   const handleMarkAllRead = async () => {
-  // 1. Optimistic Update: Flip the UI to "Read" instantly
-  // This makes the app feel snappy
   setHistory(prev => prev.map(n => ({ ...n, isRead: true })));
 
   try {
@@ -265,8 +296,6 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
     });
 
     if (!res.ok) {
-      // If the server fails, we log it, but the UI stays clean 
-      // unless you want to refresh from DB here
       console.error("Server sync failed for Mark All Read");
     }
   } catch (error) {
@@ -285,11 +314,17 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
           await subscription.unsubscribe(); 
         }
         setIsPushEnabled(false);
+        setAlertSeverity("success");
         setAlertMessage("Notifications disabled.");
         setShowAlert(true);
       } else {
         const permission = await Notification.requestPermission();
-        if (permission !== "granted") return alert("Enable notifications in browser settings.");
+        if (permission !== "granted") {
+          setAlertSeverity("warning");
+          setAlertMessage("Please enable notifications in your browser settings.");
+          setShowAlert(true);
+          return;
+        }
         
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -304,6 +339,7 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
 
         if (res.ok) { 
           setIsPushEnabled(true); 
+          setAlertSeverity("success");
           setAlertMessage("Notifications linked successfully!");
           setShowAlert(true); 
         }
@@ -340,77 +376,73 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
         </div>
       </div>
       
-      {showAlert && <Muialert message={alertMessage} severity="success" onClose={() => setShowAlert(false)} />}
+      {showAlert && <Muialert message={alertMessage} severity={alertSeverity} onClose={() => setShowAlert(false)} />}
       
       {/* --- 7-DAY NOTIFICATION HISTORY --- */}
-<div className="mt-8 animate-fade-in">
-  <div className="flex items-center justify-between mb-4 px-1">
-    <h4 className="font-bold text-gray-800 flex items-center gap-2">
-      <Bell className="w-4 h-4 text-brand-orange" />
-      7-Day Notification History
-    </h4>
-    
-    {/* Mark All Button - Only shows if there are unread items */}
-    {history.some(n => !n.isRead) && (
-      <button 
-        onClick={handleMarkAllRead}
-        className="text-[11px] font-bold text-brand-orange hover:bg-brand-orange/10 px-3 py-1.5 rounded-full transition-all flex items-center gap-1 border border-brand-orange/20"
-      >
-        <CheckCheck className="w-3 h-3" />
-        Mark all as read
-      </button>
-    )}
-  </div>
+      <div className="mt-8 animate-fade-in">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+            <Bell className="w-4 h-4 text-brand-orange" />
+            7-Day Notification History
+          </h4>
+          
+          {history.some(n => !n.isRead) && (
+            <button 
+              onClick={handleMarkAllRead}
+              className="text-[11px] font-bold text-brand-orange hover:bg-brand-orange/10 px-3 py-1.5 rounded-full transition-all flex items-center gap-1 border border-brand-orange/20"
+            >
+              <CheckCheck className="w-3 h-3" />
+              Mark all as read
+            </button>
+          )}
+        </div>
 
-  <div className="bg-gray-50 rounded-2xl border border-gray-100 p-2 max-h-80 overflow-y-auto custom-scrollbar">
-    {history.length > 0 ? (
-      history.map((notif: any) => (
-        <div 
-          key={notif._id} 
-          onClick={() => handleHistoryClick(notif._id, notif.link)}
-          className={`group relative p-4 mb-2 rounded-xl border transition-all duration-300 cursor-pointer flex items-start gap-4 shadow-sm
-            ${notif.isRead 
-              ? "bg-white border-gray-100 opacity-70" 
-              : "bg-white border-brand-orange/20 ring-1 ring-brand-orange/5 hover:shadow-md"
-            }`}
-        >
-          {/* Status Dot */}
-          {!notif.isRead && (
-            <div className="mt-1.5 flex h-2.5 w-2.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-brand-orange opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-orange"></span>
+        <div className="bg-gray-50 rounded-2xl border border-gray-100 p-2">
+          {history.length > 0 ? (
+            history.map((notif: any) => (
+              <div 
+                key={notif._id} 
+                onClick={() => handleHistoryClick(notif._id, notif.link)}
+                className={`group relative p-4 mb-2 rounded-xl border transition-all duration-300 cursor-pointer flex items-start gap-4 shadow-sm
+                  ${notif.isRead 
+                    ? "bg-white border-gray-100 opacity-70" 
+                    : "bg-white border-brand-orange/20 ring-1 ring-brand-orange/5 hover:shadow-md"
+                  }`}
+              >
+                {!notif.isRead && (
+                  <div className="mt-1.5 flex h-2.5 w-2.5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-brand-orange opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-orange"></span>
+                  </div>
+                )}
+
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm block transition-colors ${
+                    notif.isRead ? "text-gray-500 font-medium" : "text-gray-900 font-bold"
+                  }`}>
+                    {notif.message}
+                  </span>
+                  <span className="text-[10px] font-medium text-gray-400 mt-2 block">
+                    {new Date(notif.date).toLocaleDateString()} • {new Date(notif.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+
+                <div className={`transition-transform duration-300 group-hover:translate-x-1 ${notif.isRead ? "text-gray-300" : "text-brand-orange"}`}>
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <div className="bg-gray-200/50 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
+                <BellOff className="text-gray-400 w-6 h-6" />
+              </div>
+              <p className="text-sm text-gray-500 font-medium">Your notification inbox is empty.</p>
+              <p className="text-xs text-gray-400">New alerts will appear here</p>
             </div>
           )}
-
-          <div className="flex-1 min-w-0">
-            <span className={`text-sm block transition-colors ${
-              notif.isRead ? "text-gray-500 font-medium" : "text-gray-900 font-bold"
-            }`}>
-              {notif.message}
-            </span>
-            <span className="text-[10px] font-medium text-gray-400 mt-2 block">
-              {new Date(notif.date).toLocaleDateString()} • {new Date(notif.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
-
-          {/* This is the ArrowRight you were looking for! */}
-          <div className={`transition-transform duration-300 group-hover:translate-x-1 ${notif.isRead ? "text-gray-300" : "text-brand-orange"}`}>
-            <ArrowRight className="w-4 h-4" />
-          </div>
         </div>
-      ))
-    ) : (
-      /* This is the BellOff fallback you were looking for! */
-      <div className="text-center py-12">
-        <div className="bg-gray-200/50 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
-          <BellOff className="text-gray-400 w-6 h-6" />
-        </div>
-        <p className="text-sm text-gray-500 font-medium">Your notification inbox is empty.</p>
-        <p className="text-xs text-gray-400">New alerts will appear here</p>
       </div>
-    )}
-  </div>
-</div>
     </div>
   );
 };
@@ -419,8 +451,6 @@ const NotificationSettings = ({ userData, setUserData }: SettingsPanelProps) => 
 const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
   const tabs = ["general", "account", "notifications"];
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("settingsActiveTab") || "general");
-  
-  // 🚨 Track direction for the slide effect
   const [direction, setDirection] = useState(0);
 
   const setTabWithDirection = (newTab: string) => {
@@ -434,7 +464,6 @@ const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
     localStorage.setItem("settingsActiveTab", activeTab);
   }, [activeTab]);
 
-  // 🚨 Framer Motion Variants for the "Sliding" logic
   const slideVariants = {
     enter: (direction: number) => ({
       x: direction > 0 ? "100%" : "-100%",
@@ -460,17 +489,17 @@ const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
   };
 
   return (
-    <div className="w-full flex flex-col overflow-hidden">
+    <div className="w-full h-full flex flex-col overflow-hidden">
       
       {/* --- HEADING --- */}
-      <div className="mb-6 md:mb-8 px-4">
+      <div className="mb-6 md:mb-8 px-4 flex-shrink-0">
         <h2 className="text-3xl font-display font-bold text-brand-blue text-center md:text-left">
           Settings
         </h2>
       </div>
 
       {/* --- TAB NAVIGATION --- */}
-      <div className="sticky top-0 z-30 bg-white flex justify-center md:justify-start space-x-6 md:space-x-8 border-b border-gray-100 pt-2 pb-4 mb-6 hide-scrollbar px-4">
+      <div className="sticky top-0 z-30 bg-white flex justify-center md:justify-start space-x-6 md:space-x-8 border-b border-gray-100 pt-2 pb-4 mb-6 hide-scrollbar px-4 flex-shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab}
@@ -491,7 +520,8 @@ const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
       </div>
 
       {/* --- SWIPEABLE CONTENT AREA --- */}
-      <div className="relative flex-1">
+      {/* 🚨 THE SCROLL FIX: Bounding the parent and making the child overflow-y-auto */}
+      <div className="relative flex-1 flex flex-col overflow-hidden">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={activeTab}
@@ -504,26 +534,24 @@ const SettingsPanel = ({ userData, setUserData }: SettingsPanelProps) => {
               x: { type: "spring", stiffness: 300, damping: 30 },
               opacity: { duration: 0.2 }
             }}
-            // 🚨 THE SWIPE GESTURE:
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.2}
             onDragEnd={(_, info) => {
               const swipeThreshold = 50;
-              const velocityThreshold = 500; // 🚨 Added velocity check for fast flicks
+              const velocityThreshold = 500; 
 
-              // Swipe Left (Moving finger to the left) -> Go to Next Tab
               if (info.offset.x < -swipeThreshold || info.velocity.x < -velocityThreshold) {
                 const nextIndex = tabs.indexOf(activeTab) + 1;
                 if (nextIndex < tabs.length) setTabWithDirection(tabs[nextIndex]);
               } 
-              // Swipe Right (Moving finger to the right) -> Go to Previous Tab
               else if (info.offset.x > swipeThreshold || info.velocity.x > velocityThreshold) {
                 const prevIndex = tabs.indexOf(activeTab) - 1;
                 if (prevIndex >= 0) setTabWithDirection(tabs[prevIndex]);
               }
             }}
-            className="w-full h-full px-4 md:px-0"
+            // 🚨 THE SCROLL FIX: h-full + overflow-y-auto keeps the scrolling neatly contained
+            className="w-full h-full flex-1 overflow-y-auto custom-scrollbar px-4 md:px-0 pb-12 md:pb-6"
           >
             {renderContent()}
           </motion.div>

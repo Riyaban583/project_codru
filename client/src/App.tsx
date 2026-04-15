@@ -15,6 +15,7 @@ import SinglePost from "./components/SinglePost";
 import Publicprofile from "./components/Publicprofile"; 
 import Popup from "./components/Popup";
 import NotFound from "./components/NotFound";
+import SyllabusExplorer from "./components/SyllabusExplorer";
 
 // --- TYPESCRIPT DEFINITIONS ---
 export interface UserData {
@@ -275,6 +276,8 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route path="/edit-syllabus" element={<SyllabusExplorer />} />
+          <Route path="/edit-syllabus/:username" element={<SyllabusExplorer />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

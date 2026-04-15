@@ -66,7 +66,13 @@ const userSchema = new mongoose.Schema({
     topicName: String,
     status: { type: String, default: "not_started" }, // 'not_started', 'completed', 'completed_with_doubt'
     hasDoubt: { type: Boolean, default: false },
+    isCustom: { type: Boolean, default: false },
+    isHidden: { type: Boolean, default: false },
     lastUpdated: { type: Date, default: Date.now }
+  }],
+  activeSyllabuses: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Syllabus" 
   }],
   tasks: [{
     week: String,

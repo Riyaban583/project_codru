@@ -325,7 +325,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         premiumItems.push({ text: "My Courses", icon: <Backpack size={22} />, view: "my-courses" });
       }
       if (userData.Role === "Student") premiumItems.push({ text: "Report", icon: <TrendingUp size={22} />, view: "report" });
-      if (isPremiumTeacher) premiumItems.push({ text: "Management", icon: <GraduationCap size={22} />, view: "management" });
+      if (isPremiumTeacher) premiumItems.push({ text: "My students", icon: <GraduationCap size={22} />, view: "management" });
     }
 
     const parentItems = [];

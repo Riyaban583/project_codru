@@ -151,7 +151,7 @@ router.get("/dashboard/syllabus", authenticate, async (req, res) => {
     
     // Clean database (This will now work perfectly because validIds is full of your Master Syllabus IDs!)
     const originalLength = (targetUser.syllabus || []).length;
-    targetUser.syllabus = (targetUser.syllabus || []).filter(item => validIds.has((item.itemId || item._id)?.toString()));
+    targetUser.syllabus = (targetUser.syllabus || []).filter(item => item.isCustom || validIds.has((item.itemId || item._id)?.toString()));
     
     if (targetUser.syllabus.length !== originalLength) {
         await targetUser.save();
@@ -211,6 +211,99 @@ router.get("/dashboard/syllabus", authenticate, async (req, res) => {
   } catch (err) {
     console.error("Syllabus GET Error:", err);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// 1. ADD A CUSTOM TOPIC OR SUBJECT
+router.post("/dashboard/syllabus/add-custom", authenticate, async (req, res) => {
+  try {
+    const { username, subject, topicName } = req.body;
+    
+    // Find the target user (teacher adding for student, or student adding for self)
+    const targetUser = await User.findOne({ username });
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+
+    // Push the custom topic directly into their personal progress array
+    targetUser.syllabus.push({
+      subject: subject,
+      topicName: topicName,
+      status: "not_started",
+      hasDoubt: false,
+      isCustom: true,  // 🚨 Tags it as custom so your GET route doesn't delete it!
+      isHidden: false,
+      lastUpdated: Date.now()
+    });
+
+    await targetUser.save();
+    res.status(200).json({ message: "Custom topic added successfully!" });
+  } catch (err) {
+    console.error("Add Custom Topic Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// 2. HIDE GLOBAL TOPIC OR DELETE CUSTOM TOPIC
+router.delete("/dashboard/syllabus/remove", authenticate, async (req, res) => {
+  try {
+    const { username, topicId, isCustom } = req.body;
+    const targetUser = await User.findOne({ username });
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+
+    if (isCustom) {
+      // It's a custom topic, so we can safely delete it permanently from their profile
+      targetUser.syllabus = targetUser.syllabus.filter(item => item._id.toString() !== topicId);
+    } else {
+      // It's a GLOBAL topic! We cannot delete it, so we just "hide" it for this user.
+      const existingItem = targetUser.syllabus.find(i => 
+        (i.itemId && i.itemId.toString() === topicId) || 
+        (i._id && i._id.toString() === topicId)
+      );
+
+      if (existingItem) {
+        existingItem.isHidden = true; // Mark existing progress as hidden
+      } else {
+        // If they never interacted with it, it's not in their array yet. 
+        // We MUST add it just to flag it as hidden!
+        targetUser.syllabus.push({
+          itemId: topicId,
+          isHidden: true
+        });
+      }
+    }
+
+    await targetUser.save();
+    res.status(200).json({ message: "Topic removed from view!" });
+  } catch (err) {
+    console.error("Remove Topic Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.get("/dashboard/syllabus/available-courses", authenticate, async (req, res) => {
+  try {
+    // Finds all unique 'classSemester' strings in your global Syllabus collection!
+    const courses = await Syllabus.distinct("classSemester");
+    res.status(200).json(courses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/dashboard/syllabus/subscribe", authenticate, async (req, res) => {
+  try {
+    const { username, courseName } = req.body;
+    const targetUser = await User.findOne({ username });
+    
+    // Add the course name to their active list if it isn't there already
+    if (!targetUser.activeSyllabuses) targetUser.activeSyllabuses = [];
+    if (!targetUser.activeSyllabuses.includes(courseName)) {
+      targetUser.activeSyllabuses.push(courseName);
+      await targetUser.save();
+    }
+    
+    res.status(200).json({ message: "Subscribed successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
