@@ -16,7 +16,10 @@ import {
   MessageSquare,
   X,
   Briefcase,
-  LayoutDashboard
+  LayoutDashboard,
+  UserCircle,
+  Zap,
+  Plus
 } from "lucide-react";
 
 // Components
@@ -596,17 +599,33 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
           
           {isPremiumTeacher && ["syllabus", "my-courses"].includes(currentView) && (
             <div className="mb-6 mx-4 md:mx-0 bg-white px-6 py-4 rounded-[24px] shadow-sm border border-gray-100 flex items-center gap-4 overflow-x-auto custom-scrollbar flex-shrink-0">
-              <span className="text-sm font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Select Student:</span>
-              {teacherStudents.length === 0 ? (
-                <span className="text-sm text-gray-500 italic">No students in roster. Add them in Management!</span>
-              ) : (
-                <div className="flex gap-2">
-                  {currentView === "syllabus" && (
-                    <button onClick={() => setSelectedStudentUsername(null)} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition whitespace-nowrap ${selectedStudentUsername === null ? 'border-brand-orange text-brand-orange bg-orange-50 font-bold' : 'border-gray-200 text-gray-500 font-medium hover:border-brand-orange hover:bg-orange-50/50'}`}>
-                      Class Insights
-                    </button>
-                  )}
-                  {teacherStudents.map(student => {
+              <span className="text-sm font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Viewing:</span>
+              
+              <div className="flex items-center gap-2">
+                
+                {/* 1. Class Insights (Only relevant for Syllabus View) */}
+                {currentView === "syllabus" && (
+                  <button onClick={() => setSelectedStudentUsername(null)} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition whitespace-nowrap ${selectedStudentUsername === null ? 'border-brand-orange text-brand-orange bg-orange-50 font-bold' : 'border-gray-200 text-gray-500 font-medium hover:border-brand-orange hover:bg-orange-50/50'}`}>
+                    <Zap size={16} /> Class Insights
+                  </button>
+                )}
+
+                {/* 2. Teacher's Own View (Me) */}
+                <button 
+                  onClick={() => setSelectedStudentUsername(localStorage.getItem("Username") || localStorage.getItem("username"))} 
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full border transition whitespace-nowrap ${(selectedStudentUsername === (localStorage.getItem("Username") || localStorage.getItem("username"))) ? 'border-slate-900 text-slate-900 bg-slate-100 font-bold' : 'border-gray-200 text-gray-500 font-medium hover:border-slate-900 hover:bg-slate-50'}`}
+                >
+                  <UserCircle size={16} /> My {currentView === 'syllabus' ? 'Syllabus' : 'Courses'}
+                </button>
+
+                {/* Vertical Divider */}
+                <div className="w-px h-6 bg-gray-200 mx-2 shrink-0" />
+
+                {/* 3. Students List */}
+                {teacherStudents.length === 0 ? (
+                  <span className="text-sm text-gray-400 italic px-2 whitespace-nowrap">No students in roster</span>
+                ) : (
+                  teacherStudents.map(student => {
                     const isSelected = selectedStudentUsername === student.username;
                     return (
                       <button key={student.username} onClick={() => setSelectedStudentUsername(student.username)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition whitespace-nowrap ${isSelected ? 'border-brand-blue bg-blue-50 shadow-sm' : 'border-gray-200 hover:border-brand-blue hover:bg-blue-50/50'}`}>
@@ -616,11 +635,31 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
                         <span className={`text-sm ${isSelected ? 'font-bold text-brand-blue' : 'font-medium text-gray-700'}`}>{student.name ? student.name.split(' ')[0] : student.username}</span>
                       </button>
                     );
-                  })}
-                </div>
-              )}
+                  })
+                )}
+
+                {/* 🚨 NEW: 4. Add Student Button */}
+                <div className="w-px h-6 bg-gray-200 mx-1 shrink-0" />
+                <button 
+                  onClick={() => {
+                    // Update state to render the StudentManagement component
+                    setCurrentView("management");
+                    setActiveTab("Management");
+                    // Save to local storage so it persists on refresh
+                    localStorage.setItem("currentView", "management");
+                    localStorage.setItem("activeTab", "Management");
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:text-brand-blue hover:border-brand-blue hover:bg-blue-50 transition whitespace-nowrap"
+                  title="Manage Students"
+                >
+                  <Plus size={16} />
+                  <span className="text-sm font-bold">Add Student</span>
+                </button>
+
+              </div>
             </div>
           )}
+        
 
           <div className={`relative flex-1 min-h-0 flex flex-col bg-white transition-all duration-300
               rounded-t-[32px] md:rounded-[32px] 

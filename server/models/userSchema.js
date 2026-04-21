@@ -68,6 +68,7 @@ const userSchema = new mongoose.Schema({
     hasDoubt: { type: Boolean, default: false },
     isCustom: { type: Boolean, default: false },
     isHidden: { type: Boolean, default: false },
+    order: { type: Number, default: 0 },
     lastUpdated: { type: Date, default: Date.now }
   }],
   activeSyllabuses: [{ 

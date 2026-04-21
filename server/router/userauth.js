@@ -207,6 +207,27 @@ router.get("/dashboard/syllabus", authenticate, async (req, res) => {
       });
     });
 
+    // 🚨 Add this right before sending the response in GET /dashboard/syllabus!
+    targetUser.syllabus.forEach(item => {
+      if (item.isCustom && !item.isHidden) {
+        const pathArray = item.topicName ? item.topicName.split(' > ') : [];
+        const leafName = pathArray.length > 0 ? pathArray.pop() : item.topicName;
+        
+        flattenedTopics.push({
+          _id: item._id || item.itemId, 
+          id: item._id || item.itemId,
+          subject: item.subject || "General",
+          topicName: item.topicName,
+          path: pathArray,      
+          leafName: leafName, 
+          status: item.status || 'not_started',
+          hasDoubt: !!item.hasDoubt,
+          lastUpdated: item.lastUpdated,
+          isCustom: true
+        });
+      }
+    });
+
     res.status(200).json(flattenedTopics);
   } catch (err) {
     console.error("Syllabus GET Error:", err);
@@ -304,6 +325,89 @@ router.post("/dashboard/syllabus/subscribe", authenticate, async (req, res) => {
     res.status(200).json({ message: "Subscribed successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 🚨 NEW: SAFE READ-ONLY PREVIEW ROUTE
+router.get("/dashboard/syllabus/blueprint", authenticate, async (req, res) => {
+  try {
+    const { course } = req.query;
+    if (!course) return res.status(400).json({ error: "Course name required" });
+
+    // 1. Fetch the master document for this course
+    const syllabusDocs = await Syllabus.find({ classSemester: course });
+    if (!syllabusDocs || syllabusDocs.length === 0) return res.status(200).json([]);
+
+    const flattenedTopics = [];
+
+    // 2. Flatten it exactly how the frontend likes it (without checking user progress)
+    syllabusDocs.forEach(syllabus => {
+      if (!syllabus.subjects) return;
+      syllabus.subjects.forEach(subject => {
+        if (!subject.chapters) return;
+        subject.chapters.forEach(chapter => {
+          if (!chapter.topics) return;
+          chapter.topics.forEach(topic => {
+            
+            // Helper to push formatted topics
+            const pushTopic = (item, pathArray) => {
+              if (!item || !item._id) return;
+              flattenedTopics.push({
+                _id: item._id.toString(),
+                id: item._id.toString(),
+                subject: subject.title || "General",
+                topicName: [...pathArray, item.title].join(' > '), 
+                path: pathArray,      
+                leafName: item.title, 
+                status: 'not_started', // Preview is always unstarted
+                hasDoubt: false
+              });
+            };
+
+            if (topic.subtopics && topic.subtopics.length > 0) {
+              topic.subtopics.forEach(sub => {
+                if (sub.subSubtopics && sub.subSubtopics.length > 0) {
+                  sub.subSubtopics.forEach(subSub => pushTopic(subSub, [chapter.title, topic.title, sub.title]));
+                } else {
+                  pushTopic(sub, [chapter.title, topic.title]);
+                }
+              });
+            } else {
+              pushTopic(topic, [chapter.title]);
+            }
+          });
+        });
+      });
+    });
+
+    res.status(200).json(flattenedTopics);
+  } catch (err) {
+    console.error("Blueprint GET Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// 🚨 NEW REORDER ROUTE
+router.put("/dashboard/syllabus/reorder", authenticate, async (req, res) => {
+  try {
+    const { username, updates } = req.body; // Expects: [{ id: "...", order: 1 }, ...]
+    const targetUser = await User.findOne({ username });
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+
+    updates.forEach(u => {
+      // Finds the specific topic by its _id or original itemId
+      const item = targetUser.syllabus.find(s => 
+        (s._id && s._id.toString() === u.id) || 
+        (s.itemId && s.itemId.toString() === u.id)
+      );
+      if (item) item.order = u.order;
+    });
+
+    await targetUser.save();
+    res.status(200).json({ message: "Order updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

@@ -1,413 +1,372 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { fetchWithCache } from '../utils/apiCache';
 import { 
-  BookOpen, FolderTree, Plus, Trash2, ChevronRight, ChevronDown, 
-  Search, X, ArrowLeft, Globe, BookMarked, Check, Loader2
+  FolderTree, Plus, Trash2, ChevronRight, ChevronDown, 
+  Search, X, ArrowLeft, Globe, BookMarked, Check, Loader2, Maximize2, Minimize2, ArrowUp, ArrowDown, BookOpen
 } from 'lucide-react';
 import { IconButton, Button } from "@mui/material";
-import Muialert from "./Muialert";
-import { SyllabusTopic } from './SyllabusTracker';
 
-interface FolderNode {
-  name: string;
-  pathId: string;
-  subFolders: Record<string, FolderNode>;
-  topics: SyllabusTopic[];
+export interface TrackerNode {
+  _id: string;
+  title: string;
+  parentId: string | null;
+  course: string;
+  level: number;
+  order: number;
+  isCustom: boolean;
 }
 
-interface SyllabusExplorerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  targetUsername: string | null | undefined;
-  currentTopics: SyllabusTopic[];
-  onSuccess: () => void;
-}
+const SyllabusExplorer = () => {
+  const { username: routeUsername } = useParams<{ username: string }>();
+  const navigate = useNavigate();
+  // 🚨 targetUsername figures out exactly WHOSE database we are editing
+  const targetUsername = routeUsername || localStorage.getItem("Username") || localStorage.getItem("username");
 
-const SyllabusExplorer: React.FC<SyllabusExplorerProps> = ({ isOpen, onClose, targetUsername, currentTopics, onSuccess }) => {
-  // 1. View & Navigation State
+  const [userNodes, setUserNodes] = useState<TrackerNode[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeView, setActiveView] = useState<'my_path' | 'preview'>('my_path');
   const [previewCourse, setPreviewCourse] = useState<string | null>(null);
   const [globalCourses, setGlobalCourses] = useState<string[]>([]);
-  const [previewTopics, setPreviewTopics] = useState<SyllabusTopic[]>([]);
+  const [previewNodes, setPreviewNodes] = useState<TrackerNode[]>([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); 
 
-  // 2. Inline Adding State
-  const [addingTo, setAddingTo] = useState<{ subject: string, path: string | null } | null>(null);
+  const [addingTo, setAddingTo] = useState<{ parentId: string | null, course: string } | null>(null);
+  const [newCourseName, setNewCourseName] = useState("");
+  const [isCreatingCourse, setIsCreatingCourse] = useState(false);
   const [newItemName, setNewItemName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [alertInfo, setAlertInfo] = useState({ show: false, message: "", type: "info" as "success" | "error" | "info" });
-
-  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
+  const [expandedNodes, setExpandedNodes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch available global courses on mount
-  useEffect(() => {
-    if (isOpen) {
-      // 🚨 You will need to add this simple route to your backend: Syllabus.distinct("classSemester")
-      fetch(`${import.meta.env.VITE_API}dashboard/syllabus/available-courses`)
-        .then(res => res.ok ? res.json() : [])
-        .then(data => setGlobalCourses(data))
-        .catch(err => console.error(err));
-    }
-  }, [isOpen]);
+  const fetchUserNodes = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("jwtoken");
+      const url = `${import.meta.env.VITE_API}dashboard/tracker/nodes?username=${targetUsername}`; 
+      const data = await fetchWithCache(url, { "Authorization": `Bearer ${token}` }, true);
+      setUserNodes(Array.isArray(data) ? data : []);
+    } catch (err) { setUserNodes([]); } finally { setIsLoading(false); }
+  };
 
-  // Fetch Preview Data when a global course is clicked
+  useEffect(() => {
+    fetchUserNodes();
+    const token = localStorage.getItem("jwtoken");
+    fetch(`${import.meta.env.VITE_API}dashboard/tracker/available-courses`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setGlobalCourses(data))
+      .catch(() => setGlobalCourses([]));
+  }, [targetUsername]);
+
   useEffect(() => {
     if (activeView === 'preview' && previewCourse) {
       setIsLoadingPreview(true);
-      // Fetching the master syllabus for this specific class/course
-      fetch(`${import.meta.env.VITE_API}dashboard/syllabus?classSemester=${previewCourse}`)
-        .then(res => res.json())
-        .then(data => setPreviewTopics(data))
-        .catch(err => console.error(err))
+      const token = localStorage.getItem("jwtoken"); 
+      fetch(`${import.meta.env.VITE_API}dashboard/tracker/blueprint?course=${encodeURIComponent(previewCourse)}`, {
+        headers: { "Authorization": `Bearer ${token}` } 
+      })
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setPreviewNodes(data))
         .finally(() => setIsLoadingPreview(false));
     }
   }, [activeView, previewCourse]);
 
-  // Use the active dataset based on the view
-  const displayTopics = activeView === 'my_path' ? currentTopics : previewTopics;
+  // --- TREE BUILDING LOGIC ---
+  const buildTree = (nodes: TrackerNode[]) => {
+    const nodesMap = new Map<string, any>();
+    const roots: any[] = [];
+    nodes.forEach(node => nodesMap.set(node._id, { ...node, children: [] }));
+    nodesMap.forEach(node => {
+      if (node.parentId && nodesMap.has(node.parentId)) {
+        nodesMap.get(node.parentId).children.push(node);
+      } else if (!node.parentId) { roots.push(node); }
+    });
+    const recursiveSort = (arr: any[]) => {
+      arr.sort((a, b) => a.order - b.order);
+      arr.forEach(item => recursiveSort(item.children));
+    };
+    recursiveSort(roots);
+    return roots;
+  };
 
-  // Filter & Group Topics
-  const filteredTopics = useMemo(() => {
-    let base = displayTopics || [];
-    if (searchQuery.trim()) {
-      base = base.filter(t => t.topicName.toLowerCase().includes(searchQuery.toLowerCase()) || t.subject?.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
-    return base;
-  }, [displayTopics, searchQuery]);
+  const courseTrees = useMemo(() => {
+    const filtered = searchQuery.trim() 
+      ? userNodes.filter(n => n.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      : userNodes;
 
-  const groupedTopics = useMemo(() => {
-    return filteredTopics.reduce((acc, topic) => {
-      const subjectName = topic.subject || "General";
-      if (!acc[subjectName]) acc[subjectName] = [];
-      acc[subjectName].push(topic);
-      return acc;
-    }, {} as Record<string, SyllabusTopic[]>);
-  }, [filteredTopics]);
+    const groups: Record<string, any[]> = {};
+    filtered.forEach(node => {
+      if (!groups[node.course]) groups[node.course] = [];
+      groups[node.course].push(node);
+    });
 
-  // --- API HANDLERS ---
+    const finalTrees: Record<string, any[]> = {};
+    Object.keys(groups).forEach(course => {
+      finalTrees[course] = buildTree(groups[course]);
+    });
+    return finalTrees;
+  }, [userNodes, searchQuery]);
 
-  const handleInlineAdd = async () => {
-    if (!newItemName.trim() || !addingTo) return;
+  const previewTree = useMemo(() => buildTree(previewNodes), [previewNodes]);
+
+  // --- HANDLERS ---
+  const handleAddNode = async (parentId: string | null, courseName: string, explicitTitle?: string) => {
+    const finalTitle = explicitTitle !== undefined ? explicitTitle : newItemName;
+    
+    if (!finalTitle.trim() || !courseName.trim()) return;
     setIsProcessing(true);
     try {
       const token = localStorage.getItem("jwtoken");
-      const username = targetUsername || localStorage.getItem("Username");
-
-      // Construct the full path. If adding to root subject, path is just the item.
-      // If adding to a folder, append it.
-      const fullTopicPath = addingTo.path ? `${addingTo.path} > ${newItemName.trim()}` : newItemName.trim();
-
-      const res = await fetch(`${import.meta.env.VITE_API}dashboard/syllabus/add-custom`, {
+      const res = await fetch(`${import.meta.env.VITE_API}dashboard/tracker/nodes`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({
-          username,
-          subject: addingTo.subject.trim(),
-          topicName: fullTopicPath,
-          isCustom: true
+        // 🚨 Attached username here
+        body: JSON.stringify({ 
+          title: finalTitle.trim(), 
+          parentId, 
+          course: courseName.trim(),
+          username: targetUsername 
         })
       });
-
       if (res.ok) {
         setNewItemName("");
         setAddingTo(null);
-        onSuccess(); // Refreshes the tracker
-      } else throw new Error("Failed to add");
-    } catch (error) {
-      setAlertInfo({ show: true, message: "Error adding topic.", type: "error" });
-    } finally {
-      setIsProcessing(false);
-    }
+        setIsCreatingCourse(false); 
+        setNewCourseName("");       
+        fetchUserNodes();
+        showToast("Added successfully");
+      } else {
+        showToast("Failed to add", "error");
+      }
+    } catch (err) { showToast("Error adding", "error"); }
+    finally { setIsProcessing(false); }
   };
 
-  const handleDelete = async (topicId: string, isCustom: boolean) => {
-    if (!window.confirm(isCustom ? "Delete this custom topic?" : "Hide this topic from your path?")) return;
+  const handleDeleteNode = async (id: string) => {
+    if (!window.confirm("Delete this and all sub-topics?")) return;
     setIsProcessing(true);
     try {
       const token = localStorage.getItem("jwtoken");
-      const username = targetUsername || localStorage.getItem("Username");
-      const res = await fetch(`${import.meta.env.VITE_API}dashboard/syllabus/remove`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ username, topicId, isCustom })
+      // 🚨 Attached username here as query parameter
+      await fetch(`${import.meta.env.VITE_API}dashboard/tracker/nodes/${id}?username=${targetUsername}`, {
+        method: "DELETE", headers: { "Authorization": `Bearer ${token}` }
       });
-      if (res.ok) onSuccess();
-      else throw new Error("Failed to delete");
-    } catch (error) {
-      setAlertInfo({ show: true, message: "Error removing topic.", type: "error" });
-    } finally {
-      setIsProcessing(false);
-    }
+      fetchUserNodes(); showToast("Deleted");
+    } finally { setIsProcessing(false); }
   };
 
-  const handleSubscribeToCourse = async () => {
-    // This requires a backend route to push the `previewCourse` to the user's `activeSyllabuses` array
-    if(!window.confirm(`Add the entire ${previewCourse} syllabus to your path?`)) return;
+  const handleReorder = async (siblings: TrackerNode[], index: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= siblings.length) return;
+    const nodeA = siblings[index];
+    const nodeB = siblings[targetIdx];
     setIsProcessing(true);
     try {
       const token = localStorage.getItem("jwtoken");
-      const username = targetUsername || localStorage.getItem("Username");
-      await fetch(`${import.meta.env.VITE_API}dashboard/syllabus/subscribe`, {
+      await fetch(`${import.meta.env.VITE_API}dashboard/tracker/reorder`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        // 🚨 Attached username here
+        body: JSON.stringify({ updates: [{ id: nodeA._id, order: nodeB.order }, { id: nodeB._id, order: nodeA.order }], username: targetUsername })
+      });
+      fetchUserNodes();
+    } finally { setIsProcessing(false); }
+  };
+
+  const handleSubscribe = async () => {
+    if (!previewCourse) return;
+    setIsProcessing(true);
+    try {
+      const token = localStorage.getItem("jwtoken");
+      const res = await fetch(`${import.meta.env.VITE_API}dashboard/tracker/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ username, courseName: previewCourse })
+        // 🚨 Attached username here
+        body: JSON.stringify({ courseName: previewCourse, username: targetUsername })
       });
-      setAlertInfo({ show: true, message: `${previewCourse} added to your tracker!`, type: "success" });
-      onSuccess();
-    } catch(err) {
-      console.error(err);
-    } finally {
-      setIsProcessing(false);
-    }
+      if (res.ok) { fetchUserNodes(); setActiveView('my_path'); showToast("Course added!"); }
+    } finally { setIsProcessing(false); }
   };
 
-  const toggleFolder = (folderId: string) => {
-    setExpandedFolders(prev => prev.includes(folderId) ? prev.filter(f => f !== folderId) : [...prev, folderId]);
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
 
-  if (!isOpen) return null;
+  const renderNode = (node: any, index: number, siblings: any[], courseName: string) => {
+    const isExpanded = expandedNodes.includes(node._id);
+    const hasChildren = node.children.length > 0;
+    const canAddChild = node.level < 5;
 
-  // --- RECURSIVE TREE RENDERER WITH INLINE ADDING ---
-  const renderFolder = (node: FolderNode, depth: number, subject: string) => {
     return (
-      <div className="w-full">
-        {/* Render Subfolders */}
-        {Object.values(node.subFolders).map(subFolder => {
-          const isExpanded = expandedFolders.includes(subFolder.pathId);
-          return (
-            <div key={subFolder.pathId} className="w-full flex flex-col">
-              <div className="flex items-center justify-between py-2.5 pr-4 border-b border-gray-50 hover:bg-slate-50 group">
-                <div className="flex items-center flex-1 min-w-0" style={{ paddingLeft: `${(depth * 1.5) + 1}rem` }}>
-                  <button onClick={() => toggleFolder(subFolder.pathId)} className="flex items-center gap-1.5 text-sm font-bold text-gray-700 hover:text-brand-blue truncate">
-                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    {subFolder.name}
-                  </button>
-                </div>
-                {/* INLINE ADD BUTTON (Only visible in My Path) */}
-                {activeView === 'my_path' && (
-                  <IconButton onClick={() => setAddingTo({ subject, path: subFolder.pathId })} size="small" className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-blue">
-                    <Plus size={16} />
-                  </IconButton>
-                )}
+      <div key={node._id} className="w-full">
+        <div className="flex items-center justify-between py-2.5 pr-4 border-b border-gray-50 hover:bg-slate-50 transition group">
+          <div className="flex items-center flex-1 min-w-0" style={{ paddingLeft: `${(node.level - 1) * 1.5}rem` }}>
+            {hasChildren ? (
+              <button onClick={() => setExpandedNodes(prev => prev.includes(node._id) ? prev.filter(i => i !== node._id) : [...prev, node._id])} className="flex items-center gap-1.5 text-sm font-bold text-gray-700 truncate">
+                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                <span className="truncate">{node.title}</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 pl-5 text-sm font-medium text-gray-600 truncate">
+                <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                <span className="truncate">{node.title}</span>
               </div>
+            )}
+          </div>
 
-              {/* Recursive Children & Inline Input Field */}
-              {isExpanded && (
-                <div className="w-full bg-white/50">
-                  {renderFolder(subFolder, depth + 1, subject)}
-                  
-                  {/* The Inline Input Field for this folder */}
-                  {addingTo?.path === subFolder.pathId && (
-                    <div className="flex items-center gap-2 py-2 pr-4 border-b border-gray-50 bg-blue-50/30" style={{ paddingLeft: `${((depth + 1) * 1.5) + 2}rem` }}>
-                      <ChevronRight size={14} className="text-brand-blue" />
-                      <input 
-                        autoFocus
-                        value={newItemName}
-                        onChange={(e) => setNewItemName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleInlineAdd()}
-                        placeholder={`Add topic inside ${subFolder.name}...`}
-                        className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-brand-blue"
-                      />
-                      <button onClick={handleInlineAdd} disabled={isProcessing || !newItemName.trim()} className="bg-brand-blue text-white p-1.5 rounded-lg hover:bg-blue-800 disabled:opacity-50"><Check size={16}/></button>
-                      <button onClick={() => {setAddingTo(null); setNewItemName("");}} className="text-gray-400 hover:text-red-500 p-1.5"><X size={16}/></button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Render Leaf Topics */}
-        {node.topics.map(topic => {
-          const isCustom = (topic as any).isCustom || false;
-          return (
-            <div key={topic.id || topic._id} className="flex items-center justify-between py-2 pr-4 border-b border-gray-50 hover:bg-slate-50 group">
-              <div className="flex items-center flex-1 min-w-0 gap-2" style={{ paddingLeft: `${(depth * 1.5) + 2.5}rem` }}>
-                <div className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
-                <span className="text-sm font-medium text-gray-600 truncate">{topic.leafName || topic.topicName.split(' > ').pop()}</span>
-                {isCustom && activeView === 'my_path' && <span className="text-[9px] uppercase font-black text-brand-orange bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded">Custom</span>}
+          {activeView === 'my_path' && (
+            <div className="flex items-center gap-1 ml-2">
+              <div className="flex items-center border-r border-gray-100 pr-1">
+                <IconButton size="small" disabled={index === 0 || isProcessing} onClick={() => handleReorder(siblings, index, 'up')}><ArrowUp size={14}/></IconButton>
+                <IconButton size="small" disabled={index === siblings.length - 1 || isProcessing} onClick={() => handleReorder(siblings, index, 'down')}><ArrowDown size={14}/></IconButton>
               </div>
-              {activeView === 'my_path' && (
-                <IconButton onClick={() => handleDelete((topic._id || topic.id) as string, isCustom)} size="small" className="opacity-0 group-hover:opacity-100 text-red-500">
-                  <Trash2 size={14} />
-                </IconButton>
+              {canAddChild && (
+                <IconButton size="small" onClick={() => setAddingTo({ parentId: node._id, course: courseName })} className="text-brand-blue"><Plus size={18}/></IconButton>
               )}
+              <IconButton size="small" onClick={() => handleDeleteNode(node._id)} className="text-red-500"><Trash2 size={16}/></IconButton>
             </div>
-          );
-        })}
+          )}
+        </div>
+
+        {addingTo?.parentId === node._id && (
+          <div className="flex items-center gap-2 py-2 pr-4 bg-blue-50/30" style={{ paddingLeft: `${node.level * 1.5}rem` }}>
+            <input autoFocus value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Name..." className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-1.5 text-sm" />
+            <button onClick={() => handleAddNode(node._id, courseName)} className="bg-brand-blue text-white p-1.5 rounded-lg"><Check size={16}/></button>
+            <button onClick={() => setAddingTo(null)} className="text-gray-400"><X size={16}/></button>
+          </div>
+        )}
+
+        {isExpanded && node.children.map((child: any, idx: number) => renderNode(child, idx, node.children, courseName))}
       </div>
     );
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-white flex flex-col md:flex-row overflow-hidden animate-in fade-in duration-200">
-      
-      {/* 1. SIDEBAR (Global Courses & Navigation) */}
-      <div className="w-full md:w-80 bg-slate-50 border-r border-gray-200 flex flex-col flex-shrink-0">
-        <div className="p-4 md:p-6 border-b border-gray-200 flex items-center justify-between bg-white">
-          <h2 className="font-display font-black text-xl text-brand-blue flex items-center gap-2">
-            <Globe size={24} /> Explorer
-          </h2>
-          <IconButton onClick={onClose} size="small" className="md:hidden"><X size={20}/></IconButton>
+    <div className="w-full h-screen flex bg-white overflow-hidden relative">
+      {isMobileSidebarOpen && <div className="fixed inset-0 bg-slate-900/50 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsMobileSidebarOpen(false)} />}
+
+      {/* SIDEBAR */}
+      <div className={`absolute inset-y-0 left-0 z-50 bg-slate-50 flex flex-col transition-transform duration-300 md:relative md:translate-x-0 md:w-80 md:border-r border-gray-200 ${isMobileSidebarOpen ? 'translate-x-0 w-[85%]' : '-translate-x-full w-[85%]'}`}>
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-white">
+          <h2 className="font-black text-xl text-brand-blue flex items-center gap-2"><Globe size={24} /> Explorer</h2>
+          <IconButton onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden"><X size={20}/></IconButton>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-          
-          {/* My Path Section */}
-          <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 pl-2">Your Tracker</p>
-            <button 
-              onClick={() => { setActiveView('my_path'); setPreviewCourse(null); setAddingTo(null); }}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-bold text-sm ${activeView === 'my_path' ? 'bg-brand-blue text-white shadow-md' : 'bg-white border border-gray-200 text-gray-700 hover:border-brand-blue/50 hover:shadow-sm'}`}
-            >
-              <BookMarked size={18} /> My Personal Path
-            </button>
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          <button onClick={() => { setActiveView('my_path'); setIsMobileSidebarOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-sm ${activeView === 'my_path' ? 'bg-brand-blue text-white shadow-md' : 'bg-white border text-gray-700'}`}>
+            <BookMarked size={18} /> {routeUsername ? `${routeUsername}'s Path` : 'My Personal Path'}
+          </button>
+          <p className="text-xs font-bold text-gray-400 uppercase pl-2">Global Catalog</p>
+          <div className="space-y-2">
+            {globalCourses.map(course => (
+              <button key={course} onClick={() => { setActiveView('preview'); setPreviewCourse(course); setIsMobileSidebarOpen(false); }} className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium ${previewCourse === course && activeView === 'preview' ? 'bg-orange-50 border-brand-orange text-brand-orange' : 'bg-white border text-gray-600'}`}>
+                <span className="truncate">{course}</span><ChevronRight size={16}/>
+              </button>
+            ))}
           </div>
-
-          {/* Global Catalog Section */}
-          <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 pl-2">Global Catalog</p>
-            <div className="space-y-2">
-              {globalCourses.length === 0 ? (
-                <p className="text-sm text-gray-500 pl-2">Loading courses...</p>
-              ) : (
-                globalCourses.map(course => (
-                  <button
-                    key={course}
-                    onClick={() => { setActiveView('preview'); setPreviewCourse(course); setAddingTo(null); }}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all text-sm font-medium ${activeView === 'preview' && previewCourse === course ? 'bg-orange-50 border border-brand-orange text-brand-orange shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-brand-orange/50'}`}
-                  >
-                    {course} <ChevronRight size={16} className={activeView === 'preview' && previewCourse === course ? 'text-brand-orange' : 'text-gray-300'}/>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-200 bg-white hidden md:block">
-          <Button onClick={onClose} fullWidth variant="outlined" startIcon={<ArrowLeft size={18}/>} sx={{ borderRadius: '12px', color: '#64748b', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 'bold' }}>Back to Dashboard</Button>
         </div>
       </div>
 
-      {/* 2. MAIN CONTENT AREA (Tree Editor/Previewer) */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
-        
-        {/* Main Header */}
-        <div className="p-6 md:p-8 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black text-gray-900 mb-1">
-              {activeView === 'my_path' ? 'Edit Your Syllabus' : `Previewing: ${previewCourse}`}
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col bg-white overflow-hidden">
+        <div className="p-4 md:p-8 border-b border-gray-100 bg-white">
+          <div className="flex items-center gap-4 mb-4">
+            <button onClick={() => navigate(-1)} className="p-2.5 bg-gray-50 border rounded-full text-gray-600"><ArrowLeft size={20} /></button>
+            <h1 className="text-xl md:text-3xl font-black text-gray-900 leading-tight">
+              {activeView === 'my_path' ? 'Personal Path Builder' : `Previewing: ${previewCourse}`}
             </h1>
-            <p className="text-sm text-gray-500 font-medium">
-              {activeView === 'my_path' ? 'Add, organize, or hide topics in your personal tracker.' : 'Browse the official curriculum before adding it.'}
-            </p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input type="text" placeholder="Search tree..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full md:w-64 pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-brand-blue" />
-            </div>
-            {activeView === 'preview' && (
-              <Button onClick={handleSubscribeToCourse} disabled={isProcessing} variant="contained" sx={{ bgcolor: '#ed7f23', fontWeight: 'bold', borderRadius: '12px', textTransform: 'none', whiteSpace: 'nowrap', '&:hover': { bgcolor: '#d66b1a' } }}>
-                {isProcessing ? "Adding..." : "Add to Tracker"}
-              </Button>
-            )}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input type="text" placeholder="Search tree..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border rounded-xl text-sm" />
           </div>
         </div>
 
-        {/* Tree Container */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
-          
-          {isLoadingPreview ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10"><Loader2 className="animate-spin text-brand-orange mb-4" size={40} /></div>
-          ) : Object.keys(groupedTopics).length === 0 ? (
-            <div className="text-center py-20 text-gray-400">
-              <FolderTree size={60} className="mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-bold text-gray-500">No topics found.</p>
-              {activeView === 'my_path' && <p className="text-sm mt-2">Click the plus icons below or browse the Global Catalog to add some.</p>}
-            </div>
-          ) : (
-            <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm bg-white max-w-5xl mx-auto">
-              {Object.entries(groupedTopics).map(([subject, subjectTopics]) => {
-                const root: FolderNode = { name: 'root', pathId: subject, subFolders: {}, topics: [] };
-                subjectTopics.forEach(topic => {
-                    const pathArray = topic.path || topic.topicName.split(' > ').slice(0, -1);
-                    let currentFolder = root; let runningPath = subject;
-                    pathArray.forEach(folderName => {
-                        runningPath = `${runningPath} > ${folderName}`;
-                        if (!currentFolder.subFolders[folderName]) currentFolder.subFolders[folderName] = { name: folderName, pathId: runningPath, subFolders: {}, topics: [] };
-                        currentFolder = currentFolder.subFolders[folderName];
-                    });
-                    currentFolder.topics.push(topic);
-                });
-
-                return (
-                  <div key={subject} className="border-b border-gray-200 last:border-0">
-                    {/* Subject Header */}
-                    <div className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 group">
-                      <div className="flex items-center gap-2 font-bold text-gray-900 text-lg">
-                        <FolderTree size={20} className="text-brand-blue" /> {subject}
-                      </div>
-                      {/* INLINE ADD BUTTON FOR SUBJECT */}
-                      {activeView === 'my_path' && (
-                        <IconButton onClick={() => setAddingTo({ subject, path: null })} size="small" className="opacity-0 group-hover:opacity-100 text-brand-blue bg-white shadow-sm">
-                          <Plus size={18} />
-                        </IconButton>
-                      )}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/30 custom-scrollbar">
+          {isLoading || isLoadingPreview ? <div className="flex justify-center py-20"><Loader2 className="animate-spin text-brand-orange" size={40}/></div> : (
+            <>
+              {activeView === 'my_path' ? (
+                Object.entries(courseTrees).map(([courseName, roots]) => (
+                  <div key={courseName} className="mb-10 max-w-5xl mx-auto">
+                    <div className="flex items-center gap-2 mb-4 px-2">
+                      <BookOpen size={20} className="text-brand-blue" />
+                      <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">{courseName}</h2>
                     </div>
-
-                    {/* Inline Add Input for Root Subject Level */}
-                    {addingTo?.subject === subject && addingTo?.path === null && (
-                      <div className="flex items-center gap-2 p-3 pl-8 border-b border-gray-100 bg-blue-50/50">
-                        <ChevronRight size={14} className="text-brand-blue" />
-                        <input autoFocus value={newItemName} onChange={(e) => setNewItemName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleInlineAdd()} placeholder={`Add root folder or topic to ${subject}...`} className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-brand-blue" />
-                        <button onClick={handleInlineAdd} disabled={isProcessing || !newItemName.trim()} className="bg-brand-blue text-white p-1.5 rounded-lg hover:bg-blue-800 disabled:opacity-50"><Check size={16}/></button>
-                        <button onClick={() => {setAddingTo(null); setNewItemName("");}} className="text-gray-400 hover:text-red-500 p-1.5"><X size={16}/></button>
-                      </div>
-                    )}
-
-                    {/* Render the Tree */}
-                    <div className="bg-white">
-                      {renderFolder(root, 0, subject)}
+                    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                      {roots.map((node, idx) => renderNode(node, idx, roots, courseName))}
+                      <button onClick={() => setAddingTo({ parentId: null, course: courseName })} className="w-full py-4 text-sm font-bold text-brand-blue hover:bg-blue-50 transition-colors border-t border-gray-100 flex items-center justify-center gap-2">
+                        <Plus size={16}/> Add New Subject to {courseName}
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Add Completely New Subject Button */}
-          {activeView === 'my_path' && (
-            <div className="max-w-5xl mx-auto mt-6 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center hover:border-brand-blue hover:bg-slate-50 transition-colors">
-              {addingTo?.subject === 'NEW_SUBJECT' ? (
-                <div className="flex items-center max-w-md mx-auto gap-2">
-                  <input autoFocus value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="Type new Subject name..." className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-blue shadow-sm" />
-                  <button onClick={() => {
-                    if(!newItemName.trim()) return;
-                    setAddingTo({ subject: newItemName.trim(), path: null });
-                    setNewItemName(""); // Setup to instantly add a topic underneath it next
-                    setAlertInfo({ show: true, message: `Subject created! Add a topic inside ${newItemName} to save it.`, type: "info" });
-                  }} className="bg-brand-blue text-white px-4 py-2 rounded-lg font-bold text-sm">Next</button>
-                  <button onClick={() => setAddingTo(null)} className="text-gray-400 hover:text-red-500 p-2"><X size={20}/></button>
-                </div>
+                ))
               ) : (
-                <button onClick={() => setAddingTo({ subject: 'NEW_SUBJECT', path: null })} className="font-bold text-brand-blue flex items-center justify-center gap-2 w-full">
-                  <Plus size={20} /> Create Completely New Subject
-                </button>
+                <div className="max-w-5xl mx-auto border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                  {previewTree.map((node, idx) => renderNode(node, idx, previewTree, previewCourse!))}
+                  <div className="p-4 bg-slate-50 border-t flex justify-center">
+                    <Button onClick={handleSubscribe} variant="contained" sx={{ bgcolor: '#ed7f23', fontWeight: 'bold' }}>Add entire {previewCourse} to Tracker</Button>
+                  </div>
+                </div>
               )}
-            </div>
-          )}
-          
-          <div className="h-32 flex-shrink-0" /> {/* Bottom scroll padding */}
-        </div>
 
+              {activeView === 'my_path' && (
+                <div className="max-w-5xl mx-auto mt-12 border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center bg-white/50">
+                  {isCreatingCourse ? (
+                    <div className="flex flex-col max-w-sm mx-auto gap-3">
+                      <input 
+                        autoFocus 
+                        value={newCourseName} 
+                        onChange={e => setNewCourseName(e.target.value)} 
+                        placeholder="Course Name (e.g., JEE Mains)" 
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 ring-brand-blue outline-none text-sm" 
+                      />
+                      <input 
+                        value={newItemName} 
+                        onChange={e => setNewItemName(e.target.value)} 
+                        placeholder="First Subject (e.g., Physics)" 
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 ring-brand-blue outline-none text-sm" 
+                      />
+                      <div className="flex gap-2 mt-2">
+                        <button 
+                          onClick={() => handleAddNode(null, newCourseName, newItemName)} 
+                          disabled={!newCourseName.trim() || !newItemName.trim() || isProcessing}
+                          className="flex-1 bg-brand-blue text-white px-4 py-2.5 rounded-lg font-bold disabled:opacity-50"
+                        >
+                          Create Course
+                        </button>
+                        <button onClick={() => setIsCreatingCourse(false)} className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-lg transition-colors"><X size={20}/></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setIsCreatingCourse(true)} className="flex flex-col items-center gap-2 text-brand-blue font-black hover:scale-105 transition-transform mx-auto">
+                      <div className="p-4 bg-blue-50 rounded-full"><Plus size={32}/></div>
+                      Create a Completely New Course Group
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          <div className="h-48" />
+        </div>
       </div>
 
-      {alertInfo.show && <Muialert message={alertInfo.message} severity={alertInfo.type} onClose={() => setAlertInfo({ ...alertInfo, show: false })} />}
+      {!isMobileSidebarOpen && (
+        <button onClick={() => setIsMobileSidebarOpen(true)} className="md:hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md border border-slate-700 text-white px-5 py-2.5 rounded-full shadow-xl text-sm font-bold flex items-center gap-2 active:scale-95 transition-transform">
+          <Globe size={16} /> Browse
+        </button>
+      )}
+
+      {toast.show && (
+        <div className="fixed bottom-36 md:bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-5 flex items-center gap-2 px-5 py-3 rounded-full bg-slate-900 text-white font-bold text-sm shadow-2xl">
+          {toast.type === 'success' && <Check size={16} className="text-green-400" />} {toast.message}
+        </div>
+      )}
     </div>
   );
 };

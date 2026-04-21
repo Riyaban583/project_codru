@@ -10,7 +10,7 @@ const authenticate = require("./middleware/authenticate"); // Import it
 const Post = require("./models/postSchema"); // Check if your path/filename is correct
 const User = require("./models/userSchema");
 const jwt = require("jsonwebtoken");
-const http = require('http'); // <-- 1. Import http
+const http = require('http');
 const sendAutoNotification = require("./utils/notify");
  // For consistent notification messages
 const welcomeTemplate = require("./utils/welcomeTemplate"); // For consistent welcome emails
@@ -82,6 +82,7 @@ app.use(require("./router/postAuth.js"));
 app.use(require("./router/courseauth.js"));
 app.use(require("./router/training.js"));
 app.use(require("./router/courseRoutes.js"));
+app.use(require("./router/syllabusRoutes.js"));
 app.use(require("./router/seedroute.js"));
 app.use(require("./router/notification.js"));
 app.use(require('./router/whatsapp'));

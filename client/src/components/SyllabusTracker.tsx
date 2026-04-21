@@ -1,31 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchWithCache, invalidateCacheItem } from '../utils/apiCache';
-import { useNavigate } from "react-router-dom"; // 🚨 Imported useNavigate
+import { useNavigate } from "react-router-dom";
 import { 
-  CheckCircle, Circle, AlertCircle, Filter, ChevronDown, 
-  ChevronRight, User, TrendingUp, Clock, Zap, Maximize2, Minimize2, Search, X, Download, Edit3 
+  CheckCircle, Circle, AlertCircle, Filter, ChevronDown, Loader2, Plus,
+  ChevronRight, User, TrendingUp, Clock, Zap, Maximize2, Minimize2, Search, X, Download, Edit3, BookOpen
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Muialert from "./Muialert";
 
-export interface SyllabusTopic {
-  id?: string;
-  _id?: string;
-  subject: string;
-  topicName: string;
-  path?: string[];     
-  leafName?: string;   
-  status: 'not_started' | 'completed' | 'completed_with_doubt'; 
+export interface TrackerNode {
+  _id: string;
+  title: string;
+  parentId: string | null;
+  course: string;
+  level: number;
+  order: number;
+  status: 'not_started' | 'completed' | 'completed_with_doubt';
   hasDoubt: boolean;
+  isCustom: boolean;
   lastUpdated?: string;
-}
-
-interface FolderNode {
-  name: string;
-  pathId: string;
-  subFolders: Record<string, FolderNode>;
-  topics: SyllabusTopic[];
+  children?: TrackerNode[]; 
 }
 
 interface SyllabusTrackerProps {
@@ -34,296 +29,417 @@ interface SyllabusTrackerProps {
   selectedStudentUsername?: string | null;
 }
 
-// HELPERS
-const getAllFolderIds = (node: FolderNode): string[] => {
-    let ids = [node.pathId];
-    Object.values(node.subFolders).forEach(sub => { ids = [...ids, ...getAllFolderIds(sub)]; });
-    return ids;
-};
-
-const getAllTopicsFromNode = (node: FolderNode): SyllabusTopic[] => {
-    let topics = [...node.topics];
-    Object.values(node.subFolders).forEach(sub => { topics = [...topics, ...getAllTopicsFromNode(sub)]; });
-    return topics;
-};
-
 const ProgressBar = ({ percent, colorClass = "bg-brand-blue" }: { percent: number, colorClass?: string }) => (
   <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mt-3 md:mt-4">
-    <div className={`h-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,0,0,0.1)] ${colorClass}`} style={{ width: `${percent}%` }} />
+    <div 
+      className={`h-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,0,0,0.1)] ${colorClass}`} 
+      style={{ width: `${percent}%` }} 
+    />
   </div>
 );
 
 const formatTimeAgo = (dateString?: string) => {
   if (!dateString) return null;
-  return new Date(dateString).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(dateString).toLocaleString('en-GB', { 
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+  });
+};
+
+const getNodeStats = (node: TrackerNode): { total: number, completed: number, doubt: number } => {
+  let total = 1;
+  let completed = node.status.includes('completed') ? 1 : 0;
+  let doubt = node.hasDoubt ? 1 : 0;
+
+  node.children?.forEach(child => {
+    const childStats = getNodeStats(child);
+    total += childStats.total;
+    completed += childStats.completed;
+    doubt += childStats.doubt;
+  });
+  return { total, completed, doubt };
+};
+
+// --- HELPER: Get all descendant IDs for individual expand/collapse ---
+const getDescendantIds = (node: TrackerNode): string[] => {
+  let ids: string[] = [];
+  if (node.children) {
+    node.children.forEach(child => {
+      ids.push(child._id);
+      ids = ids.concat(getDescendantIds(child));
+    });
+  }
+  return ids;
 };
 
 export const SyllabusTracker: React.FC<SyllabusTrackerProps> = ({ role, readOnly = false, selectedStudentUsername }) => {
-  const navigate = useNavigate(); // 🚨 Initialized navigate
+  const navigate = useNavigate();
+  const safeRole = role?.toLowerCase() || 'student';
+  const myUsername = localStorage.getItem("Username") || localStorage.getItem("username");
   
-  const [localTopics, setLocalTopics] = useState<SyllabusTopic[]>([]);
+  const targetUsername = selectedStudentUsername || myUsername;
+  const isMyOwnSyllabus = safeRole === 'teacher' && selectedStudentUsername === myUsername;
+
+  const [courses, setCourses] = useState<string[]>([]);
+  const [activeCourse, setActiveCourse] = useState<string | null>(null);
+
+  const [flatNodes, setFlatNodes] = useState<TrackerNode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'doubts'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedSubjects, setExpandedSubjects] = useState<string[]>([]);
-  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const [expandedNodes, setExpandedNodes] = useState<string[]>([]);
   const [teacherStudents, setTeacherStudents] = useState<any[]>([]);
 
   const [alertInfo, setAlertInfo] = useState({ show: false, message: "", type: "info" as "success"| "error" | "info" });
   const [isMobileSearchActive, setIsMobileSearchActive] = useState(false);
 
-  const safeRole = role?.toLowerCase() || 'student';
-
   useEffect(() => {
     const fetchTeacherStudents = async () => {
       if (safeRole === 'teacher') {
-        const teacherUsername = localStorage.getItem("Username") || localStorage.getItem("username");
-        if (!teacherUsername) return;
+        if (!myUsername) return;
         const token = localStorage.getItem("jwtoken");
-        const res = await fetch(`${import.meta.env.VITE_API}my-students/${teacherUsername}`, {
+        const res = await fetch(`${import.meta.env.VITE_API}my-students/${myUsername}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) setTeacherStudents(await res.json());
       }
     };
     fetchTeacherStudents();
-  }, [safeRole]);
+  }, [safeRole, myUsername]);
 
-  const fetchSyllabus = async () => {
-    if (safeRole === 'teacher' && !selectedStudentUsername) { setIsLoading(false); return; }
+  useEffect(() => {
+    const fetchCourses = async () => {
+      if (safeRole === 'teacher' && !selectedStudentUsername) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const token = localStorage.getItem("jwtoken");
+        let url = `${import.meta.env.VITE_API}dashboard/tracker/courses?username=${targetUsername}`;
+        
+        const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setCourses(data);
+          
+          if (data.length > 0) {
+            if (!activeCourse || !data.includes(activeCourse)) {
+              setActiveCourse(data[0]);
+            }
+            setIsLoading(false);
+          } else { 
+            setActiveCourse(null);
+            setIsLoading(false); 
+          }
+        } else { 
+          setIsLoading(false); 
+        }
+      } catch (err) { 
+        console.error(err);
+        setIsLoading(false); 
+      }
+    };
+    fetchCourses();
+  }, [safeRole, selectedStudentUsername, targetUsername]);
+
+  const fetchSyllabusNodes = async () => {
+    if (!activeCourse) return;
     setIsLoading(true);
     try {
       const token = localStorage.getItem("jwtoken");
-      const headers = { "Authorization": `Bearer ${token}` };
-      let url = `${import.meta.env.VITE_API}dashboard/syllabus`;
-      if (safeRole === 'teacher' && selectedStudentUsername) {
-        url = `${import.meta.env.VITE_API}dashboard/syllabus?username=${selectedStudentUsername}`;
-      }
-      const data = await fetchWithCache(url, headers, true); 
-      if (data) {
-        setLocalTopics(Array.isArray(data) ? data.map((topic: any) => ({ ...topic, id: topic._id || topic.id, status: topic.status || 'not_started', hasDoubt: !!topic.hasDoubt })) : []);
-      }
-    } catch (error) { console.error(error); setLocalTopics([]); } finally { setIsLoading(false); }
+      let url = `${import.meta.env.VITE_API}dashboard/tracker/nodes?course=${encodeURIComponent(activeCourse)}&username=${targetUsername}`;
+      
+      const data = await fetchWithCache(url, { "Authorization": `Bearer ${token}` }, true); 
+      setFlatNodes(Array.isArray(data) ? data : []);
+    } catch (error) { 
+      console.error(error);
+      setFlatNodes([]); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   useEffect(() => {
-    fetchSyllabus();
-  }, [safeRole, selectedStudentUsername]);
-
-  const activeTopics = useMemo(() => localTopics.filter(t => t.topicName && t.topicName !== "New Topic"), [localTopics]);
-
-  const overallStats = useMemo(() => {
-    const total = activeTopics.length;
-    const completed = activeTopics.filter(t => t.status.includes('completed')).length;
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-    const latestDate = activeTopics.map(t => t.lastUpdated).filter(Boolean).sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0];
-    return { total, completed, percentage, lastActivity: latestDate };
-  }, [activeTopics]);
+    fetchSyllabusNodes();
+  }, [activeCourse, targetUsername]);
 
   const commonDoubts = useMemo(() => {
     if (safeRole !== 'teacher' || teacherStudents.length === 0) return [];
-    const doubtMap = new Map<string, { count: number; subject: string; lastUpdated: string | null }>();
+    
+    const doubtMap = new Map<string, { count: number; course: string; title: string; lastUpdated: string | null }>();
+    
     teacherStudents.forEach(student => {
       const studentSyllabus = Array.isArray(student.syllabus) ? student.syllabus : [];
-      studentSyllabus.forEach((topic: any) => {
-        if (topic.topicName && topic.topicName !== "New Topic" && (topic.hasDoubt || topic.status === 'completed_with_doubt')) {
-          const key = topic.topicName;
+      studentSyllabus.forEach((node: any) => {
+        if (node.title && (node.hasDoubt || node.status === 'completed_with_doubt')) {
+          const key = `${node.course}_${node.title}`;
           const existing = doubtMap.get(key);
-          if (existing) { existing.count++; if (topic.lastUpdated && (!existing.lastUpdated || new Date(topic.lastUpdated) > new Date(existing.lastUpdated))) existing.lastUpdated = topic.lastUpdated; }
-          else doubtMap.set(key, { count: 1, subject: topic.subject || "General", lastUpdated: topic.lastUpdated || null });
+          
+          if (existing) {
+            existing.count++;
+            if (node.lastUpdated && (!existing.lastUpdated || new Date(node.lastUpdated) > new Date(existing.lastUpdated))) {
+              existing.lastUpdated = node.lastUpdated;
+            }
+          } else {
+            doubtMap.set(key, { 
+              count: 1, 
+              course: node.course || "General", 
+              title: node.title, 
+              lastUpdated: node.lastUpdated || null 
+            });
+          }
         }
       });
     });
-    return Array.from(doubtMap.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.count - a.count);
+    return Array.from(doubtMap.values()).sort((a, b) => b.count - a.count);
   }, [teacherStudents, safeRole]);
 
-  const filteredTopics = useMemo(() => {
-    let base = activeTopics;
-    if (filter === 'doubts') base = base.filter(t => t.hasDoubt || t.status === 'completed_with_doubt');
-    if (searchQuery.trim()) base = base.filter(t => t.topicName.toLowerCase().includes(searchQuery.toLowerCase()) || t.subject.toLowerCase().includes(searchQuery.toLowerCase()));
-    return base;
-  }, [activeTopics, filter, searchQuery]);
+  const treeRoots = useMemo(() => {
+    let filtered = flatNodes;
+    if (filter === 'doubts') filtered = filtered.filter(n => n.hasDoubt || n.status === 'completed_with_doubt');
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(n => n.title.toLowerCase().includes(query));
+    }
+    
+    const nodeMap = new Map<string, TrackerNode>();
+    const roots: TrackerNode[] = [];
+    
+    filtered.forEach(node => nodeMap.set(node._id, { ...node, children: [] }));
+    
+    nodeMap.forEach(node => {
+      if (node.parentId && nodeMap.has(node.parentId)) {
+        nodeMap.get(node.parentId)!.children!.push(node);
+      } else { 
+        roots.push(node); 
+      }
+    });
+    
+    const sortNodes = (nodes: TrackerNode[]) => {
+      nodes.sort((a, b) => a.order - b.order);
+      nodes.forEach(n => { if (n.children) sortNodes(n.children); });
+    };
+    sortNodes(roots);
+    
+    return roots;
+  }, [flatNodes, filter, searchQuery]);
 
-  const groupedTopics = useMemo(() => filteredTopics.reduce((acc, topic) => {
-      const subjectName = topic.subject || "General";
-      if (!acc[subjectName]) acc[subjectName] = [];
-      acc[subjectName].push(topic);
-      return acc;
-    }, {} as Record<string, SyllabusTopic[]>), [filteredTopics]);
+  const overallStats = useMemo(() => {
+    const total = flatNodes.length;
+    const completed = flatNodes.filter(t => t.status.includes('completed')).length;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const latestDate = flatNodes.map(t => t.lastUpdated).filter(Boolean).sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0];
+    return { total, completed, percentage, lastActivity: latestDate };
+  }, [flatNodes]);
 
-  // HANDLERS
-  const handleUpdateTopic = async (topicId: string, updates: Partial<SyllabusTopic>) => {
-    if (readOnly || safeRole === 'teacher') return; 
+  const handleUpdateNode = async (nodeId: string, updates: { status?: TrackerNode['status'], hasDoubt?: boolean }) => {
+    if (readOnly || (safeRole === 'teacher' && !isMyOwnSyllabus)) return; 
+    
     const now = new Date().toISOString();
-    const currentTopic = activeTopics.find(t => (t._id === topicId || t.id === topicId));
-    if (!currentTopic) return;
-    setLocalTopics(prev => prev.map(t => ((t.id === topicId || t._id === topicId) ? { ...t, ...updates, lastUpdated: now } : t) as SyllabusTopic));
-    try {
-      const token = localStorage.getItem("jwtoken");
-      await fetch(`${import.meta.env.VITE_API}dashboard/syllabus/${topicId}`, {
-        method: "PUT", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ ...updates, topicName: currentTopic.topicName, subject: currentTopic.subject })   
-      });
-      invalidateCacheItem(`${import.meta.env.VITE_API}dashboard/syllabus`);
-    } catch (error) { console.error(error); }
-  };
-
-  const handleBulkUpdate = async (topicsToUpdate: SyllabusTopic[], updates: { status?: SyllabusTopic['status'], hasDoubt?: boolean }) => {
-    if (readOnly || safeRole === 'teacher' || topicsToUpdate.length === 0) return;
-    const now = new Date().toISOString();
-    const topicIds = topicsToUpdate.map(t => t.id || t._id as string);
-    setLocalTopics(prev => prev.map(t => {
-      const tId = t.id || t._id;
-      if (tId && topicIds.includes(tId)) {
+    
+    setFlatNodes(prev => prev.map(t => {
+      if (t._id === nodeId) {
         let newStatus = updates.status !== undefined ? updates.status : t.status;
         let newDoubt = updates.hasDoubt !== undefined ? updates.hasDoubt : t.hasDoubt;
+        
         if (newDoubt && newStatus === 'completed') newStatus = 'completed_with_doubt';
         if (!newDoubt && newStatus === 'completed_with_doubt') newStatus = 'completed';
-        return { ...t, status: newStatus, hasDoubt: newDoubt, lastUpdated: now } as SyllabusTopic;
+        
+        return { ...t, status: newStatus, hasDoubt: newDoubt, lastUpdated: now };
       }
       return t;
     }));
+
     try {
       const token = localStorage.getItem("jwtoken");
-      await Promise.all(topicsToUpdate.map(async (t) => {
-        const tId = t.id || t._id;
-        let newStatus = updates.status !== undefined ? updates.status : t.status;
-        let newDoubt = updates.hasDoubt !== undefined ? updates.hasDoubt : t.hasDoubt;
-        if (newDoubt && newStatus === 'completed') newStatus = 'completed_with_doubt';
-        if (!newDoubt && newStatus === 'completed_with_doubt') newStatus = 'completed';
-        await fetch(`${import.meta.env.VITE_API}dashboard/syllabus/${tId}`, {
-          method: "PUT", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ status: newStatus, hasDoubt: newDoubt, topicName: t.topicName, subject: t.subject })
-        });
-      }));
-      invalidateCacheItem(`${import.meta.env.VITE_API}dashboard/syllabus`);
-    } catch (error) { console.error(error); }
+      await fetch(`${import.meta.env.VITE_API}dashboard/tracker/progress`, {
+        method: "PUT", 
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ nodeId, ...updates, username: targetUsername })   
+      });
+      invalidateCacheItem(`${import.meta.env.VITE_API}dashboard/tracker/nodes?course=${activeCourse}`);
+    } catch (error) { 
+      console.error(error); 
+    }
   };
 
+  // --- GLOBAL EXPAND/COLLAPSE ---
   const handleExpandAll = () => {
-    const allSubjects = Array.from(new Set(activeTopics.map(t => t.subject)));
-    const allFolderPaths: string[] = [];
-    activeTopics.forEach(t => {
-      const pathArray = t.path || t.topicName.split(' > ').slice(0, -1);
-      let currentPath = t.subject;
-      pathArray.forEach(segment => { currentPath = `${currentPath} > ${segment}`; allFolderPaths.push(currentPath); });
-    });
-    setExpandedSubjects(allSubjects); setExpandedFolders(Array.from(new Set(allFolderPaths)));
+    setExpandedNodes(flatNodes.filter(n => flatNodes.some(child => child.parentId === n._id)).map(n => n._id));
+  };
+  const handleCollapseAll = () => { 
+    setExpandedNodes([]); 
+    setSearchQuery(''); 
+  };
+  const toggleNode = (nodeId: string) => {
+    setExpandedNodes(prev => prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]);
   };
 
-  const handleCollapseAll = () => { setExpandedSubjects([]); setExpandedFolders([]); setSearchQuery(''); };
-  const toggleSubject = (subject: string) => setExpandedSubjects(prev => prev.includes(subject) ? prev.filter(s => s !== subject) : [...prev, subject]);
-  const toggleFolder = (folderId: string) => setExpandedFolders(prev => prev.includes(folderId) ? prev.filter(f => f !== folderId) : [...prev, folderId]);
+  // --- 🚨 INDIVIDUAL NODE EXPAND/COLLAPSE ---
+  const handleExpandSpecificNode = (node: TrackerNode) => {
+    const descendantIds = getDescendantIds(node);
+    setExpandedNodes(prev => Array.from(new Set([...prev, node._id, ...descendantIds])));
+  };
+  const handleCollapseSpecificNode = (node: TrackerNode) => {
+    const descendantIds = getDescendantIds(node);
+    setExpandedNodes(prev => prev.filter(id => id !== node._id && !descendantIds.includes(id)));
+  };
 
-  // PDF LOGIC
+  // --- RENDERERS ---
+
+  const renderNodeTree = (node: TrackerNode, depth: number) => {
+    const isExpanded = expandedNodes.includes(node._id);
+    const hasChildren = node.children && node.children.length > 0;
+    const isCompleted = node.status.includes('completed');
+
+    return (
+      <div key={node._id} className="w-full flex flex-col">
+        <div className="w-full py-2.5 pr-4 flex items-start hover:bg-gray-50 transition border-b border-gray-100 bg-white group">
+          
+          <div style={{ width: `${depth * 1.5}rem` }} className="flex-shrink-0" />
+          
+          <div className="w-8 flex items-start justify-center flex-shrink-0">
+            {hasChildren && (
+              <button 
+                onClick={() => toggleNode(node._id)} 
+                className="p-1 text-gray-400 hover:text-brand-blue rounded-md active:bg-gray-100 mt-0.5"
+              >
+                {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              </button>
+            )}
+          </div>
+          
+          <button 
+            disabled={readOnly || (safeRole === 'teacher' && !isMyOwnSyllabus)} 
+            onClick={() => handleUpdateNode(node._id, { status: isCompleted ? 'not_started' : 'completed' })} 
+            className="mt-1 flex-shrink-0 cursor-pointer hover:scale-110 active:scale-95 transition disabled:cursor-default mr-3"
+          >
+            {isCompleted ? <CheckCircle className="text-green-500" size={18} /> : <Circle className="text-gray-300" size={18} />}
+          </button>
+          
+          <div className="flex-1 flex flex-col min-w-0 mt-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span 
+                onClick={() => hasChildren && toggleNode(node._id)}
+                className={`text-sm font-medium leading-snug ${hasChildren ? 'cursor-pointer hover:text-brand-blue' : ''} ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`}
+              >
+                {node.title}
+              </span>
+              
+              {hasChildren && (
+                <span className="text-[10px] text-gray-500 font-bold bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded flex-shrink-0">
+                  {node.children!.filter(c => c.status.includes('completed')).length}/{node.children!.length}
+                </span>
+              )}
+              
+              {node.isCustom && (
+                <span className="text-[9px] uppercase font-black text-brand-orange bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                  Custom
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* 🚨 RESTORED: Individual Expand/Collapse Buttons for child nodes */}
+          {hasChildren && (
+            <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity gap-1 mr-2 flex-shrink-0 mt-0.5">
+              <button 
+                onClick={() => handleExpandSpecificNode(node)} 
+                className="p-1 text-gray-400 hover:text-brand-blue bg-white rounded shadow-sm md:shadow-none md:bg-transparent" 
+                title="Expand Sub-topics"
+              >
+                <Maximize2 size={14}/>
+              </button>
+              <button 
+                onClick={() => handleCollapseSpecificNode(node)} 
+                className="p-1 text-gray-400 hover:text-brand-blue bg-white rounded shadow-sm md:shadow-none md:bg-transparent" 
+                title="Collapse Sub-topics"
+              >
+                <Minimize2 size={14}/>
+              </button>
+            </div>
+          )}
+
+          <button 
+            disabled={readOnly || (safeRole === 'teacher' && !isMyOwnSyllabus)} 
+            onClick={() => handleUpdateNode(node._id, { hasDoubt: !node.hasDoubt })} 
+            className={`ml-2 p-1.5 rounded-lg flex-shrink-0 transition active:scale-95 ${node.hasDoubt ? 'bg-red-100 text-red-500 shadow-sm' : 'text-gray-300 hover:text-red-400 bg-gray-50 hover:bg-red-50'} disabled:cursor-default mt-0.5`}
+          >
+            <AlertCircle size={16} />
+          </button>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="w-full animate-in slide-in-from-top-2 duration-300">
+            {node.children!.map(child => renderNodeTree(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const studentObj = teacherStudents.find(s => s.username === selectedStudentUsername);
+  const studentFirstName = studentObj?.name?.split(' ')[0];
+  
+  const headerTitle = isMyOwnSyllabus 
+    ? "My Personal Progress" 
+    : safeRole === 'teacher' 
+      ? (studentFirstName ? `${studentFirstName}'s Progress` : "Student's Progress") 
+      : 'Your Journey';
+
   const generatePDF = () => {
     const doc = new jsPDF();
-    const studentName = safeRole === 'teacher' ? (teacherStudents.find(s => s.username === selectedStudentUsername)?.name || "Student") : "My";
+    const pdfStudentName = isMyOwnSyllabus ? "My" : (safeRole === 'teacher' ? (studentObj?.name || "Student") : "My");
     const date = new Date().toLocaleDateString('en-GB');
 
-    doc.setFillColor(23, 101, 164); 
-    doc.rect(0, 0, 210, 45, 'F');
-    doc.setFontSize(22);
-    doc.setTextColor(255, 255, 255);
-    doc.text("ACADEMIC INSIGHT REPORT", 14, 25);
-    doc.setFontSize(10);
-    doc.text(`STUDENT: ${studentName.toUpperCase()}`, 14, 35);
-    doc.text(`GENERATED: ${date}`, 160, 35);
+    doc.setFillColor(23, 101, 164); doc.rect(0, 0, 210, 45, 'F'); doc.setFontSize(22); doc.setTextColor(255, 255, 255);
+    doc.text(`ACADEMIC REPORT: ${activeCourse?.toUpperCase() || 'SYLLABUS'}`, 14, 25);
+    
+    doc.setFontSize(10); doc.text(`STUDENT: ${pdfStudentName.toUpperCase()}`, 14, 35); doc.text(`GENERATED: ${date}`, 160, 35);
 
     const remainingPercent = 100 - overallStats.percentage;
     
-    doc.setDrawColor(34, 197, 94); 
-    doc.setLineWidth(1.5);
-    doc.circle(40, 75, 15, 'S');
-    doc.setTextColor(34, 197, 94);
-    doc.setFontSize(12);
-    doc.text(`${overallStats.percentage}%`, 35, 77);
-    doc.setFontSize(8);
-    doc.text("MASTERED", 32, 95);
+    doc.setDrawColor(34, 197, 94); doc.setLineWidth(1.5); doc.circle(40, 75, 15, 'S'); doc.setTextColor(34, 197, 94); doc.setFontSize(12); doc.text(`${overallStats.percentage}%`, 35, 77); doc.setFontSize(8); doc.text("MASTERED", 32, 95);
+    doc.setDrawColor(234, 179, 8); doc.circle(80, 75, 15, 'S'); doc.setTextColor(234, 179, 8); doc.setFontSize(12); doc.text(`${remainingPercent}%`, 75, 77); doc.setFontSize(8); doc.text("REMAINING", 72, 95);
 
-    doc.setDrawColor(234, 179, 8);
-    doc.circle(80, 75, 15, 'S');
-    doc.setTextColor(234, 179, 8);
-    doc.setFontSize(12);
-    doc.text(`${remainingPercent}%`, 75, 77);
-    doc.setFontSize(8);
-    doc.text("REMAINING", 72, 95);
-
-    doc.setTextColor(40);
-    doc.setFontSize(14);
-    doc.text("I. COMPLETED MILESTONES", 14, 115);
+    doc.setTextColor(40); doc.setFontSize(14); doc.text("I. COMPLETED MILESTONES", 14, 115);
+    const completedRows = flatNodes.filter(t => t.status.includes('completed')).map(t => [t.title, `Level ${t.level}`, t.status]);
     
-    const completedRows = activeTopics
-      .filter(t => t.status.includes('completed'))
-      .map(t => [t.subject, t.path?.[0] || 'General', t.leafName || t.topicName.split(' > ').pop() || '']);
-
-    autoTable(doc, {
-      startY: 120,
-      head: [['Subject', 'Chapter', 'Sub-Topic']],
-      body: completedRows,
-      headStyles: { fillColor: [34, 197, 94] }, 
-      styles: { fontSize: 8 },
-    });
-
-    doc.addPage();
-    const doubtCount = activeTopics.filter(t => t.hasDoubt).length;
-    doc.setFillColor(239, 68, 68); 
-    doc.rect(0, 0, 210, 20, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.text("II. PRIORITY DOUBTS", 14, 13);
-    doc.setFontSize(10);
-    doc.text(`TOTAL ACTIVE DOUBTS: ${doubtCount}`, 150, 13);
-
-    const doubtRows = activeTopics
-      .filter(t => t.hasDoubt)
-      .map(t => [t.subject, t.path?.[0] || 'General', t.leafName || t.topicName.split(' > ').pop() || '']);
-
-    autoTable(doc, {
-      startY: 30,
-      head: [['Subject', 'Chapter', 'Specific Sub-Topic']],
-      body: doubtRows,
-      headStyles: { fillColor: [239, 68, 68] },
-      styles: { fontSize: 8 },
-    });
-
-    doc.addPage();
-    doc.setFillColor(100, 116, 139); 
-    doc.rect(0, 0, 210, 20, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.text("III. REMAINING SYLLABUS", 14, 13);
-
-    const remainingRows = activeTopics
-      .filter(t => t.status === 'not_started')
-      .map(t => [t.subject, t.path?.[0] || 'General', t.leafName || t.topicName.split(' > ').pop() || '']);
-
-    autoTable(doc, {
-      startY: 30,
-      head: [['Subject', 'Chapter', 'Pending Topic']],
-      body: remainingRows,
-      headStyles: { fillColor: [100, 116, 139] },
-      styles: { fontSize: 8 },
-    });
-
-    doc.save(`${studentName}_Full_Progress_Report.pdf`);
+    autoTable(doc, { startY: 120, head: [['Node Title', 'Depth', 'Status']], body: completedRows, headStyles: { fillColor: [34, 197, 94] }, styles: { fontSize: 8 }});
+    doc.save(`${pdfStudentName}_${activeCourse || 'Syllabus'}_Report.pdf`);
   };
-
-  if (isLoading) return <div className="w-full h-full flex items-center justify-center text-gray-400 font-display"><div className="w-6 h-6 border-2 border-brand-orange border-t-transparent rounded-full animate-spin mr-3"></div> Loading data...</div>;
 
   if (safeRole === 'teacher' && !selectedStudentUsername) {
     return (
-      <div className="w-full h-full flex flex-col">
+      <div className="w-full h-full flex flex-col overflow-hidden">
         <div className="flex justify-between items-center mb-4 md:mb-6 flex-shrink-0">
-          <h3 className="font-display text-lg md:text-2xl font-bold text-gray-800 flex items-center gap-2"><Zap className="text-brand-orange animate-pulse w-5 h-5 md:w-6 md:h-6" /> Class Insights: Common Doubts</h3>
+          <h3 className="font-display text-xl md:text-3xl font-black text-gray-900 flex items-center gap-2 md:gap-3">
+            <Zap className="text-brand-orange animate-pulse w-6 h-6 md:w-8 md:h-8" /> Class Insights
+          </h3>
         </div>
-        <div className="flex-1 overflow-y-auto pr-2 pb-6 space-y-3 custom-scrollbar">
-          {commonDoubts.length === 0 ? <div className="flex flex-col items-center justify-center py-20 opacity-40"><CheckCircle size={48} className="text-green-500 mb-4" /><p className="text-gray-500 font-bold">No active doubts in the class!</p></div> : commonDoubts.map((doubt, idx) => (
-            <div key={idx} className="p-4 mb-3 last:mb-0 bg-red-50/50 border border-red-100 rounded-xl flex justify-between items-center transition-all hover:bg-red-50">
-              <div><h4 className="font-bold text-gray-800 text-sm">{doubt.name}</h4><div className="flex items-center gap-2 mt-1"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{doubt.subject}</p><span className="text-[10px] text-red-400 italic">Last active: {formatTimeAgo(doubt.lastUpdated || undefined) || "Recently"}</span></div></div>
-              <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-red-100 shadow-sm ml-4"><User size={14} className="text-red-500" /><span className="font-bold text-red-600">{doubt.count}</span></div>
+        <div className="flex-1 overflow-y-auto pr-2 pb-6 custom-scrollbar">
+          {teacherStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center"><User size={60} className="text-gray-300 mb-4" /><p className="text-xl font-bold text-gray-500 mb-2">No Students Yet</p><p className="text-sm text-gray-400">Invite students to start tracking collective class doubts.</p></div>
+          ) : commonDoubts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center"><CheckCircle size={60} className="text-green-400 mb-4 opacity-50" /><p className="text-xl font-bold text-gray-500 mb-2">All Clear!</p><p className="text-sm text-gray-400">There are currently no active doubts reported across the class.</p></div>
+          ) : (
+            <div className="space-y-3">
+              {commonDoubts.map((doubt, idx) => (
+                <div key={idx} className="p-4 bg-red-50/50 border border-red-100 rounded-xl flex justify-between items-center transition-all">
+                  <div className="min-w-0 pr-4">
+                    <h4 className="font-bold text-gray-800 text-sm md:text-base truncate">{doubt.title}</h4>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded shadow-sm">{doubt.course}</span>
+                      {doubt.lastUpdated && <span className="text-[10px] text-red-400 italic flex items-center gap-1 whitespace-nowrap"><Clock size={10} /> {formatTimeAgo(doubt.lastUpdated)}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 bg-white px-3 py-2 rounded-lg border border-red-100 shadow-sm flex-shrink-0">
+                    <User size={16} className="text-red-500" />
+                    <span className="font-black text-red-600 text-lg leading-none">{doubt.count}</span>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </div>
     );
@@ -332,208 +448,130 @@ export const SyllabusTracker: React.FC<SyllabusTrackerProps> = ({ role, readOnly
   return (
     <div className="w-full h-full flex flex-col overflow-hidden pb-0">
       
-      {/* COMPACT MOBILE HEADER */}
-      <div className="mb-4 md:mb-8 flex-shrink-0 relative">
-        <div className="flex flex-row items-center justify-between gap-2 md:gap-4">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-display text-xl md:text-3xl font-black text-gray-900 flex items-center gap-1.5 md:gap-3 mb-1 md:mb-2 truncate">
-              <TrendingUp className="text-brand-blue flex-shrink-0 w-6 h-6 md:w-8 md:h-8" />
-              <span className="truncate">
-                {safeRole === 'teacher' ? `${teacherStudents.find(s => s.username === selectedStudentUsername)?.name?.split(' ')[0]}'s Syllabus` : 'Your Journey Progress'}
-              </span>
-            </h3>
-            <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-gray-500">
-              <span>{overallStats.completed} / {overallStats.total} Topics Done</span>
-              {overallStats.lastActivity && <span className="hidden sm:flex bg-slate-50 px-2 py-1 rounded border border-gray-200 items-center gap-1"><Clock size={12}/> {formatTimeAgo(overallStats.lastActivity)}</span>}
+      {/* TABS FOR COURSES */}
+      {courses.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-2 flex-shrink-0 custom-scrollbar">
+          {courses.map((course) => (
+            <button key={course} onClick={() => setActiveCourse(course)} className={`px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border shadow-sm flex items-center gap-2 ${activeCourse === course ? 'bg-brand-blue border-brand-blue text-white ring-4 ring-blue-50' : 'bg-white border-gray-200 text-gray-600 hover:border-brand-blue/50'}`}>
+              <BookOpen size={14} />{course}
+            </button>
+          ))}
+          {!readOnly && (
+            <button onClick={() => navigate(selectedStudentUsername ? `/edit-syllabus/${selectedStudentUsername}` : '/edit-syllabus')} className="px-3 py-2 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:text-brand-blue hover:border-brand-blue transition-colors"><Plus size={16} /></button>
+          )}
+        </div>
+      )}
+
+      {activeCourse && (
+        <div className="mb-4 md:mb-8 flex-shrink-0 relative animate-in fade-in slide-in-from-top-4">
+          <div className="flex flex-row items-center justify-between gap-2 md:gap-4">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-display text-xl md:text-3xl font-black text-gray-900 flex items-center gap-1.5 md:gap-3 mb-1 md:mb-2 truncate">
+                <TrendingUp className="text-brand-blue flex-shrink-0 w-6 h-6 md:w-8 md:h-8" />
+                <span className="truncate">{headerTitle}</span>
+              </h3>
+              <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-gray-500">
+                <span>{overallStats.completed} / {overallStats.total} Nodes Done</span>
+                {overallStats.lastActivity && <span className="hidden sm:flex bg-slate-50 px-2 py-1 rounded border border-gray-200 items-center gap-1"><Clock size={12}/> {formatTimeAgo(overallStats.lastActivity)}</span>}
+              </div>
             </div>
+            <div className="text-right flex-shrink-0"><span className="text-3xl md:text-5xl font-black text-brand-blue tabular-nums leading-none">{overallStats.percentage}%</span></div>
           </div>
-          <div className="text-right flex-shrink-0">
-            <span className="text-3xl md:text-5xl font-black text-brand-blue tabular-nums leading-none">{overallStats.percentage}%</span>
-          </div>
+          <ProgressBar percent={overallStats.percentage} colorClass={overallStats.percentage === 100 ? "bg-green-500" : "bg-brand-blue"} />
         </div>
-        <ProgressBar percent={overallStats.percentage} colorClass={overallStats.percentage === 100 ? "bg-green-500" : "bg-brand-blue"} />
-      </div>
+      )}
 
-      {/* CONTROLS BAR */}
-      <div className="flex flex-row items-center justify-between gap-2 mb-4 md:mb-6 flex-shrink-0">
-        
-        {/* Desktop Search */}
-        <div className="relative flex-1 w-full max-w-md hidden md:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input type="text" placeholder="Search topics..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-brand-blue transition" />
-          {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={16}/></button>}
-        </div>
-
-        {/* Mobile View Toggle Logic */}
-        {isMobileSearchActive ? (
-          <div className="relative flex-1 w-full md:hidden animate-in fade-in slide-in-from-right-4">
+      {/* CONTROLS */}
+      {activeCourse && (
+        <div className="flex flex-row items-center justify-between gap-2 mb-4 md:mb-6 flex-shrink-0 animate-in fade-in">
+          <div className="relative flex-1 w-full max-w-md hidden md:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input autoFocus type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-brand-blue rounded-xl text-sm font-medium focus:outline-none transition shadow-sm" />
-            <button onClick={() => { setIsMobileSearchActive(false); setSearchQuery(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={16}/></button>
+            <input type="text" placeholder="Search topics..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-brand-blue transition" />
+            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={16}/></button>}
+          </div>
+
+          {isMobileSearchActive ? (
+            <div className="relative flex-1 w-full md:hidden animate-in fade-in slide-in-from-right-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input autoFocus type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-brand-blue rounded-xl text-sm font-medium focus:outline-none transition shadow-sm" />
+              <button onClick={() => { setIsMobileSearchActive(false); setSearchQuery(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={16}/></button>
+            </div>
+          ) : (
+            <div className="flex items-center w-full md:w-auto justify-between md:justify-end gap-2">
+              <button onClick={() => setIsMobileSearchActive(true)} className="md:hidden p-2.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition flex items-center justify-center"><Search size={18} /></button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => navigate(selectedStudentUsername ? `/edit-syllabus/${selectedStudentUsername}` : '/edit-syllabus')} className="p-2.5 md:px-3 md:py-2 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-blue-800 transition shadow-sm flex items-center gap-1.5" title="Edit Syllabus"><Edit3 size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Edit Syllabus</span></button>
+                <button onClick={generatePDF} className="p-2.5 md:px-3 md:py-2 bg-brand-orange text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition shadow-sm flex items-center gap-1.5" title="Download Report"><Download size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Report</span></button>
+                <div className="w-px h-6 bg-gray-200 mx-1 hidden sm:block" />
+                <button onClick={handleExpandAll} className="p-2.5 md:px-3 md:py-2 bg-slate-50 text-brand-blue border border-gray-200 rounded-xl text-xs font-bold hover:bg-blue-50 transition flex items-center gap-1.5" title="Expand All"><Maximize2 size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Expand All</span></button>
+                <button onClick={handleCollapseAll} className="p-2.5 md:px-3 md:py-2 bg-gray-50 text-gray-500 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-100 transition flex items-center gap-1.5" title="Reset Filters"><Minimize2 size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Reset</span></button>
+                <button onClick={() => setFilter(prev => prev === 'all' ? 'doubts' : 'all')} className={`p-2.5 md:px-4 md:py-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold border ${filter === 'doubts' ? 'bg-red-50 border-red-200 text-red-500 shadow-sm' : 'bg-slate-900 border-slate-900 text-white'}`} title="Filter by Doubts"><Filter size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">{filter === 'doubts' ? 'Doubts' : 'All'}</span></button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SYLLABUS TREE / EMPTY STATE */}
+      <div className="flex-1 overflow-y-auto pr-2 pb-32 md:pb-6 custom-scrollbar">
+        {isLoading ? (
+          <div className="w-full flex justify-center py-20"><Loader2 className="animate-spin text-brand-orange" size={40} /></div>
+        ) : treeRoots.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-100 mx-4 shadow-sm animate-in fade-in">
+            <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"><BookOpen size={40} className="text-slate-300" /></div>
+            <p className="text-xl font-black text-gray-800">No Syllabus in {activeCourse || 'this Course'}</p>
+            <p className="text-sm text-gray-500 mt-2 max-w-xs mx-auto">Your tracker for this section is currently empty. Add topics from the catalog or create your own path.</p>
+            {!readOnly && (
+              <button onClick={() => navigate(selectedStudentUsername ? `/edit-syllabus/${selectedStudentUsername}` : '/edit-syllabus')} className="mt-8 inline-flex items-center gap-2 bg-brand-blue text-white px-8 py-3.5 rounded-2xl font-bold hover:bg-blue-800 transition-all shadow-lg active:scale-95"><Plus size={20} /> Open Syllabus Builder</button>
+            )}
           </div>
         ) : (
-          <div className="flex items-center w-full md:w-auto justify-between md:justify-end gap-2">
-            {/* Mobile Search Trigger */}
-            <button onClick={() => setIsMobileSearchActive(true)} className="md:hidden p-2.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition flex items-center justify-center">
-              <Search size={18} />
-            </button>
+          treeRoots.map((subjectNode) => {
+            const stats = getNodeStats(subjectNode);
+            const subjectPercentage = Math.round((stats.completed / stats.total) * 100);
+            const isSubjectCompleted = subjectNode.status.includes('completed');
+            const hasSubjectDoubt = subjectNode.hasDoubt;
+            const isExpanded = expandedNodes.includes(subjectNode._id);
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              
-              {/* 🚨 REPLACED MODAL BUTTON WITH NAVIGATE ROUTE */}
-              <button 
-                onClick={() => navigate(selectedStudentUsername ? `/edit-syllabus/${selectedStudentUsername}` : '/edit-syllabus')} 
-                className="p-2.5 md:px-3 md:py-2 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-blue-800 transition shadow-sm flex items-center gap-1.5" 
-                title="Edit Syllabus"
-              >
-                <Edit3 size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Edit Syllabus</span>
-              </button>
-
-              <button onClick={generatePDF} className="p-2.5 md:px-3 md:py-2 bg-brand-orange text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition shadow-sm flex items-center gap-1.5" title="Download Report">
-                <Download size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Report</span>
-              </button>
-              <div className="w-px h-6 bg-gray-200 mx-1 hidden sm:block" />
-              <button onClick={handleExpandAll} className="p-2.5 md:px-3 md:py-2 bg-slate-50 text-brand-blue border border-gray-200 rounded-xl text-xs font-bold hover:bg-blue-50 transition flex items-center gap-1.5" title="Expand All">
-                <Maximize2 size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Expand All</span>
-              </button>
-              <button onClick={handleCollapseAll} className="p-2.5 md:px-3 md:py-2 bg-gray-50 text-gray-500 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-100 transition flex items-center gap-1.5" title="Reset Filters">
-                <Minimize2 size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">Reset</span>
-              </button>
-              <button onClick={() => setFilter(prev => prev === 'all' ? 'doubts' : 'all')} className={`p-2.5 md:px-4 md:py-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold border ${filter === 'doubts' ? 'bg-red-50 border-red-200 text-red-500 shadow-sm' : 'bg-slate-900 border-slate-900 text-white'}`} title="Filter by Doubts">
-                <Filter size={18} className="md:w-3.5 md:h-3.5"/> <span className="hidden md:inline">{filter === 'doubts' ? 'Doubts' : 'All'}</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* SYLLABUS TREE */}
-      <div className="flex-1 overflow-y-auto pr-2 pb-32 md:pb-6 custom-scrollbar">
-        {Object.entries(groupedTopics).map(([subject, subjectTopics]) => {
-          const root: FolderNode = { name: 'root', pathId: `root-${subject}`, subFolders: {}, topics: [] };
-          subjectTopics.forEach(topic => {
-              const pathArray = topic.path || topic.topicName.split(' > ').slice(0, -1);
-              let currentFolder = root; let runningPath = subject;
-              pathArray.forEach(folderName => {
-                  runningPath = `${runningPath} > ${folderName}`;
-                  if (!currentFolder.subFolders[folderName]) currentFolder.subFolders[folderName] = { name: folderName, pathId: runningPath, subFolders: {}, topics: [] };
-                  currentFolder = currentFolder.subFolders[folderName];
-              });
-              currentFolder.topics.push(topic);
-          });
-
-          const subjectPercentage = Math.round((subjectTopics.filter(t => t.status.includes('completed')).length / subjectTopics.length) * 100);
-          const isSubjectCompleted = subjectPercentage === 100;
-          const hasSubjectDoubt = subjectTopics.some(t => t.hasDoubt);
-
-          const renderFolder = (node: FolderNode, depth: number) => {
-              return (
-                  <div key={node.pathId} className="w-full">
-                      {Object.values(node.subFolders).map(subFolder => {
-                          const folderTopics = getAllTopicsFromNode(subFolder);
-                          const isFolderCompleted = folderTopics.length > 0 && folderTopics.every(t => t.status.includes('completed'));
-                          const hasFolderDoubt = folderTopics.some(t => t.hasDoubt);
-
-                          return (
-                              <div key={subFolder.pathId} className="w-full flex flex-col">
-                                  <div className="w-full py-3 pr-4 flex items-center hover:bg-gray-50 transition border-b border-gray-100 bg-white group">
-                                      <div style={{ width: `${(depth * 1.5) + 1}rem` }} className="flex-shrink-0" />
-                                      <button disabled={readOnly || safeRole === 'teacher'} onClick={() => handleBulkUpdate(folderTopics, { status: isFolderCompleted ? 'not_started' : 'completed' })} className="flex-shrink-0 cursor-pointer hover:scale-110 transition disabled:cursor-default">
-                                        {isFolderCompleted ? <CheckCircle className="text-green-500" size={18} /> : <Circle className="text-gray-300" size={18} />}
-                                      </button>
-                                      
-                                      <div className="flex-1 flex items-center min-w-0 ml-3 gap-2">
-                                        <button onClick={() => toggleFolder(subFolder.pathId)} className={`flex items-center gap-1.5 text-sm font-bold text-left transition mt-0.5 min-w-0 ${isFolderCompleted ? 'text-gray-400 line-through' : 'text-gray-700 hover:text-brand-blue'}`}>
-                                          {expandedFolders.includes(subFolder.pathId) ? <ChevronDown className="flex-shrink-0" size={16} /> : <ChevronRight className="flex-shrink-0" size={16} />}
-                                          <span className="truncate">{subFolder.name}</span>
-                                          <span className="text-[10px] text-gray-500 font-normal bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0 no-underline">
-                                            {folderTopics.filter(t => t.status.includes('completed')).length}/{folderTopics.length}
-                                          </span>
-                                        </button>
-                                        
-                                        <div className="opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 flex-shrink-0">
-                                          <button onClick={(e) => { e.stopPropagation(); setExpandedFolders(prev => Array.from(new Set([...prev, ...getAllFolderIds(subFolder)]))); }} className="p-1 text-brand-blue hover:bg-blue-50 rounded" title="Expand"><Maximize2 size={12}/></button>
-                                          <button onClick={(e) => { e.stopPropagation(); const ids = getAllFolderIds(subFolder); setExpandedFolders(prev => prev.filter(id => !ids.includes(id))); }} className="p-1 text-gray-400 hover:bg-gray-100 rounded" title="Collapse"><Minimize2 size={12}/></button>
-                                        </div>
-                                      </div>
-
-                                      <button disabled={readOnly || safeRole === 'teacher'} onClick={() => handleBulkUpdate(folderTopics, { hasDoubt: !hasFolderDoubt })} className={`ml-2 p-1.5 rounded-lg flex-shrink-0 transition ${hasFolderDoubt ? 'bg-red-100 text-red-500' : 'text-gray-200 hover:text-red-400'} disabled:cursor-default`}>
-                                        <AlertCircle size={16} />
-                                      </button>
-                                  </div>
-                                  {expandedFolders.includes(subFolder.pathId) && <div className="w-full animate-in fade-in duration-300">{renderFolder(subFolder, depth + 1)}</div>}
-                              </div>
-                          );
-                      })}
-                      {node.topics.map(topic => {
-                          const topicId = topic.id || (topic as any)._id;
-                          const isCompleted = topic.status.includes('completed');
-                          return (
-                              <div key={topicId} className="w-full py-3 pr-4 flex items-start hover:bg-gray-50 transition border-b border-gray-100 bg-white group">
-                                  <div style={{ width: `${(depth * 1.5) + 2.5}rem` }} className="flex-shrink-0" />
-                                  <button disabled={readOnly || safeRole === 'teacher'} onClick={() => handleUpdateTopic(topicId, { status: isCompleted ? 'not_started' : 'completed' })} className="mt-0.5 flex-shrink-0 cursor-pointer hover:scale-110 transition disabled:cursor-default">
-                                    {isCompleted ? <CheckCircle className="text-green-500" size={18} /> : <Circle className="text-gray-300" size={18} />}
-                                  </button>
-                                  <div className="flex-1 ml-3 min-w-0">
-                                    <p className={`text-sm font-medium leading-tight mt-0.5 ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                                        {topic.leafName || topic.topicName.split(' > ').pop()}
-                                    </p>
-                                  </div>
-                                  <button disabled={readOnly || safeRole === 'teacher'} onClick={() => handleUpdateTopic(topicId, { hasDoubt: !topic.hasDoubt })} className={`ml-2 p-1.5 rounded-lg flex-shrink-0 transition ${topic.hasDoubt ? 'bg-red-100 text-red-500' : 'text-gray-200 hover:text-red-400'} disabled:cursor-default`}>
-                                    <AlertCircle size={16} />
-                                  </button>
-                              </div>
-                          );
-                      })}
-                  </div>
-              );
-          };
-
-          return (
-              <div key={subject} className="border border-gray-200 rounded-2xl overflow-hidden bg-white mb-4 last:mb-0 group/subject transition-all hover:border-brand-blue/30 shadow-sm">
+            return (
+              <div key={subjectNode._id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white mb-4 last:mb-0 group/subject transition-all hover:border-brand-blue/30 shadow-sm animate-in fade-in group">
                   <div className="w-full p-4 bg-slate-50 border-b border-gray-100">
                     <div className="flex items-center justify-between mb-3">
                       
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <button disabled={readOnly || safeRole === 'teacher'} onClick={() => handleBulkUpdate(subjectTopics, { status: isSubjectCompleted ? 'not_started' : 'completed' })} className="mt-0.5 flex-shrink-0 cursor-pointer hover:scale-110 transition disabled:cursor-default">{isSubjectCompleted ? <CheckCircle className="text-green-500" size={20} /> : <Circle className="text-gray-300" size={20} />}</button>
-                          
-                          <div className="flex items-center min-w-0 gap-2">
-                            <button onClick={() => toggleSubject(subject)} className={`flex items-center gap-1.5 font-bold text-base transition min-w-0 ${isSubjectCompleted ? 'text-gray-400 line-through' : 'text-gray-800 hover:text-brand-blue'}`}>
-                              {expandedSubjects.includes(subject) ? <ChevronDown className="flex-shrink-0" size={18} /> : <ChevronRight className="flex-shrink-0" size={18} />}
-                              <span className="truncate">{subject}</span>
-                            </button>
-                            
-                            <div className="opacity-100 md:opacity-0 group-hover/subject:opacity-100 transition-opacity flex items-center gap-1 flex-shrink-0">
-                              <button onClick={(e) => { e.stopPropagation(); setExpandedSubjects(prev => Array.from(new Set([...prev, subject]))); const ids: string[] = []; Object.values(root.subFolders).forEach(n => ids.push(...getAllFolderIds(n))); setExpandedFolders(prev => Array.from(new Set([...prev, ...ids]))); }} className="p-1 text-brand-blue hover:bg-blue-100 rounded"><Maximize2 size={14}/></button>
-                              <button onClick={(e) => { e.stopPropagation(); setExpandedSubjects(prev => prev.filter(s => s !== subject)); const ids = []; Object.values(root.subFolders).forEach(n => ids.push(...getAllFolderIds(n))); setExpandedFolders(prev => prev.filter(id => !ids.includes(id))); }} className="p-1 text-gray-400 hover:bg-gray-200 rounded"><Minimize2 size={14}/></button>
-                            </div>
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <div className="w-8 flex items-center justify-center flex-shrink-0">
+                            <button onClick={() => toggleNode(subjectNode._id)} className="p-1 text-gray-400 hover:text-brand-blue rounded-md active:bg-gray-100">{isExpanded ? <ChevronDown size={22} /> : <ChevronRight size={22} />}</button>
+                          </div>
+                          <button disabled={readOnly || (safeRole === 'teacher' && !isMyOwnSyllabus)} onClick={() => handleUpdateNode(subjectNode._id, { status: isSubjectCompleted ? 'not_started' : 'completed' })} className="flex-shrink-0 cursor-pointer hover:scale-110 active:scale-95 transition disabled:cursor-default mx-2">{isSubjectCompleted ? <CheckCircle className="text-green-500" size={24} /> : <Circle className="text-gray-300" size={24} />}</button>
+                          <div className="flex items-center flex-wrap min-w-0 gap-2">
+                            <span onClick={() => toggleNode(subjectNode._id)} className={`font-bold text-base md:text-lg cursor-pointer hover:text-brand-blue transition min-w-0 truncate ${isSubjectCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{subjectNode.title}</span>
+                            {subjectNode.isCustom && <span className="text-[10px] uppercase font-black text-brand-orange bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded flex-shrink-0">Custom</span>}
                           </div>
                       </div>
 
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                          <span className={`text-xs font-black px-2 py-1 rounded-md border shadow-sm ${isSubjectCompleted ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-gray-200 text-brand-blue'}`}>{subjectPercentage}%</span>
-                          <button disabled={readOnly || safeRole === 'teacher'} onClick={() => handleBulkUpdate(subjectTopics, { hasDoubt: !hasSubjectDoubt })} className={`p-1.5 rounded-lg transition ${hasSubjectDoubt ? 'bg-red-100 text-red-500' : 'text-gray-200 hover:text-red-400'} disabled:cursor-default`}><AlertCircle size={18} /></button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                          {/* 🚨 RESTORED: Individual Expand/Collapse Buttons for subject nodes */}
+                          {subjectNode.children && subjectNode.children.length > 0 && (
+                            <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity gap-1 mr-1 flex-shrink-0">
+                              <button onClick={() => handleExpandSpecificNode(subjectNode)} className="p-1.5 text-gray-400 hover:text-brand-blue bg-white rounded shadow-sm md:shadow-none md:bg-transparent" title="Expand Sub-topics"><Maximize2 size={16}/></button>
+                              <button onClick={() => handleCollapseSpecificNode(subjectNode)} className="p-1.5 text-gray-400 hover:text-brand-blue bg-white rounded shadow-sm md:shadow-none md:bg-transparent" title="Collapse Sub-topics"><Minimize2 size={16}/></button>
+                            </div>
+                          )}
+
+                          <span className={`text-xs font-black px-2 py-1 rounded-md border shadow-sm ${subjectPercentage === 100 ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-gray-200 text-brand-blue'}`}>{subjectPercentage}%</span>
+                          <button disabled={readOnly || (safeRole === 'teacher' && !isMyOwnSyllabus)} onClick={() => handleUpdateNode(subjectNode._id, { hasDoubt: !hasSubjectDoubt })} className={`p-1.5 rounded-lg transition active:scale-95 ${hasSubjectDoubt ? 'bg-red-100 text-red-500 shadow-sm' : 'text-gray-300 hover:text-red-400 bg-gray-50 hover:bg-red-50'} disabled:cursor-default`}><AlertCircle size={20} /></button>
                       </div>
                     </div>
-                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-1">
-                      <div className={`h-full transition-all duration-1000 ease-out ${isSubjectCompleted ? "bg-green-500" : "bg-brand-blue"}`} style={{ width: `${subjectPercentage}%` }} />
-                    </div>
+                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-1"><div className={`h-full transition-all duration-1000 ease-out ${subjectPercentage === 100 ? "bg-green-500" : "bg-brand-blue"}`} style={{ width: `${subjectPercentage}%` }} /></div>
                   </div>
-                  {expandedSubjects.includes(subject) && <div className="w-full animate-in slide-in-from-top-2 duration-300">{renderFolder(root, 0)}</div>}
+                  {isExpanded && subjectNode.children && (<div className="w-full animate-in slide-in-from-top-2 duration-300">{subjectNode.children.map(child => renderNodeTree(child, 0))}</div>)}
               </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
-      {alertInfo.show && (
-        <Muialert 
-          message={alertInfo.message} 
-          severity={alertInfo.type} 
-          onClose={() => setAlertInfo({ ...alertInfo, show: false })} 
-        />
-      )}
-
+      {alertInfo.show && <Muialert message={alertInfo.message} severity={alertInfo.type} onClose={() => setAlertInfo({ ...alertInfo, show: false })} />}
     </div>
   );
 };
