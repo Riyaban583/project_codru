@@ -121,8 +121,6 @@ const CRM = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // 🚨 SCROLL BUG FIXED: The vertical scrolling blocker has been completely removed!
-
     const fetchDashboardData = async () => {
         setIsLoading(true);
         try {
@@ -131,7 +129,8 @@ const CRM = () => {
 
             const [leadsRes, tasksRes, teamRes] = await Promise.all([
                 axios.get(`${API_BASE}/leads`, { headers }),
-                axios.get(`${API_BASE}/tasks`, { headers }),
+                
+                axios.get(`${API_BASE}/tasks?scope=all`, { headers }),
                 axios.get(`${API_BASE}/team`) 
             ]);
 

@@ -12,7 +12,6 @@ const User = require("./models/userSchema");
 const jwt = require("jsonwebtoken");
 const http = require('http');
 const sendAutoNotification = require("./utils/notify");
- // For consistent notification messages
 const welcomeTemplate = require("./utils/welcomeTemplate"); // For consistent welcome emails
 const { contactUsTemplate } = require("./utils/contactUsTemplate"); // For consistent contact email formatting
 const Event = require("./models/eventSchema");

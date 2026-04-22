@@ -334,4 +334,14 @@ router.delete("/dashboard/tracker/courses/:courseName", authenticate, async (req
   }
 });
 
+router.post("/dashboard/tracker/nodes/master", authenticate, async (req, res) => {
+    try {
+        if (!req.user.isAdmin) return res.status(403).json({ error: "Unauthorized" });
+        // Same logic as POST /nodes, but use the MasterNode model
+        const newNode = new MasterNode({ ...req.body }); 
+        await newNode.save();
+        res.status(201).json(newNode);
+    } catch (err) { res.status(500).send("Error"); }
+});
+
 module.exports = router;

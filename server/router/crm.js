@@ -34,12 +34,16 @@ router.get('/team', async (req, res) => {
 });
 
 // ==========================================
-// GET: FETCH ALL LEADS FOR KANBAN (DEBUG VERSION)
+// GET: FETCH LEADS (SECURED FOR STAFF ONLY)
 // ==========================================
-router.get('/leads', async (req, res) => {
+router.get('/leads', authenticate, async (req, res) => { // 🚨 Added authenticate
     try {
-        const leads = await Lead
-            .find() // 🚨 Wait... this is fetching EVERY lead in the database!
+        // 🚨 SECURITY: Block normal students/parents from fetching CRM leads!
+        if (!req.user.isAdmin && !req.user.isCuTeTeam) {
+            return res.status(403).json({ error: "Access denied. Staff only." });
+        }
+
+        const leads = await Lead.find()
             .sort({ createdAt: -1 })
             .populate('assignedTo', 'name username photo');
         res.status(200).json(leads);
@@ -101,19 +105,26 @@ router.put('/tasks/:id', authenticate, async (req, res) => { // 🚨 Added authe
 });
 
 // ==========================================
-// GET: FETCH ALL TASKS (DEBUG VERSION)
+// GET: FETCH TASKS (SMART ROUTE)
 // ==========================================
-router.get('/tasks', async (req, res) => {
+router.get('/tasks', authenticate, async (req, res) => {
     try {
-        // 🚨 FIX: Removed the semicolon after sort() so the chain connects!
-        const tasks = await Task.find()
+        // Default: Only show tasks where the logged-in user is in the assignedTo array
+        let dbQuery = { assignedTo: req.user._id }; 
+
+        // 🚨 THE MAGIC: If the CRM asks for all tasks, AND the user is Staff...
+        if (req.query.scope === 'all' && (req.user.isAdmin || req.user.isCuTeTeam)) {
+            dbQuery = {}; // Erase the filter, fetch the whole database!
+        }
+
+        const tasks = await Task.find(dbQuery)
             .sort({ sortOrder: 1, dueDate: 1 })
             .populate('leadId', 'name phoneNumber')
             .populate('assignedTo', 'name username photo');
             
         res.status(200).json(tasks);
     } catch (error) {
-        console.error("🚨 KANBAN TASKS CRASH:", error); 
+        console.error("🚨 TASKS CRASH:", error); 
         res.status(500).json({ error: "Failed to fetch tasks." });
     }
 });
