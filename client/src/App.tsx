@@ -276,8 +276,8 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route path="/edit-syllabus" element={<SyllabusExplorer />} />
-          <Route path="/edit-syllabus/:username" element={<SyllabusExplorer />} />
+          <Route path="/edit-syllabus" element={<SyllabusExplorer userData={userData} />} />
+          <Route path="/edit-syllabus/:username" element={<SyllabusExplorer userData={userData} />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

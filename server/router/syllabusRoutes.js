@@ -344,4 +344,72 @@ router.post("/dashboard/tracker/nodes/master", authenticate, async (req, res) =>
     } catch (err) { res.status(500).send("Error"); }
 });
 
+// ==========================================
+// 12. CLONE CUSTOM PATH (Community Sharing & Bulk Teacher Push)
+// ==========================================
+router.post("/dashboard/tracker/clone-path", authenticate, async (req, res) => {
+  try {
+    // 🚨 Now expects targetUsernames (Array) instead of targetUsername (String)
+    const { sourceUsername, targetUsernames, courseName } = req.body;
+    
+    // Backwards compatibility just in case
+    const targets = targetUsernames || (req.body.targetUsername ? [req.body.targetUsername] : []);
+    if (targets.length === 0) return res.status(400).json({error: "No target users provided."});
+
+    let query = { username: sourceUsername };
+    if (courseName && courseName !== 'ALL') {
+      query.course = courseName;
+    }
+
+    const sourceNodes = await UserNode.find(query);
+    if (sourceNodes.length === 0) {
+      return res.status(404).json({ error: "No syllabus data found to copy." });
+    }
+
+    let allClonedNodes = [];
+
+    // 🚨 THE MAGIC: Loop through every selected student and duplicate the tree
+    for (const targetUser of targets) {
+      const idMap = new Map();
+      const userClones = sourceNodes.map(sn => {
+        const newId = new mongoose.Types.ObjectId();
+        idMap.set(sn._id.toString(), newId);
+        
+        return {
+          _id: newId,
+          username: targetUser, // Assigning to THIS specific student in the loop
+          course: sn.course,
+          title: sn.title,
+          order: sn.order,
+          level: sn.level,
+          isCustom: sn.isCustom,
+          status: 'not_started',
+          hasDoubt: false,
+          _originalParentId: sn.parentId ? sn.parentId.toString() : null
+        };
+      });
+
+      // Connect children to new parents
+      userClones.forEach(cn => {
+        if (cn._originalParentId && idMap.has(cn._originalParentId)) {
+          cn.parentId = idMap.get(cn._originalParentId);
+        } else {
+          cn.parentId = null;
+        }
+        delete cn._originalParentId;
+      });
+
+      allClonedNodes = allClonedNodes.concat(userClones);
+    }
+
+    // Bulk Insert EVERYTHING at once for maximum speed
+    await UserNode.insertMany(allClonedNodes);
+    res.status(201).json({ message: `Successfully copied to ${targets.length} users!` });
+
+  } catch (err) {
+    console.error("Cloning Error:", err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
 module.exports = router;
