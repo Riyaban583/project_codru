@@ -10,7 +10,7 @@ const FormData = require('form-data');
 const Lead = require('../models/Lead');
 const Task = require('../models/Task');
 const authenticate = require("../middleware/authenticate"); // Import it
-
+const Template = require('../models/Template');
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
@@ -352,7 +352,7 @@ router.post('/contacts', async (req, res) => {
 });
 
 // ==========================================
-// 6. POST: SEND TEMPLATE MESSAGE (With Variables!)
+// 6. POST: SEND TEMPLATE MESSAGE (Upgraded for Flows & Dynamic Headers)
 // ==========================================
 router.post('/send-template', async (req, res) => {
     try {
@@ -367,23 +367,31 @@ router.post('/send-template', async (req, res) => {
         const WHATSAPP_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
         const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-        // 1. Initialize components array
         const components = [];
 
-        // 2. Add Header (Image) if provided
-        if (headerUrl) {
+        // 1. DYNAMIC HEADER FIX
+        if (headerUrl && headerUrl.trim() !== "") {
+            let mediaType = "image"; // Default
+            const lowerUrl = headerUrl.toLowerCase();
+            
+            if (lowerUrl.match(/\.(pdf|doc|docx|ppt|pptx|xls|xlsx)$/i)) {
+                mediaType = "document";
+            } else if (lowerUrl.match(/\.(mp4|3gp|mov|avi)$/i)) {
+                mediaType = "video";
+            }
+
             components.push({
                 type: "header",
                 parameters: [
                     {
-                        type: "image",
-                        image: { link: headerUrl }
+                        type: mediaType,
+                        [mediaType]: { link: headerUrl }
                     }
                 ]
             });
         }
 
-        // 3. Add Body Variables if provided
+        // 2. BODY VARIABLES
         if (variables.length > 0) {
             components.push({
                 type: "body",
@@ -394,24 +402,53 @@ router.post('/send-template', async (req, res) => {
             });
         }
 
+        // 3. 🚨 WHATSAPP FLOW FIX 🚨
+        // Look up the template in our DB to see if it's a Flow
+        const templateDoc = await Template.findOne({ metaName: templateName });
+
+        if (templateDoc && templateDoc.isFlow) {
+            components.push({
+                type: "button",
+                sub_type: "flow", // This is the exact keyword Meta demands
+                index: "0",       // Target the first button
+                parameters: [
+                    {
+                        type: "action",
+                        action: {
+                            // Meta demands a unique flow token per session
+                            flow_token: `crm_flow_${Date.now()}_${to}` 
+                        }
+                    }
+                ]
+            });
+        }
+
+        // 4. BUILD CLEAN PAYLOAD
+        const templatePayload = {
+            name: templateName,
+            language: { code: languageCode }
+        };
+        
+        // Only attach components if we actually have some (prevents empty array errors)
+        if (components.length > 0) {
+            templatePayload.components = components;
+        }
+
         const payload = {
             messaging_product: "whatsapp",
             to: to,
             type: "template",
-            template: {
-                name: templateName,
-                language: { code: languageCode },
-                components: components // This is now dynamic!
-            }
+            template: templatePayload
         };
 
+        // 5. SEND TO META
         const response = await axios.post(
             `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
             payload,
             { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
         );
 
-        // 4. Save to DB for CRM history
+        // 6. SAVE TO DATABASE
         const savedMessage = await Message.create({
             wa_id: response.data.messages[0].id,
             senderName: "System Template",
@@ -434,8 +471,6 @@ router.post('/send-template', async (req, res) => {
     }
 });
 
-const Template = require('../models/Template');
-
 // ==========================================
 // 8. POST: SYNC TEMPLATES FROM META
 // ==========================================
@@ -455,37 +490,37 @@ router.post('/templates/sync', async (req, res) => {
 
         // 2. Loop through Meta's templates
         for (const mt of metaTemplates) {
-            // We only care about APPROVED templates
             if (mt.status !== 'APPROVED') continue;
 
-            // Check if it requires an image by looking at its components
             const hasImageHeader = mt.components.some(
                 comp => comp.type === 'HEADER' && comp.format === 'IMAGE'
             );
 
-            // 3. Upsert into our Database
-            // If it exists, we just update the status. If it's new, we insert it with empty URLs!
+            // 🚨 NEW: Auto-detect if this template has a Flow button!
+            const hasFlowButton = mt.components.some(
+                comp => comp.type === 'BUTTONS' && comp.buttons.some(b => b.type === 'FLOW')
+            );
+
             const existing = await Template.findOne({ metaName: mt.name });
 
             if (!existing) {
                 await Template.create({
                     metaName: mt.name,
-                    // Give it a readable default name (e.g., "hello_world" -> "Hello World")
                     displayName: mt.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                     language: mt.language,
                     metaStatus: mt.status,
                     requiresImage: hasImageHeader,
-                    headerImageUrl: "", // Empty!
-                    // If it requires an image, it is NOT configured yet. If it's just text, it's ready!
+                    isFlow: hasFlowButton, // 👈 Saves the Flow status!
+                    headerImageUrl: "", 
                     isConfigured: !hasImageHeader 
                 });
                 addedCount++;
             } else {
-                // If it already exists, just update its approval status in case Meta rejected it later
                 existing.metaStatus = mt.status;
+                existing.isFlow = hasFlowButton; // 👈 Update existing ones
                 await existing.save();
             }
-        }
+        } 
 
         res.status(200).json({ message: `Sync complete. Added ${addedCount} new templates.` });
     } catch (error) {

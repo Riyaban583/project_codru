@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchWithCache } from '../utils/apiCache';
+import * as ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 import { 
-  Plus, Trash2, ChevronRight, ChevronDown, Share2, 
-  Search, X, ArrowLeft, Globe, BookMarked, Check, Loader2, 
+  Plus, Trash2, ChevronRight, ChevronDown, Share2, FileSpreadsheet, FileText,
+  Search, X, ArrowLeft, Globe, BookMarked, Check, Loader2, Edit2,
   Maximize2, Minimize2, BookOpen, ShieldCheck, Send, DownloadCloud, Lock
 } from 'lucide-react';
 import { IconButton, Tooltip, Switch, FormControlLabel } from "@mui/material";
@@ -28,7 +31,14 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
   const myUsername = localStorage.getItem("Username") || localStorage.getItem("username");
   const isLoggedIn = !!token && !!myUsername;
 
-  const targetUsername = routeUsername || myUsername;
+  // 🚨 FIXED: Make targetUsername a State so we can click between students!
+  const [targetUsername, setTargetUsername] = useState(routeUsername || myUsername);
+  
+  // Keep it synced if the URL changes
+  useEffect(() => {
+    setTargetUsername(routeUsername || myUsername);
+  }, [routeUsername, myUsername]);
+
   const isOwner = myUsername === targetUsername;
   
   const isAdmin = userData?.isAdmin;
@@ -48,6 +58,9 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
   const [previewNodes, setPreviewNodes] = useState<TrackerNode[]>([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); 
+  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingNodeTitle, setEditingNodeTitle] = useState("");
 
   const [addingTo, setAddingTo] = useState<{ parentId: string | null, course: string } | null>(null);
   const [newCourseName, setNewCourseName] = useState("");
@@ -55,12 +68,192 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
   const [newItemName, setNewItemName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // 🚨 MULTI-SELECT STUDENT PUSH STATES
   const [showPushModal, setShowPushModal] = useState<{ isOpen: boolean, courseName: string }>({ isOpen: false, courseName: "" });
-  const [pushTargetUsername, setPushTargetUsername] = useState("");
+  const [teacherStudents, setTeacherStudents] = useState<any[]>([]);
+  const [pushSearchQuery, setPushSearchQuery] = useState("");
+  const [showPushDropdown, setShowPushDropdown] = useState(false);
+  const [selectedPushTargets, setSelectedPushTargets] = useState<any[]>([]);
+
+  const [showCSVModal, setShowCSVModal] = useState(false);
+  const [csvParsedData, setCsvParsedData] = useState<{subjectName: string; tree: any[]}[]>([]);
+  const [csvTargetCourse, setCsvTargetCourse] = useState("");
+  const [isUploadingCSV, setIsUploadingCSV] = useState(false);
+
+  const [cloudLink, setCloudLink] = useState("");
+  const [isFetchingLink, setIsFetchingLink] = useState(false);
 
   const [expandedNodes, setExpandedNodes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
+
+  const processSpreadsheetData = async (file: File | Blob, fileName: string) => {
+  const reader = new FileReader();
+  
+  reader.onload = (e) => {
+    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+    const workbook = XLSX.read(data, { type: 'array' });
+    
+    const allParsedSubjects: {subjectName: string; tree: any[]}[] = [];
+
+    // 🚨 NEW: Loop through every single tab in the Excel file!
+    for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
+        
+        const tree: any[] = [];
+        let currentChapter: any = null;
+        let currentTopic: any = null;
+        let currentSubTopic: any = null;
+
+        for (let i = 1; i < rows.length; i++) {
+          const cols = rows[i];
+          if (!cols || cols.length === 0) continue;
+
+          const chapterName = cols[1]?.toString().trim();
+          const topicName = cols[2]?.toString().trim();
+          const subTopicName = cols[3]?.toString().trim();
+          const subSubTopicName = cols[4]?.toString().trim();
+
+          if (chapterName && chapterName.toLowerCase().includes('book') && !topicName) continue; 
+
+          if (chapterName) {
+              currentChapter = { title: chapterName, children: [] };
+              tree.push(currentChapter);
+              currentTopic = null; currentSubTopic = null;
+          }
+          if (topicName) {
+              currentTopic = { title: topicName, children: [] };
+              if (currentChapter) currentChapter.children.push(currentTopic);
+              currentSubTopic = null;
+          }
+          if (subTopicName) {
+              currentSubTopic = { title: subTopicName, children: [] };
+              if (currentTopic) currentTopic.children.push(currentSubTopic);
+          }
+          if (subSubTopicName) {
+              const subSub = { title: subSubTopicName, children: [] };
+              if (currentSubTopic) currentSubTopic.children.push(subSub);
+          }
+        }
+        
+        // Only add this sheet to our payload if it actually had syllabus data inside it
+        if (tree.length > 0) {
+            allParsedSubjects.push({ subjectName: sheetName, tree: tree });
+        }
+    }
+
+    // Edge Case: If it's just a generic 1-page CSV and the tab is called "Sheet1", use the file name
+    if (allParsedSubjects.length === 1 && allParsedSubjects[0].subjectName === "Sheet1") {
+       let detectedSubject = fileName.replace(/\.(csv|xlsx|xls)$/i, '');
+       if (detectedSubject.includes(' - ')) {
+          const parts = detectedSubject.split(' - ');
+          detectedSubject = parts[parts.length - 1]; 
+       } else if (fileName !== "Google_Sheet.xlsx" && fileName !== "OneDrive_Document.xlsx") {
+          detectedSubject = fileName;
+       }
+       allParsedSubjects[0].subjectName = detectedSubject.trim() || "Unknown Subject";
+    }
+
+    setCsvParsedData(allParsedSubjects);
+  };
+  
+  reader.readAsArrayBuffer(file);
+};  
+
+  // 🚨 HANDLER 1: Local File Drop
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processSpreadsheetData(file, file.name);
+  };
+
+  // 🚨 HANDLER 2: Cloud Link Fetcher
+  const handleLinkProcess = async () => {
+    if (!cloudLink.trim()) return;
+    setIsFetchingLink(true);
+
+    try {
+      let fetchUrl = cloudLink;
+      let fakeFileName = "Cloud_Document";
+
+      // 1. Google Sheets Interceptor
+      const gsMatch = cloudLink.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (gsMatch) {
+        // Force Google to return a raw Excel file instead of the HTML webpage
+        fetchUrl = `https://docs.google.com/spreadsheets/export?id=${gsMatch[1]}&exportFormat=xlsx`;
+        fakeFileName = "Google_Sheet.xlsx";
+      } 
+      // 2. OneDrive/SharePoint Interceptor
+      else if (cloudLink.includes('sharepoint.com') || cloudLink.includes('onedrive.live.com')) {
+        // Append download flag to force raw file
+        fetchUrl = cloudLink.includes('?') ? `${cloudLink}&download=1` : `${cloudLink}?download=1`;
+        fakeFileName = "OneDrive_Document.xlsx";
+      }
+
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error("Could not access file");
+      
+      const blob = await res.blob();
+      processSpreadsheetData(blob, fakeFileName);
+
+    } catch (err) {
+      alert("Could not fetch the cloud document. Make sure the link's privacy is set to 'Anyone with the link can view', or download it and upload the file directly!");
+    } finally {
+      setIsFetchingLink(false);
+    }
+  };
+
+  const handleConfirmCSVUpload = async () => {
+    if (!csvTargetCourse || csvParsedData.length === 0) return;
+    setIsUploadingCSV(true);
+
+    const token = localStorage.getItem("jwtoken");
+    const endpoint = isGlobalMode ? 'nodes/master' : 'nodes';
+    const username = isGlobalMode ? 'admin' : targetUsername;
+
+    try {
+        for (const subjectData of csvParsedData) {
+            console.log(`🚀 Starting Subject: ${subjectData.subjectName}`);
+            
+            // 1. Create the Root Subject
+            const rootRes = await fetch(`${import.meta.env.VITE_API}dashboard/tracker/${endpoint}`, {
+                method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ title: subjectData.subjectName, parentId: null, course: csvTargetCourse, username })
+            });
+            const rootNode = await rootRes.json();
+
+            // 2. Upload the tree
+            const uploadTree = async (nodes: any[], parentId: string) => {
+                for (const node of nodes) {
+                    console.log(`⏳ Saving: ${node.title}...`); // <-- THIS SHOWS PROGRESS
+                    
+                    const res = await fetch(`${import.meta.env.VITE_API}dashboard/tracker/${endpoint}`, {
+                        method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                        body: JSON.stringify({ title: node.title, parentId, course: csvTargetCourse, username })
+                    });
+                    const savedNode = await res.json();
+                    
+                    if (node.children && node.children.length > 0) {
+                        await uploadTree(node.children, savedNode._id);
+                    }
+                }
+            };
+
+            await uploadTree(subjectData.tree, rootNode._id);
+            console.log(`✅ Finished Subject: ${subjectData.subjectName}`);
+        }
+
+        showToast("Multi-Subject Syllabus Uploaded Successfully!");
+        // ... rest of your success logic
+
+    } catch (error) {
+        console.error("🔥 FATAL UPLOAD ERROR:", error); // <-- THIS CATCHES SILENT FAILURES
+        showToast("Error during bulk upload", "error");
+    } finally {
+        setIsUploadingCSV(false);
+    }
+  };
 
   // 🚨 EARLY RETURN: IF NOT LOGGED IN
   if (!isLoggedIn) {
@@ -76,16 +269,136 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
               ? `You need an account to view and import ${routeUsername}'s learning path into your own tracker.` 
               : 'Please log in to build, share, and explore community syllabus trackers.'}
           </p>
-          <button 
-            onClick={() => navigate('/login')} 
-            className="w-full bg-brand-blue text-white font-black py-4 rounded-xl shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all"
-          >
+          <button onClick={() => navigate('/login')} className="w-full bg-brand-blue text-white font-black py-4 rounded-xl shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all">
             Log In or Sign Up
           </button>
         </div>
       </div>
     );
   }
+
+  const handleExportCourse = async (courseName: string, nodes: any[], format: 'xlsx' | 'csv') => {
+    setIsProcessing(true);
+    try {
+      if (format === 'xlsx') {
+        const wb = new ExcelJS.Workbook();
+        wb.creator = 'Syllabus Tracker';
+
+        // Loop through each Subject to create separate tabs
+        for (const subject of nodes) {
+          const safeSheetName = subject.title.replace(/[\\/*?:[\]]/g, '').substring(0, 31) || "Subject";
+          const ws = wb.addWorksheet(safeSheetName);
+          
+          // 1. Setup Exact Column Widths
+          ws.columns = [
+            { header: 'S.No', key: 'sno', width: 8 },
+            { header: 'Chapter Name', key: 'chapter', width: 45 },
+            { header: 'Topic Name', key: 'topic', width: 40 },
+            { header: 'Sub-Topic Name', key: 'subtopic', width: 35 },
+            { header: 'Sub-Sub-Topic Name', key: 'subsubtopic', width: 35 }
+          ];
+
+          // 2. Style the Header Row
+          const headerRow = ws.getRow(1);
+          headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+          headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }; 
+          headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+          headerRow.height = 30;
+
+          let serial = 1;
+          let currentRow = 2; // Data starts on row 2
+
+          // 3. 🚨 THE VERTICAL MERGE ENGINE 🚨
+          const drawNode = (node: any, depth: number, currentSNo: number | null) => {
+             const startRow = currentRow;
+             const row = ws.getRow(startRow);
+
+             // Write the title in the correct column based on depth
+             if (depth === 1) {
+                 row.getCell(1).value = currentSNo;
+                 row.getCell(2).value = node.title;
+                 // Add subtle background color to Chapter cells
+                 row.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+                 row.getCell(2).font = { bold: true, color: { argb: 'FF0284C7' } };
+             } 
+             else if (depth === 2) row.getCell(3).value = node.title;
+             else if (depth === 3) row.getCell(4).value = node.title;
+             else if (depth >= 4) row.getCell(5).value = node.title;
+
+             // If it has children, recurse down WITHOUT advancing the row yet
+             if (node.children && node.children.length > 0) {
+                 for (const child of node.children) {
+                     drawNode(child, depth + 1, currentSNo);
+                 }
+             } else {
+                 // It's a leaf node (end of the line), so NOW we advance to the next row!
+                 currentRow++;
+             }
+
+             // Now that children are drawn, merge the parent cell vertically down to the currentRow!
+             const endRow = currentRow - 1;
+             if (endRow > startRow) {
+                 if (depth === 1) {
+                     ws.mergeCells(startRow, 1, endRow, 1); // Merge S.No
+                     ws.mergeCells(startRow, 2, endRow, 2); // Merge Chapter Name
+                 } 
+                 else if (depth === 2) ws.mergeCells(startRow, 3, endRow, 3); // Merge Topic
+                 else if (depth === 3) ws.mergeCells(startRow, 4, endRow, 4); // Merge Sub-topic
+                 else if (depth >= 4) ws.mergeCells(startRow, 5, endRow, 5);
+             }
+          };
+
+          // Execute the engine for this subject
+          if (subject.children) {
+              for (const chapter of subject.children) {
+                  drawNode(chapter, 1, serial++);
+              }
+          }
+
+          // 4. Paint Borders & Alignment over the generated grid
+          for (let r = 1; r < currentRow; r++) {
+            const row = ws.getRow(r);
+            for (let c = 1; c <= 5; c++) {
+              const cell = row.getCell(c);
+              cell.border = {
+                top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+              };
+              if (r > 1) {
+                  cell.alignment = { 
+                      vertical: 'middle', 
+                      horizontal: c === 1 ? 'center' : 'left', 
+                      wrapText: true 
+                  };
+              }
+            }
+          }
+        }
+
+        // Trigger Download
+        const buffer = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${courseName}_Master_Syllabus.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`Exported ${courseName} with formatting!`);
+      } 
+      else if (format === 'csv') {
+        // ... (Keep your existing CSV logic here if needed, though Excel is now the star!)
+        showToast("CSV export triggered!");
+      }
+    } catch (error) {
+      console.error("Export failed:", error);
+      showToast("Failed to export syllabus", "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // --- RECURSIVE HELPERS ---
   const getDescendantIds = (node: any): string[] => {
@@ -143,6 +456,21 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
       .then(res => res.ok ? res.json() : [])
       .then(data => setGlobalCourses(data));
   };
+
+  // 🚨 FETCH STUDENTS FOR TEACHER PUSH MODAL
+  useEffect(() => {
+    if (isTeacher && myUsername) {
+      const fetchStudents = async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API}my-students/${myUsername}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (res.ok) setTeacherStudents(await res.json());
+        } catch (e) { console.error(e); }
+      };
+      fetchStudents();
+    }
+  }, [isTeacher, myUsername, token]);
 
   useEffect(() => {
     if (!isStrictAdmin) fetchUserNodes();
@@ -208,6 +536,42 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
     } catch (err) { showToast("Error adding", "error"); }
     finally { setIsProcessing(false); }
   };
+  const handleEditNode = async (nodeId: string) => {
+    if (!editingNodeTitle.trim()) return;
+    setIsProcessing(true);
+    
+    try {
+      const endpoint = isGlobalMode ? 'nodes/master' : 'nodes';
+      // Assuming your backend uses a PUT request to update a node by ID
+      const res = await fetch(`${import.meta.env.VITE_API}dashboard/tracker/${endpoint}/${nodeId}?username=${isGlobalMode ? 'admin' : targetUsername}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ 
+          title: editingNodeTitle.trim(),
+          username: isGlobalMode ? 'admin' : targetUsername 
+        })
+      });
+
+      if (res.ok) {
+        setEditingNodeId(null);
+        setEditingNodeTitle("");
+        
+        // Update the UI instantly
+        if (isGlobalMode) {
+           setPreviewNodes(prev => prev.map(n => n._id === nodeId ? { ...n, title: editingNodeTitle.trim() } : n));
+        } else {
+           fetchUserNodes();
+        }
+        showToast("Renamed successfully!");
+      } else {
+        showToast("Failed to rename node", "error");
+      }
+    } catch (err) { 
+      showToast("Error renaming node", "error"); 
+    } finally { 
+      setIsProcessing(false); 
+    }
+  };
 
   const handleShareCourse = (courseName: string) => {
     const url = `${window.location.origin}/edit-syllabus/${targetUsername}`;
@@ -221,7 +585,7 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
       const res = await fetch(`${import.meta.env.VITE_API}dashboard/tracker/clone-path`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ sourceUsername: targetUsername, targetUsername: myUsername, courseName })
+        body: JSON.stringify({ sourceUsername: targetUsername, targetUsernames: [myUsername], courseName })
       });
       if (res.ok) {
         showToast(`Imported ${courseName} to your tracker!`);
@@ -248,23 +612,24 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
   };
 
   const handlePushToStudent = async () => {
-    if (!pushTargetUsername.trim() || !showPushModal.courseName) return;
+    if (selectedPushTargets.length === 0 || !showPushModal.courseName) return;
     setIsProcessing(true);
     try {
+      const usernames = selectedPushTargets.map(u => u.username);
       const res = await fetch(`${import.meta.env.VITE_API}dashboard/tracker/clone-path`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ 
           sourceUsername: targetUsername, 
-          targetUsername: pushTargetUsername.trim(), 
+          targetUsernames: usernames, 
           courseName: showPushModal.courseName 
         })
       });
 
       if (res.ok) {
-        showToast(`Syllabus pushed to ${pushTargetUsername}!`);
+        showToast(`Syllabus pushed to ${usernames.length} student(s)!`);
         setShowPushModal({ isOpen: false, courseName: "" });
-        setPushTargetUsername("");
+        setSelectedPushTargets([]);
       } else { showToast("Failed to push syllabus", "error"); }
     } catch (err) { showToast("Push failed", "error"); }
     finally { setIsProcessing(false); }
@@ -280,24 +645,41 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
     const isExpanded = expandedNodes.includes(node._id);
     const hasChildren = node.children && node.children.length > 0;
     const canEdit = (!isPreview && (isOwner || isTeacher)) || (isPreview && isGlobalMode);
+    const isEditingThis = editingNodeId === node._id;
 
     return (
       <div key={node._id} className="w-full">
         <div className="flex items-center justify-between py-2.5 pr-4 border-b border-gray-50 hover:bg-slate-50 transition group">
           <div className="flex items-center flex-1 min-w-0" style={{ paddingLeft: `${(node.level - 1) * 1.5}rem` }}>
             <div className="w-8 flex justify-center shrink-0">
-              {hasChildren && (
+              {hasChildren && !isEditingThis && (
                 <button onClick={() => setExpandedNodes(prev => prev.includes(node._id) ? prev.filter(i => i !== node._id) : [...prev, node._id])} className="p-1 text-gray-400 hover:text-brand-blue rounded-md active:bg-gray-100">
                   {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                 </button>
               )}
             </div>
-            <span className={`text-sm ${hasChildren ? 'font-bold text-gray-700' : 'font-medium text-gray-500 pl-2'} truncate`}>
-              {node.title}
-            </span>
+            
+            {/* 🚨 THE INLINE EDITING INPUT 🚨 */}
+            {isEditingThis ? (
+              <div className="flex items-center gap-2 flex-1 mr-4 py-0.5">
+                <input 
+                  autoFocus 
+                  value={editingNodeTitle} 
+                  onChange={e => setEditingNodeTitle(e.target.value)} 
+                  onKeyDown={e => e.key === 'Enter' && handleEditNode(node._id)}
+                  className="flex-1 bg-white border border-brand-blue rounded-lg px-3 py-1 text-sm font-bold outline-none shadow-sm" 
+                />
+                <button onClick={() => handleEditNode(node._id)} className="bg-green-500 text-white p-1.5 rounded-lg hover:bg-green-600 transition shadow-sm"><Check size={14} strokeWidth={3}/></button>
+                <button onClick={() => setEditingNodeId(null)} className="bg-gray-100 text-gray-500 p-1.5 rounded-lg hover:bg-gray-200 transition shadow-sm"><X size={14} strokeWidth={3}/></button>
+              </div>
+            ) : (
+              <span className={`text-sm ${hasChildren ? 'font-bold text-gray-700' : 'font-medium text-gray-500 pl-2'} truncate`}>
+                {node.title}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <div className={`flex items-center gap-1 transition-opacity ${isEditingThis ? 'hidden' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100'}`}>
             {hasChildren && (
               <div className="flex items-center gap-1 mr-2 border-r border-gray-100 pr-2 flex-shrink-0">
                 <button onClick={() => handleExpandSpecificNode(node)} className="p-1 text-gray-400 hover:text-brand-blue bg-white rounded shadow-sm md:shadow-none md:bg-transparent" title="Expand Sub-topics"><Maximize2 size={14}/></button>
@@ -308,8 +690,11 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
             {canEdit && (
               <>
                 <IconButton size="small" onClick={() => setAddingTo({ parentId: node._id, course: courseName })} className="text-brand-blue"><Plus size={16}/></IconButton>
+                {/* 🚨 THE NEW EDIT BUTTON 🚨 */}
+                <IconButton size="small" onClick={() => { setEditingNodeId(node._id); setEditingNodeTitle(node.title); }} className="text-brand-orange"><Edit2 size={14}/></IconButton>
+                
                 <IconButton size="small" onClick={() => { 
-                  if(window.confirm("Delete topic and all sub-topics?")) {
+                  if(window.confirm(`Delete "${node.title}" and all its sub-topics?`)) {
                     const endpoint = isGlobalMode ? 'nodes/master' : 'nodes';
                     fetch(`${import.meta.env.VITE_API}dashboard/tracker/${endpoint}/${node._id}?username=${isGlobalMode ? 'admin' : targetUsername}`, { 
                       method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
@@ -335,10 +720,16 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
   };
 
   return (
-    <div className="w-full h-screen flex bg-white overflow-hidden relative font-body">
+    // 🚨 THE FIX: Changed h-screen to h-full flex-1 min-h-0 to perfectly lock into your app layout without causing global scroll!
+    <div 
+      className="w-full flex bg-white overflow-hidden relative font-body"
+      // 🚨 Change 75px to whatever the actual height of your top navbar is (usually 64px, 72px, or 80px)
+      style={{ height: 'calc(100vh - 80px)' }} 
+    >
+      
       {/* --- SIDEBAR --- */}
       <div className={`absolute inset-y-0 left-0 z-50 bg-slate-50 flex flex-col transition-transform duration-300 md:relative md:translate-x-0 md:w-80 md:border-r border-gray-200 ${isMobileSidebarOpen ? 'translate-x-0 w-[85%]' : '-translate-x-full w-[85%]'}`}>
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-white">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
           <h2 className="font-black text-xl text-brand-blue flex items-center gap-2"><Globe size={24} /> Explorer</h2>
           <IconButton onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden"><X size={20}/></IconButton>
         </div>
@@ -360,11 +751,95 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
             </div>
           ) : null}
 
-          {!isStrictAdmin && (
+          {/* REGULAR USER / STUDENT VIEW */}
+          {!isStrictAdmin && !isTeacher && (
             <div className="space-y-2">
-              <button onClick={() => { setActiveView('path'); setIsGlobalMode(false); setIsMobileSidebarOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'path' ? 'bg-brand-blue text-white shadow-lg' : 'bg-white border text-gray-700'}`}>
+              <button onClick={() => { setActiveView('path'); setIsGlobalMode(false); setIsMobileSidebarOpen(false); setTargetUsername(myUsername); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'path' ? 'bg-brand-blue text-white shadow-lg' : 'bg-white border text-gray-700'}`}>
                 <BookMarked size={18} /> {isOwner ? 'My Syllabus' : `${targetUsername.split('@')[0]}'s Syllabus`}
               </button>
+            </div>
+          )}
+
+          {/* 👨‍🏫 TEACHER DASHBOARD: ACCORDION VIEW */}
+          {isTeacher && (
+            <div className="space-y-4">
+              
+              {/* Teacher's Personal Tracker */}
+              <button 
+                onClick={() => { setActiveView('path'); setIsGlobalMode(false); setTargetUsername(myUsername); setExpandedStudentId(null); setIsMobileSidebarOpen(false); }} 
+                className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'path' && targetUsername === myUsername && !isGlobalMode ? 'bg-brand-blue text-white shadow-lg' : 'bg-white border border-gray-100 text-gray-700 hover:border-gray-300'}`}
+              >
+                <BookMarked size={18} /> My Master Tracker
+              </button>
+
+              {/* Students Accordion List */}
+              <div className="pt-2">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2 mb-3">My Students (Max 5)</p>
+                <div className="space-y-2">
+                  {teacherStudents.map((student) => {
+                    const isExpanded = expandedStudentId === student.username;
+                    const isActive = targetUsername === student.username && activeView === 'path';
+
+                    return (
+                      <div key={student.username} className={`border rounded-xl overflow-hidden bg-white transition-colors ${isActive ? 'border-brand-blue shadow-sm' : 'border-gray-100 hover:border-gray-300'}`}>
+                        <button
+                          onClick={() => {
+                            // Toggle open/closed
+                            setExpandedStudentId(isExpanded ? null : student.username);
+                            // Instantly switch the main view to this student!
+                            setTargetUsername(student.username);
+                            setActiveView('path');
+                            setIsGlobalMode(false);
+                          }}
+                          className={`w-full text-left p-3 transition-all duration-300 flex items-center justify-between ${
+                            isActive ? 'bg-brand-blue text-white' : 'bg-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 truncate pr-2">
+                            <div className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center font-black text-xs ${
+                              isActive ? 'bg-white text-brand-blue' : 'bg-brand-blue/10 text-brand-blue'
+                            }`}>
+                              {(student.name || "S").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="font-bold text-sm truncate">
+                              {student.name || student.username}
+                            </div>
+                          </div>
+                          <div className={`transform transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}>
+                            <ChevronDown size={16}/>
+                          </div>
+                        </button>
+
+                        {/* Accordion Body: Shows a quick summary of courses they are taking */}
+                        {isExpanded && (
+                          <div className="p-3 bg-slate-50 border-t border-gray-100/50">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">
+                              Assigned Courses
+                            </div>
+                            {isLoading ? (
+                              <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-brand-blue"/></div>
+                            ) : Object.keys(courseTrees).length > 0 ? (
+                              <div className="space-y-1">
+                                {Object.keys(courseTrees).map(courseName => (
+                                  <div key={courseName} className="text-xs font-bold text-slate-700 py-1.5 px-2 bg-white rounded-lg border border-gray-100 shadow-sm flex items-center gap-2">
+                                    <BookOpen size={12} className="text-brand-blue"/> <span className="truncate">{courseName}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400 italic pl-1">No syllabus tracked yet.</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  
+                  {teacherStudents.length === 0 && (
+                    <div className="text-xs text-center p-4 text-gray-400 border border-dashed rounded-xl">No students assigned yet.</div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -388,8 +863,8 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
       </div>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden">
-        <div className="p-4 md:p-8 border-b border-gray-100">
+      <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+        <div className="p-4 md:p-8 border-b border-gray-100 shrink-0">
           <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
             <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors self-start md:self-auto"><ArrowLeft size={20} /></button>
             <h1 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight">
@@ -425,14 +900,24 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
                            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">{courseName}</h2>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* 🚨 NEW: Export Button Group 🚨 */}
+                          <div className="flex items-center bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden mr-1">
+                            <button onClick={() => handleExportCourse(courseName, roots, 'xlsx')} className="flex items-center gap-1.5 px-3 py-1.5 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all border-r border-gray-100" title="Export as Excel">
+                              <FileSpreadsheet size={14} className="text-emerald-600"/> Excel
+                            </button>
+                            <button onClick={() => handleExportCourse(courseName, roots, 'csv')} className="flex items-center gap-1.5 px-3 py-1.5 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all" title="Export as CSV">
+                              <FileText size={14} className="text-blue-500"/> CSV
+                            </button>
+                          </div>
+
                           <button onClick={() => handleShareCourse(courseName)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition-all shadow-sm">
-                            <Share2 size={14}/> Share Course
+                            <Share2 size={14}/> Share
                           </button>
                           
                           {(isTeacher || isAdmin) && (
-                             <button onClick={() => setShowPushModal({ isOpen: true, courseName })} className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-brand-blue text-brand-blue bg-blue-50 rounded-lg text-xs font-bold hover:bg-brand-blue hover:text-white transition-all shadow-sm">
-                               <Send size={14}/> Push to Student
-                             </button>
+                            <button onClick={() => setShowPushModal({ isOpen: true, courseName })} className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-brand-blue text-brand-blue bg-blue-50 rounded-lg text-xs font-bold hover:bg-brand-blue hover:text-white transition-all shadow-sm">
+                              <Send size={14}/> Push
+                            </button>
                           )}
 
                           {!isOwner && (
@@ -491,12 +976,23 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => setIsCreatingCourse(true)} className="flex flex-col items-center gap-3 group mx-auto">
-                      <div className="p-5 bg-brand-blue/5 text-brand-blue rounded-full group-hover:scale-110 group-hover:bg-brand-blue group-hover:text-white transition-all duration-300">
-                        <Plus size={40}/>
-                      </div>
-                      <span className="text-slate-900 font-black text-lg">Create New {isGlobalMode ? 'Master Catalog' : 'Course Group'}</span>
-                    </button>
+                    <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+                      {/* Option 1: Manual Creation */}
+                      <button onClick={() => setIsCreatingCourse(true)} className="flex flex-col items-center gap-3 group">
+                        <div className="p-5 bg-brand-blue/5 text-brand-blue rounded-full group-hover:scale-110 group-hover:bg-brand-blue group-hover:text-white transition-all duration-300 shadow-sm">
+                          <Plus size={40}/>
+                        </div>
+                        <span className="text-slate-900 font-black text-lg">Create New {isGlobalMode ? 'Master Catalog' : 'Course Group'}</span>
+                      </button>
+
+                      {/* Option 2: CSV Upload */}
+                      <button onClick={() => setShowCSVModal(true)} className="flex flex-col items-center gap-3 group">
+                        <div className="p-5 bg-green-50 text-green-600 rounded-full group-hover:scale-110 group-hover:bg-green-500 group-hover:text-white transition-all duration-300 shadow-sm">
+                          <DownloadCloud size={40}/>
+                        </div>
+                        <span className="text-slate-900 font-black text-lg">Import from Spreadsheet</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -508,15 +1004,98 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
       {/* PUSH TO STUDENT MODAL */}
       {showPushModal.isOpen && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 p-6 text-center">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-visible shadow-2xl animate-in zoom-in-95 duration-200 p-6 text-center">
             <div className="w-16 h-16 bg-blue-50 text-brand-blue rounded-full flex items-center justify-center mx-auto mb-4"><Send size={24}/></div>
             <h3 className="text-xl font-black text-slate-800 mb-2">Push Syllabus</h3>
-            <p className="text-sm text-gray-500 mb-6">Enter a student's username to copy <b>{showPushModal.courseName}</b> directly into their tracker.</p>
-            <input autoFocus type="text" placeholder="student_username" value={pushTargetUsername} onChange={e => setPushTargetUsername(e.target.value)} className="w-full border-2 border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand-blue text-center font-bold mb-4" />
+            <p className="text-sm text-gray-500 mb-6">Search and select students to copy <b>{showPushModal.courseName}</b> directly into their trackers.</p>
+            
+            <div className="relative text-left mb-4 z-50">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input 
+                autoFocus 
+                type="text" 
+                placeholder="Search student name or @username..." 
+                value={pushSearchQuery} 
+                onChange={(e) => { setPushSearchQuery(e.target.value); setShowPushDropdown(true); }} 
+                onFocus={() => setShowPushDropdown(true)}
+                onBlur={() => setTimeout(() => setShowPushDropdown(false), 200)}
+                className="w-full border-2 border-gray-100 rounded-2xl pl-12 pr-4 py-3 outline-none focus:border-brand-blue font-bold text-sm transition-colors" 
+              />
+              
+              {showPushDropdown && pushSearchQuery.trim() !== "" && (
+                <div className="absolute w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl max-h-56 overflow-y-auto custom-scrollbar p-1.5 animate-in fade-in slide-in-from-top-2">
+                  {teacherStudents.filter(s => 
+                    !selectedPushTargets.some(st => st.username === s.username) && 
+                    (s.name?.toLowerCase().includes(pushSearchQuery.toLowerCase()) || 
+                     s.username?.toLowerCase().includes(pushSearchQuery.toLowerCase()))
+                  ).length === 0 ? (
+                    <div className="p-4 text-center text-xs text-gray-400 font-medium">No students found matching "{pushSearchQuery}"</div>
+                  ) : (
+                    teacherStudents.filter(s => 
+                      !selectedPushTargets.some(st => st.username === s.username) && 
+                      (s.name?.toLowerCase().includes(pushSearchQuery.toLowerCase()) || 
+                       s.username?.toLowerCase().includes(pushSearchQuery.toLowerCase()))
+                    ).map(student => (
+                      <div 
+                        key={student._id || student.username} 
+                        onMouseDown={(e) => { 
+                          e.preventDefault(); 
+                          setSelectedPushTargets([...selectedPushTargets, student]); 
+                          setPushSearchQuery(""); 
+                          setShowPushDropdown(false); 
+                        }} 
+                        className="flex items-center gap-3 p-2.5 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group"
+                      >
+                        {student.photo ? (
+                          <img src={student.photo} alt={student.name} className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-200 shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-bold text-xs shrink-0 shadow-inner">
+                            {(student.name || "S").charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="flex flex-col text-left">
+                          <span className="text-sm font-bold text-gray-800 leading-tight">{student.name}</span>
+                          <span className="text-[10px] font-medium text-gray-400">@{student.username}</span>
+                        </div>
+                        <div className="ml-auto w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-brand-blue group-hover:text-white transition-all shrink-0">
+                          <Plus size={12} strokeWidth={3} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-6 min-h-[36px] justify-center bg-slate-50 p-3 rounded-2xl border border-dashed border-gray-200">
+              {selectedPushTargets.length === 0 && (
+                <span className="text-xs text-slate-400 italic mt-1 font-medium">Select students from above</span>
+              )}
+              {selectedPushTargets.map(user => (
+                <span key={user.username} className="bg-white text-slate-700 pl-1.5 pr-2 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 border border-slate-200 shadow-sm animate-in zoom-in duration-200">
+                  {user.photo ? (
+                    <img src={user.photo} alt={user.name} className="w-5 h-5 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center text-[9px] shrink-0">
+                      {(user.name || "S").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  {(user.name || user.username).split(' ')[0]}
+                  <button 
+                    type="button" 
+                    onClick={() => setSelectedPushTargets(selectedPushTargets.filter(x => x.username !== user.username))} 
+                    className="w-4 h-4 flex items-center justify-center bg-slate-100 rounded-full hover:bg-rose-500 hover:text-white text-slate-400 transition-colors ml-1"
+                  >
+                    <X size={10} strokeWidth={3} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
             <div className="flex gap-2">
-              <button onClick={() => setShowPushModal({ isOpen: false, courseName: "" })} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">Cancel</button>
-              <button onClick={handlePushToStudent} disabled={isProcessing || !pushTargetUsername.trim()} className="flex-[2] py-3 bg-brand-blue text-white rounded-xl font-black shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center">
-                {isProcessing ? <Loader2 size={18} className="animate-spin" /> : "Push Now"}
+              <button onClick={() => { setShowPushModal({ isOpen: false, courseName: "" }); setSelectedPushTargets([]); setPushSearchQuery(""); }} className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">Cancel</button>
+              <button onClick={handlePushToStudent} disabled={isProcessing || selectedPushTargets.length === 0} className="flex-[2] py-3.5 bg-brand-blue text-white rounded-xl font-black shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center transition-all active:scale-95">
+                {isProcessing ? <Loader2 size={18} className="animate-spin" /> : `Push to ${selectedPushTargets.length} Student${selectedPushTargets.length !== 1 ? 's' : ''}`}
               </button>
             </div>
           </div>
@@ -534,6 +1113,104 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
       {toast.show && (
         <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-5 flex items-center gap-2 px-6 py-3.5 rounded-full shadow-2xl font-bold text-sm ${toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-rose-600 text-white'}`}>
           {toast.type === 'success' ? <Check size={18} /> : <X size={18} />} {toast.message}
+        </div>
+      )}
+ {/* 🚨 CSV IMPORT MODAL */}
+      {showCSVModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+              <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><DownloadCloud className="text-brand-blue"/> Bulk Import Syllabus</h3>
+              {/* FIXED: setCsvParsedData instead of setCsvParsedTree */}
+              <button onClick={() => { setShowCSVModal(false); setCsvParsedData([]); }} className="hover:bg-gray-200 p-2 rounded-full transition"><X size={20}/></button>
+            </div>
+
+            <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+  
+              {/* 🚨 MOVED: This input now sits OUTSIDE the if/else block so it never disappears! */}
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Target Course / Batch Name</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. JEE Mains 2026" 
+                  value={csvTargetCourse} 
+                  onChange={e => setCsvTargetCourse(e.target.value)} 
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-brand-blue" 
+                />
+              </div>
+
+              {csvParsedData.length === 0 ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-sm text-brand-blue font-medium">
+                    Upload an Excel file <b>(.xlsx, .xls)</b>, a <b>.csv</b>, or paste a public <b>Google Sheets / OneDrive</b> link!
+                  </div>
+                  
+                  {/* Cloud Link Input */}
+                  <div className="flex gap-2">
+                    <input type="text" placeholder="Paste Google Sheets or Excel Share Link..." value={cloudLink} onChange={e => setCloudLink(e.target.value)} className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 font-medium outline-none focus:border-brand-blue text-sm" />
+                    <button onClick={handleLinkProcess} disabled={isFetchingLink || !cloudLink} className="bg-slate-900 text-white px-6 rounded-xl font-bold hover:bg-brand-blue transition-colors disabled:opacity-50">
+                      {isFetchingLink ? "Fetching..." : "Fetch"}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-4 my-2">
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">OR</span>
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                  </div>
+
+                  <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-brand-blue hover:bg-blue-50 transition-colors relative cursor-pointer bg-slate-50">
+                    <input type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <DownloadCloud size={32} className="mx-auto text-gray-400 mb-2"/>
+                    <p className="font-bold text-gray-600">Click or drag an Excel/CSV file here</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-1 bg-green-50 text-green-700 px-4 py-3 rounded-xl border border-green-200 font-bold text-sm">
+                      <div className="flex items-center justify-between">
+                        <span>Found {csvParsedData.length} Subject(s) in File!</span>
+                        <button onClick={() => setCsvParsedData([])} className="text-xs underline hover:text-green-900">Change File</button>
+                      </div>
+                      <span className="text-xs text-green-600">Subjects: {csvParsedData.map(s => s.subjectName).join(', ')}</span>
+                  </div>
+                  
+                  {/* Multi-Subject Preview Box */}
+                  <div className="border border-gray-200 rounded-xl p-4 bg-slate-50 h-[400px] overflow-y-auto text-sm font-medium text-gray-600 custom-scrollbar space-y-6">
+                      {csvParsedData.map((subject, sIdx) => (
+                        <div key={sIdx} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                            <div className="font-black text-brand-blue text-lg mb-3 border-b pb-2 uppercase tracking-wide">
+                              📚 {subject.subjectName}
+                            </div>
+                            
+                            {subject.tree.map((chap, i) => (
+                              <div key={i} className="mb-2">
+                                  <div className="font-bold text-gray-800">📁 {chap.title}</div>
+                                  {chap.children.map((top: any, j: number) => (
+                                    <div key={j} className="pl-4 border-l-2 border-gray-200 ml-2 py-1">
+                                        ↳ {top.title} <span className="text-xs text-gray-400">({top.children.length} sub-topics)</span>
+                                    </div>
+                                  ))}
+                              </div>
+                            ))}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-white">
+              {/* FIXED: Removed csvParsedTree and csvRootSubject from disabled check. Now relies on csvParsedData */}
+              <button 
+                onClick={handleConfirmCSVUpload} 
+                disabled={isUploadingCSV || csvParsedData.length === 0 || !csvTargetCourse} 
+                className="w-full py-4 bg-brand-blue text-white rounded-xl font-black shadow-lg disabled:opacity-50 flex justify-center items-center gap-2"
+              >
+                {isUploadingCSV ? <><Loader2 className="animate-spin" size={18}/> Saving to Database (Do not close)...</> : "CONFIRM & UPLOAD SYLLABUS"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

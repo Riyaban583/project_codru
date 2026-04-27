@@ -14,6 +14,7 @@ const templateSchema = new mongoose.Schema({
     isConfigured: { type: Boolean, default: false },  // 🔥 Will hide it from Chat UI until true!
     buttonColor: { type: String, default: "blue" },
     variableCount: { type: Number, default: 0 },
+    isFlow: { type: Boolean, default: false },
 
     isVisible: { type: Boolean, default: true }, // For the toggle
     sortOrder: { type: Number, default: 0 }
