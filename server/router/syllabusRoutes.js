@@ -3,6 +3,8 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const authenticate = require("../middleware/authenticate"); // Adjust path as needed
 const { MasterNode, UserNode } = require("../models/syllabusNodeSchema"); // Adjust path as needed
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Assuming you have an 'authenticate' middleware
 // const authenticate = require("../middleware/authenticate");
 
@@ -410,6 +412,74 @@ router.post("/dashboard/tracker/clone-path", authenticate, async (req, res) => {
     console.error("Cloning Error:", err);
     res.status(500).json({ error: "Server Error" });
   }
+});
+
+router.post('/api/extract-syllabus', async (req, res) => {
+    try {
+        const { images } = req.body; // Expecting an array of { mimeType, data }
+
+        if (!images || images.length === 0) {
+            return res.status(400).json({ error: "No images provided" });
+        }
+
+        // 1. Format the images exactly how Gemini likes them
+        const imageParts = images.map(img => ({
+            inlineData: {
+                data: img.data,
+                mimeType: img.mimeType
+            }
+        }));
+
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const prompt = `
+            You are an expert educational data extractor. 
+            I have provided images of a textbook's Table of Contents / Index.
+            
+            Extract the syllabus hierarchy from these images and output it STRICTLY as a JSON array matching this exact format:
+            [
+              {
+                "subjectName": "Detected Subject Name (e.g., Mathematics)",
+                "tree": [
+                  {
+                    "title": "Chapter 1 Name",
+                    "children": [
+                      {
+                        "title": "Topic 1.1 Name",
+                        "children": [
+                           { "title": "Sub-Topic 1.1.1 Name", "children": [] }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+
+            Rules:
+            1. Ignore page numbers, author names, or publisher info.
+            2. Keep the numbering in the title (e.g., "3.1 Introduction").
+            3. Do NOT wrap the response in markdown blocks like \`\`\`json. Return ONLY the raw JSON array.
+            4. If multiple subjects are detected, create a separate object for each in the array.
+        `;
+
+        // 2. Call Gemini
+        const result = await model.generateContent([prompt, ...imageParts]);
+        const responseText = result.response.text();
+        
+        // 3. Clean the response
+        let cleanJson = responseText.trim();
+        if (cleanJson.startsWith("```json")) {
+            cleanJson = cleanJson.replace(/```json/g, "").replace(/```/g, "").trim();
+        }
+
+        const parsedData = JSON.parse(cleanJson);
+        res.status(200).json(parsedData);
+
+    } catch (error) {
+        console.error("Gemini Extraction Error:", error);
+        res.status(500).json({ error: "Failed to process images" });
+    }
 });
 
 module.exports = router;

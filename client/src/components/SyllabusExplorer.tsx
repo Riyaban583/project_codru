@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { 
   Plus, Trash2, ChevronRight, ChevronDown, Share2, FileSpreadsheet, FileText,
-  Search, X, ArrowLeft, Globe, BookMarked, Check, Loader2, Edit2,
+  Search, X, ArrowLeft, Globe, BookMarked, Check, Loader2, Edit2, Camera,
   Maximize2, Minimize2, BookOpen, ShieldCheck, Send, DownloadCloud, Lock
 } from 'lucide-react';
 import { IconButton, Tooltip, Switch, FormControlLabel } from "@mui/material";
@@ -30,6 +30,9 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
   const token = localStorage.getItem("jwtoken");
   const myUsername = localStorage.getItem("Username") || localStorage.getItem("username");
   const isLoggedIn = !!token && !!myUsername;
+
+  const [isScanningAI, setIsScanningAI] = useState(false);
+  const [aiScanStatus, setAiScanStatus] = useState(""); // To show "Analyzing images...", "Building tree...", etc.
 
   // 🚨 FIXED: Make targetUsername a State so we can click between students!
   const [targetUsername, setTargetUsername] = useState(routeUsername || myUsername);
@@ -252,6 +255,62 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
         showToast("Error during bulk upload", "error");
     } finally {
         setIsUploadingCSV(false);
+    }
+  };
+
+  const handleAIUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsScanningAI(true);
+    setAiScanStatus("Uploading images to secure server...");
+
+    try {
+      // 1. Convert files to Base64 (but just the raw data string)
+      const base64Images = await Promise.all(
+        Array.from(files).map(async (file) => {
+          return new Promise<{mimeType: string, data: string}>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64Data = (reader.result as string).split(',')[1];
+              resolve({
+                mimeType: file.type,
+                data: base64Data
+              });
+            };
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
+      setAiScanStatus("AI is reading the syllabus... this takes a few seconds.");
+      
+      // 2. Send the images to YOUR backend, safely hiding the API key
+      const token = localStorage.getItem("jwtoken");
+      const res = await fetch(`${import.meta.env.VITE_API}api/extract-syllabus`, {
+        method: "POST",
+        headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}` // Secure it so only logged-in teachers can use your AI
+        },
+        body: JSON.stringify({ images: base64Images })
+      });
+
+      if (!res.ok) throw new Error("Backend failed to process AI request");
+
+      const parsedData = await res.json();
+      
+      // 3. Feed it into our existing review state
+      setCsvParsedData(parsedData);
+      showToast("AI Extraction Successful! Please review the syllabus.");
+
+    } catch (error) {
+      console.error("AI Scan Failed:", error);
+      showToast("Failed to read the images. Please ensure they are clear pictures of the index.", "error");
+    } finally {
+      setIsScanningAI(false);
+      setAiScanStatus("");
+      e.target.value = ''; 
     }
   };
 
@@ -1160,10 +1219,39 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
                     <div className="h-px bg-gray-200 flex-1"></div>
                   </div>
 
-                  <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-brand-blue hover:bg-blue-50 transition-colors relative cursor-pointer bg-slate-50">
-                    <input type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    <DownloadCloud size={32} className="mx-auto text-gray-400 mb-2"/>
-                    <p className="font-bold text-gray-600">Click or drag an Excel/CSV file here</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    
+                    {/* Option 1: The Traditional Excel/CSV Upload */}
+                    <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center hover:border-green-500 hover:bg-green-50 transition-colors relative cursor-pointer bg-slate-50 group">
+                      <input type="file" accept=".csv, .xlsx, .xls" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                      <FileSpreadsheet size={32} className="mx-auto text-gray-400 mb-3 group-hover:text-green-500 transition-colors"/>
+                      <h4 className="font-black text-gray-700 mb-1">Standard Import</h4>
+                      <p className="text-xs text-gray-500 font-medium">Upload Excel or CSV files</p>
+                    </div>
+
+                    {/* Option 2: The Magic AI Scanner */}
+                    <div className={`border-2 border-dashed rounded-2xl p-6 text-center relative overflow-hidden transition-colors ${isScanningAI ? 'border-brand-blue bg-blue-50' : 'border-gray-300 bg-slate-50 hover:border-brand-blue hover:bg-blue-50 cursor-pointer group'}`}>
+                      
+                      {isScanningAI ? (
+                        <div className="flex flex-col items-center justify-center h-full relative z-20">
+                          <Loader2 size={32} className="text-brand-blue animate-spin mb-3"/>
+                          <h4 className="font-black text-brand-blue mb-1">AI Processing...</h4>
+                          <p className="text-xs text-blue-600 font-bold animate-pulse">{aiScanStatus}</p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Allow multiple image uploads at once! */}
+                          <input type="file" accept="image/png, image/jpeg, image/webp" multiple onChange={handleAIUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                          <Camera size={32} className="mx-auto text-gray-400 mb-3 group-hover:text-brand-blue transition-colors"/>
+                          <h4 className="font-black text-gray-700 mb-1">Magic AI Scanner</h4>
+                          <p className="text-xs text-gray-500 font-medium">Take photos of the book's Index</p>
+                        </>
+                      )}
+
+                      {/* Cool animated background gradient for the AI scanner */}
+                      {isScanningAI && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent w-[200%] animate-[shimmer_2s_infinite] -z-10"></div>}
+                    </div>
+
                   </div>
                 </div>
               ) : (
