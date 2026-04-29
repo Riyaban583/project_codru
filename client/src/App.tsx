@@ -16,6 +16,7 @@ import Publicprofile from "./components/Publicprofile";
 import Popup from "./components/Popup";
 import NotFound from "./components/NotFound";
 import SyllabusExplorer from "./components/SyllabusExplorer";
+import ForgetPassword from "./components/Forget_password";
 
 // --- TYPESCRIPT DEFINITIONS ---
 export interface UserData {
@@ -276,6 +277,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route path="/forget-password/:token" element={<ForgetPassword />} />
           <Route path="/edit-syllabus" element={<SyllabusExplorer userData={userData} />} />
           <Route path="/edit-syllabus/:username" element={<SyllabusExplorer userData={userData} />} />
 
