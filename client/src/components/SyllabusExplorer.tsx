@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchWithCache } from '../utils/apiCache';
-import * as ExcelJS from 'exceljs';
-import * as XLSX from 'xlsx';
-import Papa from 'papaparse';
+// import * as ExcelJS from 'exceljs';
+// import * as XLSX from 'xlsx';
 import { 
   Plus, Trash2, ChevronRight, ChevronDown, Share2, FileSpreadsheet, FileText,
   Search, X, ArrowLeft, Globe, BookMarked, Check, Loader2, Edit2, Camera,
@@ -93,7 +92,8 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
   const processSpreadsheetData = async (file: File | Blob, fileName: string) => {
   const reader = new FileReader();
   
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
+    const XLSX = await import('xlsx');
     const data = new Uint8Array(e.target?.result as ArrayBuffer);
     const workbook = XLSX.read(data, { type: 'array' });
     
@@ -340,6 +340,7 @@ const SyllabusExplorer = ({ userData }: { userData: any }) => {
     setIsProcessing(true);
     try {
       if (format === 'xlsx') {
+        const ExcelJS = await import('exceljs');
         const wb = new ExcelJS.Workbook();
         wb.creator = 'Syllabus Tracker';
 
