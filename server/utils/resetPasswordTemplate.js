@@ -38,3 +38,5 @@ const resetPasswordTemplate = (userName, resetLink) => {
     </div>
   `;
 };
+
+module.exports = { resetPasswordTemplate };

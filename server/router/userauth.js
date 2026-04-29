@@ -16,6 +16,7 @@ const User = require("../models/userSchema");
 const OTP = require("../models/otpSchema");
 const Syllabus = require("../models/syllabusSchema");
 const authenticate = require("../middleware/authenticate");
+const { resetPasswordTemplate } = require("../utils/resetPasswordTemplate");
 const otpTemplate = require("../utils/otpTemplate"); // Ensure this path is correct
 const actionTemplate = require("../utils/actionTemplate"); // Ensure this path is correct
 const sendAutoNotification = require("../utils/notify");
@@ -677,16 +678,20 @@ router.post("/admission/:username", async (req, res) => {
 //   }
 // });
 
-// Change password route
-router.post("/change-password", async (req, res) => {
+// 🚨 ADD 'authenticate' middleware here to protect the route!
+router.post("/change-password", authenticate, async (req, res) => {
   try {
-    const { username, currentPassword, newPassword } = req.body;
+    // 🚨 We no longer need 'username' from the frontend!
+    const { currentPassword, newPassword } = req.body;
 
-    if (!username || !currentPassword || !newPassword) {
+    if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: "Empty field(s)" });
     }
 
-    let user = await User.findOne({ username });
+    // 🚨 SECURE: Grab the exact user ID from the verified JWT token
+    const userId = req.user._id; 
+
+    let user = await User.findById(userId);
     if (!user) {
       return res.status(400).json({ error: "User not found" });
     }
@@ -697,6 +702,8 @@ router.post("/change-password", async (req, res) => {
     }
 
     // 1. Update Password
+    // (Assuming you have a Mongoose pre-save hook that hashes the password automatically. 
+    // If not, you must bcrypt.hash(newPassword) right here!)
     user.password = newPassword;
     await user.save();
 
@@ -706,7 +713,7 @@ router.post("/change-password", async (req, res) => {
       user._id,
       "🔒 Security Alert: Your password was successfully changed.",
       "settings",
-      req.user.username // Indicates that the user triggered this change
+      req.user.username // 👈 This now works perfectly because of 'authenticate'!
     );
 
     // 3. 🚨 EMAIL NOTIFICATION
@@ -735,34 +742,45 @@ router.post("/change-password", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 router.post("/reset-password", async (req, res) => {
   try {
     const { username } = req.body;
     let user = await User.findOne({ username });
 
     if (!user) return res.status(400).json({ error: "User not found" });
+    if (!user.email) return res.status(400).json({ error: "No email associated with this user." });
 
-    // Generate link
+    // 1. Generate link (Ensure process.env.TOKEN_SECRET exists in your .env file!)
     const token = jwt.sign({ userId: user._id }, process.env.TOKEN_SECRET, { expiresIn: "1h" });
-    const resetLink = `http://localhost:5173/forgot-password/${token}`;
+    
+    // Pro-tip: Use an env variable for the frontend URL so it works in production too!
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const resetLink = `${frontendUrl}/forget-password/${token}`; // Match your React Route path!
 
-    // 🚨 Generate the HTML using our template
+    // 2. Generate HTML
+    // 🚨 WARNING: Ensure 'resetPasswordTemplate' is required at the top of this file!
     const resetHtml = resetPasswordTemplate(user.name || user.username, resetLink);
 
+    // 3. Send Email
     const mailOptions = {
       from: process.env.EMAIL,
       to: user.email,
       subject: "Password Reset Request - CuTe Learning",
-      html: resetHtml // 👈 Beautiful HTML instead of plain text!
+      html: resetHtml 
     };
 
+    // 🚨 WARNING: Ensure 'transporter' (Nodemailer) is defined/imported in this file!
     transporter.sendMail(mailOptions, (error, info) => {
-      if (error) return res.status(500).json({ error: "Failed to send email" });
+      if (error) {
+        console.error("🔥 Nodemailer Error:", error);
+        return res.status(500).json({ error: "Failed to send email. Check server logs." });
+      }
       res.status(200).json({ message: "Password reset link sent to your email" });
     });
     
   } catch (error) {
+    // 🚨 THIS LOG WILL TELL YOU EXACTLY WHAT CRASHED!
+    console.error("🔥 Crash in /reset-password route:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -777,22 +795,38 @@ router.post("/reset-password/:token", async (req, res) => {
       return res.status(400).json({ error: "New password is required" });
     }
 
-    const decoded = jwt.verify(token, process.env.TOKEN_SECRET);
+    // 1. SAFELY VERIFY JWT 
+    // (If it's expired/invalid, we catch it here and send a 400 instead of a 500 crash)
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.TOKEN_SECRET);
+    } catch (jwtError) {
+      return res.status(400).json({ error: "This reset link is invalid or has expired. Please request a new one." });
+    }
+
     const userId = decoded.userId;
 
-    let user = await User.findById(userId);
+    // 2. MANUALLY HASH THE PASSWORD
+    // By hashing it here, we don't have to rely on Mongoose pre-save hooks which can be finicky.
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    if (!user) {
+    // 3. USE `updateOne` INSTEAD OF `user.save()`
+    // This safely updates ONLY the password and ignores all other strict schema validations!
+    const result = await User.updateOne(
+      { _id: userId },
+      { $set: { password: hashedPassword } }
+    );
+
+    if (result.matchedCount === 0) {
       return res.status(400).json({ error: "User not found" });
     }
 
-    user.password = newPassword;
-    await user.save();
-
     res.status(200).json({ message: "Password has been reset successfully" });
+    
   } catch (error) {
-    console.error("Server error during password reset:", error);
-    res.status(500).json({ error: "Server error" });
+    console.error("🔥 Server error during password reset:", error);
+    res.status(500).json({ error: "An unexpected server error occurred." });
   }
 });
 
