@@ -785,6 +785,17 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
+// Add this in your backend routes file
+router.get("/reset-password/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    // Just try to verify it. If it's expired, it will jump to the catch block.
+    jwt.verify(token, process.env.TOKEN_SECRET);
+    res.status(200).json({ valid: true });
+  } catch (error) {
+    res.status(400).json({ error: "Invalid or expired link" });
+  }
+});
 // Reset password confirmation route
 router.post("/reset-password/:token", async (req, res) => {
   try {

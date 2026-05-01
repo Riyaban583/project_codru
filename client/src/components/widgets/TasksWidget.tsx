@@ -98,9 +98,10 @@ const TasksWidget = ({ data }: { data: any }) => {
       const token = localStorage.getItem("jwtoken");
       const currentUsername = localStorage.getItem("Username") || "";
       
-      // 🚨 Extract usernames from selected objects
       let assignedStaff = selectedAssignees.map(user => user.username);
-      if (assignedStaff.length === 0) {
+      
+      // 🚨 FIX: ALWAYS include the creator in the assigned list so they show up in Management!
+      if (!assignedStaff.includes(currentUsername)) {
         assignedStaff.push(currentUsername);
       }
 

@@ -140,7 +140,13 @@ const CourseWidget: React.FC<CourseWidgetProps> = ({ user }) => {
 
       {/* 🚨 NEW: STUDENT PILLS FOR TEACHERS */}
       {role?.toLowerCase() === 'teacher' && assignedStudents.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2 mb-2 relative z-10">
+        <div 
+          onWheel={(e) => {
+            // 🚨 MAGIC FIX: Converts vertical mouse scrolling to horizontal scrolling!
+            e.currentTarget.scrollLeft += e.deltaY;
+          }}
+          className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2 mb-2 relative z-10 w-full snap-x"
+        >
           {assignedStudents.map((student) => (
             <button
               key={student._id}
