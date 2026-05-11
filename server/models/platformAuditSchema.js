@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 // }
 
 const platformAuditSchema = new mongoose.Schema({
-    contactPhone: { type: String, required: true, unique: true },
+    contactPhone: { type: String, required: true, },
     schoolName: { type: String,required: true,},
     contactName: { type: String, required: true,},
     studentCount: { type: String, required: true,},

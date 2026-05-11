@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 // }
 
 const contactSchema = new mongoose.Schema({
-    phoneNumber: { type: String, required: true, unique: true },
+    phoneNumber: { type: String, required: true, },
     name: { type: String, default: "New Student" },
     lastMessage: { type: String },
     lastSeen: { type: Date, default: Date.now },
