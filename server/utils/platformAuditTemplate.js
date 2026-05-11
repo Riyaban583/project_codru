@@ -1,5 +1,5 @@
 // Change the parameters to accept countryCode and phone instead of subject
-const Template = (userName, userEmail, countryCode, phone, message) => {
+const Template = (contactName, contactPhone, schoolName, studentCount) => {
   const LOGO_URL = "https://res.cloudinary.com/da6jhcsmm/image/upload/v1772999280/logo_no_bg1_mfmk8x.png";
 
   return `
@@ -13,19 +13,16 @@ const Template = (userName, userEmail, countryCode, phone, message) => {
       <div style="padding: 40px; background-color: #ffffff;">
         <h2 style="color: #1e293b; font-size: 18px; margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">Lead Details</h2>
         
-        <p style="margin: 10px 0;"><strong style="color: #64748b;">Name:</strong> ${userName}</p>
-        <p style="margin: 10px 0;"><strong style="color: #64748b;">Email:</strong> ${userEmail}</p>
-        <p style="margin: 10px 0;"><strong style="color: #64748b;">Phone:</strong> ${countryCode} ${phone}</p>
+        <p style="margin: 10px 0;"><strong style="color: #64748b;">Contact Name:</strong> ${contactName}</p>
+        <p style="margin: 10px 0;"><strong style="color: #64748b;">Contact Phone No.:</strong> ${contactPhone}</p>
+        <p style="margin: 10px 0;"><strong style="color: #64748b;">School Name:</strong> ${schoolName}</p>
+        <p style="margin: 10px 0;"><strong style="color: #64748b;">Student Count:</strong> ${studentCount}</p>
         
-        <div style="margin-top: 25px; padding: 20px; background-color: #f8fafc; border-radius: 12px; color: #334155; line-height: 1.6; font-style: italic;">
-          "${message}"
-        </div>
+        
 
         <div style="text-align: center; margin-top: 40px;">
-          <a href="mailto:${userEmail}" style="background-color: #1765a4; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block; margin-right: 10px;">
-            Reply via Email
-          </a>
-          <a href="https://wa.me/${countryCode.replace('+', '')}${phone}" style="background-color: #25D366; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">
+          
+          <a href="https://wa.me/${contactPhone}" style="background-color: #25D366; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">
             Chat on WhatsApp
           </a>
         </div>
@@ -42,4 +39,4 @@ const Template = (userName, userEmail, countryCode, phone, message) => {
 };
 
 // 🚨 CRITICAL: You MUST export it so other files can read it as a function!
-module.exports = { contactUsTemplate };
+module.exports = { plantformAuditTemplate };

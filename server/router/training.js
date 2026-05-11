@@ -2,9 +2,11 @@ const express = require("express");
 const router = express.Router();
 const contact = require("../models/trainingSchema"); // Ensure this path is correct
 const dotenv = require("dotenv");
+const platformAudit = require("../models/platformAuditSchema");
 const cookieParser = require("cookie-parser");
 const authenticate = require("../middleware/authenticate"); // Uncomment only if auth is required
 const User = require("../models/userSchema");
+const { plantformAuditTemplate } = require("../utils/platformAuditTemplate");
 
 router.use(cookieParser());
 dotenv.config({ path: "./config.env" });
@@ -103,5 +105,74 @@ router.post("/training",authenticate, async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+
+router.post("/b2b-lead",authenticate, async (req, res) => {
+  try {
+    // 1. Extract the exact fields from your frontend form
+    // (Removed 'subject', added 'countryCode' and 'phone')
+    const { contactName, contactPhone, schoolName, studentCount} = req.body;
+
+    // 2. Validate all required fields based on your Schema
+    if (!contactName || !contactPhone || !schoolName || !studentCount) {
+      return res.status(400).json({ error: "Please fill in all required fields." });
+    }
+
+    // 3. Save to MongoDB First
+    const newEnquiry = new Enquiry({
+        contactName,
+        contactPhone,
+        schoolName,
+        studentCount,
+       
+    });
+    
+    await newEnquiry.save(); 
+
+    // 4. Prepare HTML for the Email
+    // Since 'subject' is gone, we just pass a hardcoded title to your template
+    const emailTitle = "New Website Enquiry"; 
+    const supportEmailHtml = plantformAuditTemplate(contactName, contactPhone, schoolName, studentCount);
+
+    // 5. Send Email to Admin/Support Team
+    const mailOptions = {
+      from: process.env.EMAIL,
+      to: process.env.EMAIL, 
+      replyTo: email,
+      // Added the phone number to the email subject line so you see it instantly!
+      subject: `📩 Enquiry from ${contactPhone})`,
+      html: supportEmailHtml
+    };
+
+    transporter.sendMail(mailOptions, (error) => {
+      if (error) console.error("Contact Email Error:", error);
+    });
+
+    // 6. Notify All Admins (In-App + Real-time)
+    try {
+      const admins = await User.find({ isAdmin: true });
+      
+      const notifyPromises = admins.map((admin) => 
+        sendAutoNotification(
+          req.app, 
+          admin._id, 
+          `📩 New Website Enquiry from ${contactName}`, 
+          "admin/messages", 
+          name 
+        )
+      );
+      
+      await Promise.all(notifyPromises);
+    } catch (err) {
+      console.error("Admin Notification Error:", err);
+    }
+
+    res.status(200).json({ success: true, message: "Your message has been sent and saved!" });
+  } catch (error) {
+    console.error("Contact Form Error:", error);
+    res.status(500).json({ error: "Failed to send message." });
+  }
+});
+
 
 module.exports = router;
