@@ -119,9 +119,9 @@ router.post("/b2b-lead",authenticate, async (req, res) => {
     }
 
     // 3. Save to MongoDB First
-    const newEnquiry = new Enquiry({
+    const newEnquiry = new platformAudit({
         contactName,
-        contactPhone,
+        contactPhone, 
         schoolName,
         studentCount,
        
