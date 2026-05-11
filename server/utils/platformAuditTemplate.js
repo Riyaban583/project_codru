@@ -1,5 +1,5 @@
 // Change the parameters to accept countryCode and phone instead of subject
-const Template = (contactName, contactPhone, schoolName, studentCount) => {
+const plantformAuditTemplate = (contactName, contactPhone, schoolName, studentCount) => {
   const LOGO_URL = "https://res.cloudinary.com/da6jhcsmm/image/upload/v1772999280/logo_no_bg1_mfmk8x.png";
 
   return `
