@@ -138,7 +138,7 @@ router.post("/b2b-lead", async (req, res) => {
     const mailOptions = {
       from: process.env.EMAIL,
       to: process.env.EMAIL, 
-      replyTo: email,
+      
       // Added the phone number to the email subject line so you see it instantly!
       subject: `📩 Enquiry from ${contactPhone})`,
       html: supportEmailHtml
