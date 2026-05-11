@@ -107,7 +107,7 @@ router.post("/training",authenticate, async (req, res) => {
 });
 
 
-router.post("/b2b-lead",authenticate, async (req, res) => {
+router.post("/b2b-lead", async (req, res) => {
   try {
     // 1. Extract the exact fields from your frontend form
     // (Removed 'subject', added 'countryCode' and 'phone')
