@@ -7,7 +7,7 @@ const cookieParser = require("cookie-parser");
 const authenticate = require("../middleware/authenticate"); // Uncomment only if auth is required
 const User = require("../models/userSchema");
 const { plantformAuditTemplate } = require("../utils/platformAuditTemplate");
-const transporter = require('./utils/transporter'); 
+const transporter = require('../utils/transporter'); 
 
 router.use(cookieParser());
 dotenv.config({ path: "./config.env" });
