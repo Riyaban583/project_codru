@@ -36,6 +36,7 @@ import { SyllabusTracker } from "./SyllabusTracker";
 import Muialert from "./Muialert";
 import { UserData } from "../App";
 import MyCourses from "./MyCourses";
+import BulkEmails from "./BulkEmails";
 import AdminAuditLog from "./AdminAuditLog";
 import Notification from "./Notification";
 import ExpertConnect from "./ExpertConnect";
@@ -98,7 +99,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       settings: "Settings", "my-posts": "My Posts", "saved-posts": "Saved Posts",
       report: "Report", management: "Management", "my-courses": "My Courses",
       "the-village": "The Village (Q&A)", "expert-connect": "Expert Connect",
-      "whatsapp-crm": "WhatsApp Support"
+      "whatsapp-crm": "WhatsApp Support","BulkEmails":"BulkEmails"
     };
     return viewToTabMap[currentView] || "Overview";
   });
@@ -186,7 +187,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
         "manage-users": "Manage Users",           
         "admin-audit-log": "Security Audit Log",
         "whatsapp-crm": "WhatsApp Support",
-        "crm": "Management"   
+        "crm": "Management" ,
+        "BulkEmails": "Bulk Emails"  
       };
 
       setActiveTab(viewToTabMap[target] || "Dashboard"); 
@@ -343,6 +345,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       adminItems.push({ text: "WhatsApp CRM", icon: <MessageSquare size={22} />, view: "whatsapp-crm" });
       adminItems.push({ text: "Manage Users", icon: <UserCog size={22} />, view: "manage-users" });
       adminItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
+      adminItems.push({ text: "Bulk Emails", icon: <ShieldAlert size={22} />, view: "bulk-emails" });
     }
 
     // --- 1. SINGLE LIST ITEM RENDERER (Used for both Desktop & Mobile) ---
@@ -690,7 +693,8 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
               {currentView === "admin-audit-log" && userData?.isAdmin && <AdminAuditLog />}
               {currentView === "whatsapp-crm" && userData?.isAdmin && <WhatsAppChat />}
               {currentView === "crm" && userData?.isAdmin && <CRM />}
-              
+              {currentView === "bulk-emails" && userData?.isAdmin && <BulkEmails userData={userData} />}
+
               {currentView === "the-village" && isParent && (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-4">
