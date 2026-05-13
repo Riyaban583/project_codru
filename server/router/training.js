@@ -6,9 +6,14 @@ const platformAudit = require("../models/platformAuditSchema");
 const cookieParser = require("cookie-parser");
 const authenticate = require("../middleware/authenticate"); // Uncomment only if auth is required
 const User = require("../models/userSchema");
+const multer = require('multer');
 const { plantformAuditTemplate } = require("../utils/platformAuditTemplate");
 const transporter = require('../utils/transporter'); 
+const { bulkEmailTemplate } = require("../utils/bulkEmailTemplate");
+const path = require('path');
+const fs = require('fs');
 
+const upload = multer({ storage: multer.memoryStorage() });
 router.use(cookieParser());
 dotenv.config({ path: "./config.env" });
 
@@ -174,6 +179,120 @@ router.post("/b2b-lead", async (req, res) => {
     res.status(500).json({ error: "Failed to send message." });
   }
 });
+
+// router.post("/send-bulk", async (req, res) => {
+//   try {
+//     // 1. Extract the data sent from React
+//     const { recipientsData } = req.body;
+
+//     // 2. Validate that we actually received an array of data
+//     if (!recipientsData || !Array.isArray(recipientsData)) {
+//       return res.status(400).json({ error: "Invalid data received. Expected an array of schools." });
+//     }
+
+//     console.log(`Backend received ${recipientsData.length} schools to process.`);
+
+//     // 3. Loop through the array and send an email to each school
+//     const emailPromises = recipientsData.map(async (school) => {
+      
+//       // Generate the HTML using your imported template
+//       const emailHtml = bulkEmailTemplate(
+//         school.schoolName, 
+//         school.designationOfAddressee, 
+//         school.nameOfAddresse
+//       );
+
+//       // Construct the Mail Options object
+//       const mailOptions = {
+//         from: process.env.EMAIL,
+//         to: school.emailIds.join(", "), // Joins multiple emails with a comma
+//         subject: `Scaling ${school.schoolName}'s admissions without new infrastructure`,
+//         html: emailHtml
+//       };
+
+//       // Send the email using your existing Vercel transporter setup
+//       return transporter.sendMail(mailOptions);
+//     });
+
+//     // 4. Wait for all emails to finish sending
+//     await Promise.all(emailPromises);
+
+//     // 5. Send a SUCCESS JSON response back to React! 
+//     res.status(200).json({ message: `Successfully dispatched emails to ${recipientsData.length} schools.` });
+
+//   } catch (error) {
+//     console.error("Backend Bulk Email Error:", error);
+//     // Send a FAILURE JSON response back to React
+//     res.status(500).json({ error: "Failed to send bulk emails from the server." });
+//   }
+// });
+
+router.post("/send-bulk", async (req, res) => {
+  try {
+    const { recipientsData } = req.body;
+
+    if (!recipientsData || !Array.isArray(recipientsData)) {
+      return res.status(400).json({ error: "Invalid data received. Expected an array of schools." });
+    }
+
+    // ----------------------------------------------------------------------
+    // 🚨 1. READ THE PDF FILE AND CONVERT TO BASE64
+    // We do this ONCE before the loop so we don't crash the server reading 
+    // the same file 100 times.
+    // ----------------------------------------------------------------------
+    let pdfAttachmentBase64 = "";
+    try {
+      // Construct the absolute path to your PDF
+      // This tells Node: "Go up one folder from 'routes', then into 'public', then 'pdf'"
+      const pdfPath = path.join(__dirname, "..", "public", "pdf", "sample_pdf.pdf");
+      
+      // Read file and encode to base64 so it can travel securely to Vercel
+      pdfAttachmentBase64 = fs.readFileSync(pdfPath).toString("base64");
+    } catch (err) {
+      console.error("Could not find or read the PDF file:", err);
+      return res.status(500).json({ error: "Server error: Partnership Proposal PDF is missing." });
+    }
+    // ----------------------------------------------------------------------
+
+    console.log(`Backend received ${recipientsData.length} schools to process.`);
+
+    const emailPromises = recipientsData.map(async (school) => {
+      
+      const emailHtml = bulkEmailTemplate(
+        school.schoolName, 
+        school.designationOfAddressee, 
+        school.nameOfAddresse
+      );
+
+      const mailOptions = {
+        from: process.env.EMAIL,
+        
+        to: school.emailIds.join(", "),
+        subject: `Scaling ${school.schoolName}'s admissions without new infrastructure`,
+        html: emailHtml,
+        // 🚨 2. ADD THE ATTACHMENT HERE
+        attachments: [
+          {
+            filename: "Partnership_Proposal.pdf", // This is the name the recipient will see
+            content: pdfAttachmentBase64,         // The encoded file data
+            encoding: "base64"
+          }
+        ]
+      };
+
+      return transporter.sendMail(mailOptions);
+    });
+
+    await Promise.all(emailPromises);
+
+    res.status(200).json({ message: `Successfully dispatched emails to ${recipientsData.length} schools with attachments.` });
+
+  } catch (error) {
+    console.error("Backend Bulk Email Error:", error);
+    res.status(500).json({ error: "Failed to send bulk emails from the server." });
+  }
+});
+
 
 
 module.exports = router;
