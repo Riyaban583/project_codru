@@ -10,7 +10,9 @@ const transporter = {
         mailOptions: mailOptions
       }, {
         headers: {
-          'Authorization': `Bearer ${process.env.MICROSERVICE_SECRET}`
+          'Authorization': `Bearer ${process.env.MICROSERVICE_SECRET}`,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity
         }
       });
 

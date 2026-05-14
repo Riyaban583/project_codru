@@ -178,7 +178,7 @@ router.post('/webhook', async (req, res) => {
                 });
 
                 // Update Contact Sidebar & Unread Count
-                await Contact.findOneAndUpdate(
+                const savedContact = await Contact.findOneAndUpdate(
                     { phoneNumber: fromNumber }, 
                     { 
                         $set: { 
@@ -192,7 +192,7 @@ router.post('/webhook', async (req, res) => {
                 );
 
                 await Lead.findOneAndUpdate(
-                    { phoneNumber: incomingNumber },
+                    { phoneNumber: fromNumber },
                     {
                         $setOnInsert: {
                             contactId: savedContact._id,
@@ -621,7 +621,11 @@ router.post('/send-media', upload.single('file'), async (req, res) => {
         const mediaUploadRes = await axios.post(
             `https://graph.facebook.com/v19.0/${botNumberId}/media`,
             formData,
-            { headers: { ...formData.getHeaders(), Authorization: `Bearer ${TOKEN}` } }
+            { 
+                headers: { ...formData.getHeaders(), Authorization: `Bearer ${TOKEN}` },
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity
+            }
         );
 
         const secureMediaId = mediaUploadRes.data.id;
