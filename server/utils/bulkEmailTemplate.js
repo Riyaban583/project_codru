@@ -1,47 +1,73 @@
 const bulkEmailTemplate = (schoolName, designation, nameOfAddresse) => {
-  // Gracefully handle the greeting. If we have a name, use it. If not, use the designation. If neither, use "Director".
+  // Gracefully handle the greeting
   const greetingName = nameOfAddresse 
     ? nameOfAddresse 
     : (designation ? designation : "Director");
 
   // Fallback for school name just in case the cell was empty
   const safeSchoolName = schoolName || "your institution";
+  
+  // 🚨 NEW: Logic for the formal address block
+  const displayDesignation = designation ? designation : "Director / Principal";
+  // If we have a name, format it with a line break. If not, return an empty string so there's no weird blank space.
+  const nameBlock = nameOfAddresse ? `<strong>${nameOfAddresse}</strong><br />` : "";
+  
+  const LOGO_URL = "https://res.cloudinary.com/da6jhcsmm/image/upload/v1772999280/logo_no_bg1_mfmk8x.png";
 
   return `
-    <div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #333; max-width: 650px; margin: 0 auto; padding: 20px;">
+    <div style="font-family: 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 600px; margin: 20px auto; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
       
-      <p>Dear ${greetingName},</p>
-      
-      <p>My name is Lavish Sharma, Co-Founder of Curious Team Learning, Kota.</p>
-      
-      <p>We are in a time where the government has issued mandatory guidelines for schools to function online during weather conditions, pandemic, etc. in the past. According to recent news, the government has asked people to work from home due to current economic conditions, which might soon bring change in the way children receive education. With the growing trend of online schools, traditional offline schools lack the infrastructure to keep up with the advancement and lose admissions in the process.</p>
-      
-      <p>Children and parents are choosing convenience, and this is where our system helps you. We have built a system to help physical/traditional offline schools run their online schools without building new infrastructure, seamlessly.</p>
-      
-      <p>We have developed the <strong>Curious Team Education System (CuTeES)</strong>; a complete Hybrid & Online Schooling Infrastructure. We allow schools like <strong>${safeSchoolName}</strong> to run a <strong>"Parallel Online School"</strong> alongside your physical campus. Schools and children can switch the mode of schooling seamlessly and efficiently. Moreover, new children can enroll whose determining factor is distance, parents getting transferred quite frequently, or who cannot afford expensive schooling.</p>
-      
-      <p>Here is how we do it without burdening your management:</p>
-      
-      <ul style="margin-top: 0; padding-left: 20px;">
-        <li style="margin-bottom: 10px;"><strong>Zero-Friction Hybrid Classes:</strong> We equip your teachers with a Laptop and Tablet. They teach on the smart board as usual, while our system automatically live-streams and records the class to a secure cloud for your online and absentee students with the help of our app.</li>
-        <li style="margin-bottom: 10px;"><strong>Skill-Lab Kits at Home:</strong> We ship physical science and robotics kits directly to your students' homes, so online students still get practical, offline learning by using our app.</li>
-        <li style="margin-bottom: 10px;"><strong>Complete Digital Growth:</strong> We provide a dedicated content strategist to manage your social media and actually drive those online admissions to your school, assuring you an ROI.</li>
-      </ul>
-      
-      <p>I have attached a <strong>Partnership Proposal</strong> detailing the financials, the hardware setup, and how we handle the entire tech backend, so your management doesn't have to.</p>
-      
-      <p>Additionally, in Section – 5, I have mapped out the exact financial projection showing how this model can generate an additional <strong>₹1 Cr.+ in annual net revenue</strong> for <strong>${safeSchoolName}</strong> with near-zero physical overhead.</p>
-      
-      <p>If you are open to exploring how this could work for your institute, simply reply to this email. I would be happy to arrange a brief meeting to discuss a customized setup tailored exactly to your current infrastructure.</p>
-      
-      <br />
-      <p style="margin: 0;">Warm regards,</p>
-      <p style="margin: 5px 0 0 0;"><strong>Lavish Sharma</strong></p>
-      <p style="margin: 0; font-size: 14px; color: #555;">Co-Founder,<br />Curious Team Learning.</p>
-      <p style="margin: 5px 0 0 0; font-size: 14px;">
-        <a href="https://curiousteamlearning.com/about-school-learning" style="color: #34A853; text-decoration: none;">curiousteamlearning.com/about-school-learning</a> | +91 73001 99100
-      </p>
-      
+      <div style="background-color: #f8fafc; padding: 25px 20px; border-bottom: 3px solid #ed7f23; text-align: center;">
+        <img src="${LOGO_URL}" alt="Curious Team Learning" width="120" style="display: block; margin: 0 auto; width: 120px; height: auto;" />
+      </div>
+
+      <div style="padding: 40px; background-color: #ffffff; color: #334155; font-size: 15px; line-height: 1.6;">
+        
+        <div style="margin-bottom: 30px; font-size: 14px; color: #475569; line-height: 1.5;">
+          To,<br />
+          ${nameBlock}
+          <strong>${displayDesignation}</strong><br />
+          ${safeSchoolName}
+        </div>
+        
+        <p style="margin-top: 0;">Dear <strong>${greetingName}</strong>,</p>
+        
+        <p>I am Lavish Sharma, Co-Founder of Curious Team Learning Pvt. Ltd., Kota.</p>
+        
+        <p>In the past few years, I observed a problem: traditional offline schools struggle to provide seamless online education to children and are losing admissions due to the growing trend of online schools.</p>
+        
+        <p>Additionally, the government has issued temporary guidelines which can become permanent that ask people to work from home during the current economic conditions, which also might soon change how children receive education similar to the conditions during the pandemic.</p>
+        
+        <p>This proposal is to provide physical/traditional offline schools with a system like <strong>${safeSchoolName}'s</strong> that enables you to run the online schools without building new infrastructure, giving you the flexibility to accept additional admissions throughout the academic year.</p>
+        
+        <div style="background-color: #f8fafc; border-left: 4px solid #1765a4; padding: 15px 20px; margin: 25px 0; border-radius: 0 8px 8px 0;">
+          <p style="margin: 0; color: #1e293b;">
+            <strong>Curious Team Education System (CuTeES)</strong> is a complete Hybrid & Online Schooling Infrastructure. It’s a system to run a <strong>"Parallel Online School"</strong> alongside your physical campus, providing you with the efficiency to run both modes of schooling seamlessly and simultaneously.
+          </p>
+        </div>
+        
+        <p>I have attached a <strong>Partnership Proposal</strong> detailing the financials, the hardware setup, and how we handle the entire tech backend, so your management doesn't have to.</p>
+        
+        <p>Additionally, in <strong>Section – 6</strong>, I have mapped out the exact financial projection showing how this model can generate an additional <strong style="color: #ed7f23;">₹1 Cr.+ in annual net revenue</strong> for <strong>${safeSchoolName}</strong> with near-zero physical overhead.</p>
+        
+        <p>If you are open to exploring how this could work for your institute, simply reply to this email and I would be happy to arrange a brief meeting to discuss a customized setup tailored exactly to your current infrastructure.</p>
+        
+        <div style="margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+          <p style="margin: 0; color: #1e293b;">Warm regards,</p>
+          <p style="margin: 5px 0 0 0; font-size: 16px; color: #1765a4;"><strong>Lavish Sharma</strong></p>
+          <p style="margin: 2px 0 15px 0; font-size: 14px; color: #64748b;">Co-Founder,<br />Curious Team Learning.</p>
+          
+          <p style="margin: 0;">
+            <a href="https://curiousteamlearning.com/about-school-learning" style="display: inline-block; background-color: #1765a4; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">
+              Click here to explore CuTeES details online
+            </a>
+          </p>
+          <p style="margin: 15px 0 0 0; font-size: 13px; color: #94a3b8;">
+            Direct Line: <strong>+91 73001 99100</strong>
+          </p>
+        </div>
+
+      </div>
     </div>
   `;
 };

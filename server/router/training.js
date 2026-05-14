@@ -16,6 +16,21 @@ const fs = require('fs');
 const upload = multer({ storage: multer.memoryStorage() });
 router.use(cookieParser());
 dotenv.config({ path: "./config.env" });
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const { generateProposalTemplate } = require("../utils/proposalPdfTemplate"); // 🚨 Import your template!
+
+const pdfmake = require('pdfmake');
+
+// 🚨 Setup Fonts ONCE outside the route
+const fonts = {
+  Roboto: {
+    normal: path.join(__dirname, '..', 'public', 'fonts', 'Roboto-Regular.ttf'),
+    bold: path.join(__dirname, '..', 'public', 'fonts', 'Roboto-Medium.ttf'),
+    italics: path.join(__dirname, '..', 'public', 'fonts', 'Roboto-Italic.ttf'),
+    bolditalics: path.join(__dirname, '..', 'public', 'fonts', 'Roboto-MediumItalic.ttf')
+  }
+};
+pdfmake.addFonts(fonts);
 
 //for user details
 router.get("/training", authenticate, async (req, res) => {
@@ -226,71 +241,67 @@ router.post("/b2b-lead", async (req, res) => {
 //     res.status(500).json({ error: "Failed to send bulk emails from the server." });
 //   }
 // });
-
 router.post("/send-bulk", async (req, res) => {
-  try {
-    const { recipientsData } = req.body;
+  const { recipientsData } = req.body;
 
-    if (!recipientsData || !Array.isArray(recipientsData)) {
-      return res.status(400).json({ error: "Invalid data received. Expected an array of schools." });
-    }
+  if (!recipientsData || !Array.isArray(recipientsData)) {
+    return res.status(400).json({ error: "Invalid data received." });
+  }
 
-    // ----------------------------------------------------------------------
-    // 🚨 1. READ THE PDF FILE AND CONVERT TO BASE64
-    // We do this ONCE before the loop so we don't crash the server reading 
-    // the same file 100 times.
-    // ----------------------------------------------------------------------
-    let pdfAttachmentBase64 = "";
+  // 1. SET HEADERS FOR STREAMING
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders(); 
+
+  let sentCount = 0;
+  const total = recipientsData.length;
+
+  for (const school of recipientsData) {
     try {
-      // Construct the absolute path to your PDF
-      // This tells Node: "Go up one folder from 'routes', then into 'public', then 'pdf'"
-      const pdfPath = path.join(__dirname, "..", "public", "pdf", "sample_pdf.pdf");
       
-      // Read file and encode to base64 so it can travel securely to Vercel
-      pdfAttachmentBase64 = fs.readFileSync(pdfPath).toString("base64");
-    } catch (err) {
-      console.error("Could not find or read the PDF file:", err);
-      return res.status(500).json({ error: "Server error: Partnership Proposal PDF is missing." });
-    }
-    // ----------------------------------------------------------------------
-
-    console.log(`Backend received ${recipientsData.length} schools to process.`);
-
-    const emailPromises = recipientsData.map(async (school) => {
+      const docDefinition = generateProposalTemplate(school.schoolName, school.nameOfAddresse);
       
-      const emailHtml = bulkEmailTemplate(
-        school.schoolName, 
-        school.designationOfAddressee, 
-        school.nameOfAddresse
-      );
+      // 🚨 NEW PDFMAKE 0.3+ GENERATION (So much cleaner!)
+      const pdf = pdfmake.createPdf(docDefinition);
+      const personalizedPdfBase64 = await pdf.getBase64(); // Boom. Done.
 
-      const mailOptions = {
-        from: process.env.EMAIL,
-        
+      // Send Email via Vercel Microservice
+      await transporter.sendMail({
+        from: process.env.EMAIL, 
         to: school.emailIds.join(", "),
         subject: `Scaling ${school.schoolName}'s admissions without new infrastructure`,
-        html: emailHtml,
-        // 🚨 2. ADD THE ATTACHMENT HERE
-        attachments: [
-          {
-            filename: "Partnership_Proposal.pdf", // This is the name the recipient will see
-            content: pdfAttachmentBase64,         // The encoded file data
-            encoding: "base64"
-          }
-        ]
-      };
+        html: bulkEmailTemplate(school.schoolName, school.designationOfAddressee, school.nameOfAddresse),
+        attachments: [{
+          filename: `CuTeES_Proposal_${school.schoolName.replace(/\s+/g, '_')}.pdf`,
+          content: personalizedPdfBase64,
+          encoding: 'base64'
+        }]
+      });
 
-      return transporter.sendMail(mailOptions);
-    });
+      sentCount++;
 
-    await Promise.all(emailPromises);
+      // 2. STREAM THE PROGRESS BACK TO REACT
+      const progressData = JSON.stringify({ 
+        current: sentCount, 
+        total: total, 
+        lastSchool: school.schoolName 
+      });
+      res.write(`data: ${progressData}\n\n`);
 
-    res.status(200).json({ message: `Successfully dispatched emails to ${recipientsData.length} schools with attachments.` });
+      // C. Sleep to avoid spam filters
+      await sleep(2500); 
 
-  } catch (error) {
-    console.error("Backend Bulk Email Error:", error);
-    res.status(500).json({ error: "Failed to send bulk emails from the server." });
+    } catch (err) {
+      console.error(`Failed to send to ${school.schoolName}:`, err.message);
+      sentCount++;
+      res.write(`data: ${JSON.stringify({ current: sentCount, total: total, error: true, lastSchool: school.schoolName })}\n\n`);
+    }
   }
+
+  // 3. CLOSE THE STREAM WHEN FINISHED
+  res.write(`data: ${JSON.stringify({ complete: true })}\n\n`);
+  res.end();
 });
 
 

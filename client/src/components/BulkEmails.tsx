@@ -18,6 +18,9 @@ const BulkEmails = ({ userData }: { userData: any }) => {
   const [isSending, setIsSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
 
+  const [progress, setProgress] = useState(0);
+  const [currentSchool, setCurrentSchool] = useState("");
+
   // 2. Excel Parsing Logic
   const processSpreadsheetData = async (file: File | Blob, fileName: string) => {
     const reader = new FileReader();
@@ -41,10 +44,10 @@ const BulkEmails = ({ userData }: { userData: any }) => {
             if (!cols || cols.length === 0 || !cols[0]) continue;
 
             const rawEmails = cols[2]?.toString() || "";
-            const parsedEmails = rawEmails.split(/[,;]/).map(email => email.trim()).filter(email => email !== "");
+            const parsedEmails = rawEmails.split(/[,;\s]+/).map(email => email.trim()).filter(email => email !== "");
 
             const rawContacts = cols[3]?.toString() || "";
-            const parsedContacts = rawContacts.split(/[,;]/).map(num => num.trim()).filter(num => num !== "");
+            const parsedContacts = rawContacts.split(/[,;\s]+/).map(num => num.trim()).filter(num => num !== "");
 
             const node: TrackerNode = {
               _id: crypto.randomUUID(), 
@@ -84,33 +87,59 @@ const BulkEmails = ({ userData }: { userData: any }) => {
   // 🚨 4. NEW: POST DATA TO BACKEND
   const sendDataToBackend = async () => {
     setIsSending(true);
-    setStatusMessage("Sending emails...");
+    setStatusMessage("Starting the campaign...");
+    setProgress(0);
 
     try {
-      // Flatten the data (combine all sheets into one big array of schools)
       const allRecipients = csvParsedData.flatMap(sheet => sheet.data);
-
       const token = localStorage.getItem("jwtoken");
       
-      // Make the POST request to your backend
+      // 1. Make the POST request
       const response = await fetch(`${import.meta.env.VITE_API}send-bulk`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}` 
         },
-        // Send the flattened array of recipients
         body: JSON.stringify({ recipientsData: allRecipients })
       });
 
-      const result = await response.json();
+      // 2. Read the stream instead of a single JSON response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
 
-      if (response.ok) {
-        setStatusMessage("✅ Successfully sent emails!");
-        // Optional: clear the data so they can upload a new sheet
-        setTimeout(() => setCsvParsedData([]), 3000); 
-      } else {
-        throw new Error(result.error || "Failed to send emails");
+      if (!reader) throw new Error("Stream not supported by browser.");
+
+      // Loop continuously as data chunks arrive from Render
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break; // Loop is finished!
+
+        // Decode the raw bytes into text
+        const chunkText = decoder.decode(value, { stream: true });
+        
+        // A chunk might contain multiple "data: {...}\n\n" strings, so we split them
+        const messages = chunkText.split("\n\n").filter(Boolean);
+
+        for (const message of messages) {
+          if (message.startsWith("data: ")) {
+            const parsedData = JSON.parse(message.replace("data: ", ""));
+
+            if (parsedData.complete) {
+              setStatusMessage("✅ Campaign complete!");
+              setTimeout(() => {
+                setCsvParsedData([]);
+                setProgress(0);
+              }, 3000);
+              return;
+            }
+
+            // 3. Update the UI States in real-time!
+            const percentage = Math.round((parsedData.current / parsedData.total) * 100);
+            setProgress(percentage);
+            setCurrentSchool(`Sent to: ${parsedData.lastSchool}`);
+          }
+        }
       }
 
     } catch (error: any) {
@@ -122,7 +151,13 @@ const BulkEmails = ({ userData }: { userData: any }) => {
   };
 
   // Calculate total recipients to show on the UI
-  const totalRecipients = csvParsedData.reduce((acc, sheet) => acc + sheet.data.length, 0);
+  // Calculate total schools (rows)
+  const totalSchools = csvParsedData.reduce((acc, sheet) => acc + sheet.data.length, 0);
+  
+  // Calculate total individual email addresses across all schools
+  const totalEmails = csvParsedData.reduce((acc, sheet) => {
+    return acc + sheet.data.reduce((emailCount, node) => emailCount + node.emailIds.length, 0);
+  }, 0);
 
   // 5. The UI Render
   return (
@@ -157,8 +192,24 @@ const BulkEmails = ({ userData }: { userData: any }) => {
         <div className="flex flex-col items-center text-center bg-white p-8 rounded-2xl shadow-lg border border-slate-100 max-w-sm w-full">
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Ready to Send</h2>
           <p className="text-slate-500 mb-6">
-            Found <strong>{totalRecipients}</strong> recipients in your spreadsheet.
+            Found <strong>{totalSchools}</strong> recipients with a total of <strong>{totalEmails}</strong> email addresses.
           </p>
+          {/* --- PROGRESS BAR UI --- */}
+          {isSending && (
+            <div className="w-full mt-4 mb-6">
+              <div className="flex justify-between text-xs font-semibold text-slate-500 mb-2">
+                <span>{currentSchool || "Initializing..."}</span>
+                <span>{progress}%</span>
+              </div>
+              
+              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                <div 
+                  className="bg-[#34A853] h-3 rounded-full transition-all duration-500 ease-out" 
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={sendDataToBackend}

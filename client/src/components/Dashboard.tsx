@@ -19,7 +19,8 @@ import {
   LayoutDashboard,
   UserCircle,
   Zap,
-  Plus
+  Plus,
+  Mail
 } from "lucide-react";
 
 // Components
@@ -345,7 +346,7 @@ const Dashboard = ({ userData, setUserData }: DashboardProps) => {
       adminItems.push({ text: "WhatsApp CRM", icon: <MessageSquare size={22} />, view: "whatsapp-crm" });
       adminItems.push({ text: "Manage Users", icon: <UserCog size={22} />, view: "manage-users" });
       adminItems.push({ text: "Audit Log", icon: <ShieldAlert size={22} />, view: "admin-audit-log" });
-      adminItems.push({ text: "Bulk Emails", icon: <ShieldAlert size={22} />, view: "bulk-emails" });
+      adminItems.push({ text: "Bulk Emails", icon: <Mail size={22} />, view: "bulk-emails" });
     }
 
     // --- 1. SINGLE LIST ITEM RENDERER (Used for both Desktop & Mobile) ---
