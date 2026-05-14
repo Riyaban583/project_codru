@@ -1,2 +1,5 @@
-/server/config.env
-/server/node_modules/
+nodemodules/
+.DS_Store
+.vscode/
+.idea/
+*.log

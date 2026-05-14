@@ -1,34 +1,113 @@
+/* Container for the whole background */
+/* Ensure the background never forces the container to grow vertically */
 .planetry-animated-background {
-  background-color: #000;
-  position: relative;
+  position: absolute;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: -1;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  max-height: 100%; /* Add this line */
 }
 
-.planetry-main {
-  position: relative;
-  top: 50%;
-  left: 50%;
-  height: 1px;
-  width: 1px;
-  background-color: #fff;
+/* Optional: Make the horizontal scrollbar look cleaner */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(237, 127, 35, 0.3); /* Brand orange, but subtle */
+  border-radius: 10px;
+}
+
+/* --- Static Twinkling Stars --- */
+.static-star {
+  position: absolute;
+  background-color: #ffffff;
   border-radius: 50%;
-  box-shadow: -24vw -44vh 2px 2px #fff, 38vw -4vh 0px 0px #fff,
-    -20vw -48vh 1px 2px #fff, -39vw 38vh 3px 1px #fff, -42vw -11vh 0px 3px #fff,
-    12vw 15vh 3px 3px #fff, 42vw 6vh 3px 2px #fff, -8vw 9vh 0px 2px #fff,
-    34vw -38vh 1px 0px #fff, -17vw 45vh 3px 1px #fff, 22vw -36vh 3px 2px #fff,
-    -42vw 1vh 1px 0px #fff;
-  animation: planetry-zoom 10s alternate infinite;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+  animation: twinkle 4s infinite ease-in-out alternate;
 }
 
-@keyframes planetry-zoom {
+@keyframes twinkle {
+  0% { transform: scale(0.8); opacity: 0.2; }
+  100% { transform: scale(1.2); opacity: 1; }
+}
+
+/* --- Shooting Stars --- */
+.shooting-star {
+  position: absolute;
+  width: 100px; /* Tail length */
+  height: 2px;
+  /* Tail fades out on the left (0%), head is solid on the right (100%) */
+  background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);
+  /* Start rotated in our random direction */
+  transform: rotate(var(--angle));
+  opacity: 0;
+  animation: shoot linear infinite;
+}
+
+/* The glowing "head" of the shooting star */
+.shooting-star::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: 0; /* Locked to the front of the line! */
+  width: 6px;
+  height: 6px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #ffffff, 0 0 20px #ed7f23;
+}
+
+/* Because we rotate the container FIRST, translateX will automatically 
+  push the star perfectly forward in whatever direction it's pointing! 
+*/
+@keyframes shoot {
   0% {
-    transform: scale(1);
+    transform: rotate(var(--angle)) translateX(0);
+    opacity: 1;
   }
   100% {
-    transform: scale(1.5);
+    /* Travel the random distance forward */
+    transform: rotate(var(--angle)) translateX(var(--distance));
+    opacity: 0;
   }
+}
+/* Add this to your existing CSS file */
+
+.nebula-cloud {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px); /* This makes it look like soft dust */
+  opacity: 0.6;
+  mix-blend-mode: screen; /* Makes colors glow against the dark background */
+  animation: drift 20s infinite ease-in-out alternate;
+  z-index: 1;
+}
+
+/* Give nebulas a slow, subtle "pulse" and "drift" */
+@keyframes drift {
+  0% {
+    transform: scale(1) translate(0, 0);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.3) translate(20px, 20px);
+    opacity: 0.7;
+  }
+}
+
+/* Ensure stars stay on top of the dust */
+.static-star {
+  z-index: 2;
+}
+
+.shooting-star {
+  z-index: 3;
 }

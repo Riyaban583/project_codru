@@ -1,40 +1,141 @@
-:root {
-  /* --default-font: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif; */
-  --heading-font: "Arial Rounded MT Bold", "Arimo Bold";
-  --tagline-font: "Segoe Print", "Arimo Italic";
-  --text-font: "Bierstadt", "Arimo";
-
-  /* font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif; */
-  line-height: 1.5;
-  font-weight: 400;
-  width: 100%;
-
-  color-scheme: light dark;
-  /* color: black; */
-  /* background-color:  #efe1e1; */
-  justify-content: "center";
-
-  /* font-synthesis: none; */
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import url('https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+/* 🚨 THE NUCLEAR SCROLLBAR KILLER */
+/* This forces every single element in your app to hide its scrollbar */
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
 }
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none; /* Hide scrollbar for WebKit browsers */
+
+*::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
 }
-body {
-  margin: 0px;
-  padding: 0%;
-  ::-webkit-scrollbar {
+
+.god-mode-active {
+  animation: pulse-red-div 2s infinite !important;
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.05) !important;
+}
+
+@keyframes pulse-red-div {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* =========================================
+   1. CuTe Learning Brand Theme Variables
+   ========================================= */
+@theme {
+  --color-brand-orange: #ed7f23; 
+  --color-brand-blue: #1765a4;   
+  
+  --font-display: "Arial Rounded MT Bold", "Helvetica Rounded", Arial, sans-serif;
+  --font-body: "Arimo", sans-serif;
+}
+
+/* =========================================
+   2. Global Base Rules
+   ========================================= */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  html, body {
+    @apply font-body bg-slate-50 text-slate-800 antialiased flex flex-col min-h-screen;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  input, textarea, select {
+    @apply bg-white text-gray-900;
+  }
+}
+
+/* =========================================
+   3. Custom Components (Logo, Chat, etc.)
+   ========================================= */
+@layer components {
+  .logo {
+    width: 6.5rem;
+    height: auto;
+    display: block;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+  }
+
+  /* Chat Widget Link Styles */
+  .msg-bubble a {
+    @apply text-brand-orange underline font-bold;
+  }
+
+  .msg-user a {
+    @apply text-white;
+  }
+}
+
+/* =========================================
+   4. Custom Utilities (Scrollbars)
+   ========================================= */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
 }
-* {
-  margin: 0px;
-  padding: 0px;
+/* =========================================
+   Ultimate v4 Scrollbar Fix
+   ========================================= */
+
+/* This targets ANY element that has the 'dashboard-content-scroll' class */
+[class*="dashboard-content-scroll"]::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  display: block !important;
 }
-input {
-  background-color: white;
-  color: black;
+
+[class*="dashboard-content-scroll"]::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+  border-radius: 10px !important;
+}
+
+[class*="dashboard-content-scroll"]::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1 !important;
+  border-radius: 10px !important;
+  border: 2px solid #f1f5f9 !important;
+}
+
+[class*="dashboard-content-scroll"]::-webkit-scrollbar-thumb:hover {
+  background-color: #ed7f23 !important; /* Brand Orange */
+}
+
+/* Firefox */
+[class*="dashboard-content-scroll"] {
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 #f1f5f9 !important;
+}
+
+@keyframes slide-up {
+  0% { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

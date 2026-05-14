@@ -1,2 +1,5 @@
-config.env
+# server/.gitignore
+.env
 node_modules/
+config.env 
+npm-debug.log
