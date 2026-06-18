@@ -130,7 +130,7 @@ const payRequest =
     .merchantOrderId(merchantOrderId)
     .amount(99900)
     .redirectUrl(
-  "http://localhost:5173/payment-success"
+  "http://localhost:5173/payment-status"
 )
     .message("Codru Premium Plan")
     .build();
