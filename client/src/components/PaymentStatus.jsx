@@ -23,6 +23,11 @@ console.log("ORDER ID FROM STORAGE:", orderId);
           );
 
         console.log(response.data);
+        navigate("/payment-success");
+        console.log(
+  "FULL STATUS RESPONSE:",
+  JSON.stringify(response.data, null, 2)
+);
         console.log(
   "PAYMENT STATE:",
   response.data.state
@@ -33,7 +38,7 @@ console.log("ORDER ID FROM STORAGE:", orderId);
 
         if (status === "COMPLETED") {
 
-          navigate("/payment-success");
+          // navigate("/payment-success");
 
         }
 

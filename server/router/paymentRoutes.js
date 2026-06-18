@@ -159,13 +159,10 @@ console.log("RESPONSE KEYS:", Object.keys(response));
 console.log("REDIRECT URL:", response.redirectUrl);
 
  res.status(200).json({
-
   success: true,
-
   redirectUrl: response.redirectUrl,
-
   orderId: response.orderId,
-
+  merchantOrderId,
 });
 
   } catch (error) {
@@ -295,7 +292,42 @@ router.get(
 router.post("/webhook", async (req, res) => {
 
   console.log("WEBHOOK RECEIVED");
-  console.log(req.body);
+
+  const { payload } = req.body;
+
+  const payment =
+    await Payment.findOne({
+      merchantOrderId:
+        payload.merchantOrderId
+    });
+
+  if (payment) {
+
+    if (
+      payload.state ===
+      "COMPLETED"
+    ) {
+
+      payment.status =
+        "Success";
+
+    }
+
+    else {
+
+      payment.status =
+        "Failed";
+
+    }
+
+    await payment.save();
+
+    console.log(
+      "Payment Updated:",
+      payment.status
+    );
+
+  }
 
   res.status(200).send("OK");
 
