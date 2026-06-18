@@ -291,45 +291,61 @@ router.get(
 
 router.post("/webhook", async (req, res) => {
 
-  console.log("WEBHOOK RECEIVED");
+  try {
 
-  const { payload } = req.body;
+    console.log("WEBHOOK RECEIVED");
+    console.dir(req.body, { depth: null });
 
-  const payment =
-    await Payment.findOne({
-      merchantOrderId:
-        payload.merchantOrderId
-    });
+    const { payload } = req.body;
 
-  if (payment) {
+    const payment =
+      await Payment.findOne({
+        merchantOrderId:
+          payload.merchantOrderId
+      });
 
-    if (
-      payload.state ===
-      "COMPLETED"
-    ) {
+    if (payment) {
 
-      payment.status =
-        "Success";
+      if (
+        payload.state === "COMPLETED"
+      ) {
+
+        payment.status =
+          "Success";
+
+      } else {
+
+        payment.status =
+          "Failed";
+
+      }
+
+      await payment.save();
+
+      console.log(
+        "Payment Updated:",
+        payment.status
+      );
+
+    } else {
+
+      console.log(
+        "Payment Not Found"
+      );
 
     }
 
-    else {
+    res.status(200).send("OK");
 
-      payment.status =
-        "Failed";
+  } catch (error) {
 
-    }
+    console.log(error);
 
-    await payment.save();
-
-    console.log(
-      "Payment Updated:",
-      payment.status
+    res.status(500).send(
+      "Webhook Error"
     );
 
   }
-
-  res.status(200).send("OK");
 
 });
 module.exports = router;
