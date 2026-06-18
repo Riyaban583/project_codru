@@ -23,6 +23,10 @@ console.log("ORDER ID FROM STORAGE:", orderId);
           );
 
         console.log(response.data);
+        console.log(
+  "PAYMENT STATE:",
+  response.data.state
+);
 
         const status =
           response.data.state;

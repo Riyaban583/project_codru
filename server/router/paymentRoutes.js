@@ -108,6 +108,22 @@ console.log(
   "Merchant Order Id:",
   merchantOrderId
 );
+const newPayment =
+  new Payment({
+
+    mobile,
+    amount: 999,
+    status: "Pending",
+    transactionId,
+    merchantOrderId,
+
+  });
+
+await newPayment.save();
+
+console.log(
+  "Payment Saved As Pending"
+);
 const payRequest =
   StandardCheckoutPayRequest
     .builder()
@@ -187,6 +203,41 @@ router.get("/status/:orderId", async (req, res) => {
       "STATUS RESPONSE:",
       statusResponse
     );
+    console.dir(
+  statusResponse,
+  { depth: null }
+);
+
+    const payment =
+  await Payment.findOne({
+    merchantOrderId: orderId
+  });
+
+if (payment) {
+
+  if (
+    statusResponse.state ===
+    "COMPLETED"
+  ) {
+
+    payment.status =
+      "Success";
+
+  }
+
+  else if (
+    statusResponse.state ===
+    "FAILED"
+  ) {
+
+    payment.status =
+      "Failed";
+
+  }
+
+  await payment.save();
+
+}
 
     res.json(statusResponse);
 
@@ -241,4 +292,12 @@ router.get(
   }
 );
 
+router.post("/webhook", async (req, res) => {
+
+  console.log("WEBHOOK RECEIVED");
+  console.log(req.body);
+
+  res.status(200).send("OK");
+
+});
 module.exports = router;

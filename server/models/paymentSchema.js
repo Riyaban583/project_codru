@@ -22,6 +22,10 @@ const paymentSchema = new mongoose.Schema({
     required: true,
   },
 
+  merchantOrderId: {
+  type: String,
+},
+
   createdAt: {
     type: Date,
     default: Date.now,
