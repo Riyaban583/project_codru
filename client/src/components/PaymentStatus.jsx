@@ -13,15 +13,17 @@ const PaymentStatus = () => {
 
       try {
 
-        const orderId =
-  localStorage.getItem("phonepeOrderId");
+       const orderId =
+  searchParams.get("id");
 
-console.log("ORDER ID FROM STORAGE:", orderId);
+console.log(
+  "ORDER ID FROM URL:",
+  orderId
+);
         const response =
-          await axios.get(
-            `http://localhost:8080/api/payment/status/${orderId}`
-          );
-
+         await axios.get(
+  `${import.meta.env.VITE_API}api/payment/status/${orderId}`
+);
         console.log(response.data);
         navigate("/payment-success");
         console.log(
